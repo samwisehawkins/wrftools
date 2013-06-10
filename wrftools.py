@@ -581,15 +581,16 @@ def run_gribmaster(config):
     fcst_hours  = config['fcst_hours']
     gm_log      = config['gm_log']
     gm_sleep    = config['gm_sleep']
-    gm_max_attempts = config['gm_max_attempts']
+    gm_max_attempts = int(config['gm_max_attempts'])
 
 
     log_dir = '/home/slha/forecasting'
        
     cmd     = '%s/gribmaster --verbose --%s --dset %s --date %s --cycle %s --length %s > %s' %(gm_dir, gm_transfer, gm_dataset, start.strftime('%Y%m%d'), start.strftime('%H'), fcst_hours, gm_log )
-    
+    logger.debug(gm_max_attempts)
+    logger.debug(type(gm_max_attempts))
     for attempt in range(gm_max_attempts):
-        logger.info('*** RUNNING GRIBMASTER ***')
+        logger.info('*** RUNNING GRIBMASTER, %s attempt ***' % (attempt+1))
         run_cmd(cmd, config)
         
         cmd = 'grep "BUMMER" %s' % gm_log # check for failure
