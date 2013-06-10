@@ -309,11 +309,17 @@ def prepare(config):
             logger.debug('creating directory %s ' %d)
             os.mkdir(d) 
    
-    if 'ncl_log' in config:
-        if os.path.exists(config['ncl_log']):
-            logger.debug('removing ncl log file')
-            os.remove(config['ncl_log']) 
+    for log in ['ncl_log', 'gm_log']:
+        log_file = config[log]
+        if os.path.exists(log_file):
+            logger.debug('removing log file: %s' % log_file )
+            os.remove(log_file) 
+
     logger.info('*** DONE PREPARE ***')
+
+
+
+
 
 
 #*****************************************************************
@@ -573,26 +579,39 @@ def run_gribmaster(config):
     gm_dataset  = config['gm_dataset']
     start       = config['init_time']
     fcst_hours  = config['fcst_hours']
-    
-    
+    gm_log      = config['gm_log']
+    gm_sleep    = config['gm_sleep']
+    gm_max_attempts = config['gm_max_attempts']
+
+
     log_dir = '/home/slha/forecasting'
-    gm_log  = '%s/gribmaster.log' % log_dir   
+       
     cmd     = '%s/gribmaster --verbose --%s --dset %s --date %s --cycle %s --length %s > %s' %(gm_dir, gm_transfer, gm_dataset, start.strftime('%Y%m%d'), start.strftime('%H'), fcst_hours, gm_log )
     
-    logger.info('*** RUNNING GRIBMASTER ***')
-    run_cmd(cmd, config)
+    for attempt in range(gm_max_attempts):
+        logger.info('*** RUNNING GRIBMASTER ***')
+        run_cmd(cmd, config)
+        
+        cmd = 'grep "BUMMER" %s' % gm_log # check for failure
+        ret = subprocess.call(cmd, shell=True)
+        # if we positively find the string BUMMER, we know we have failed
+        if ret==0:
+            logger.error('*** FAIL GRIBMASTER: Attempt %d of %d ***' % (attempt+1, gm_max_attempts))
+            logger.info('Sleeping for %d mins' % gm_sleep) 
+            time.sleep(gm_sleep*60)
+        
+        # else we check for definite sucess
+        else:
+            cmd = 'grep "ENJOY" %s' % gm_log # check for failure
+            ret = subprocess.call(cmd, shell=True)
+            if ret==0:
+                logger.info('*** SUCESS GRIBMASTER ***')
+                return
+        
+        
+    raise IOError('gribmaster did not find files after %d attempts' % gm_max_attempts)
+
     
-    cmd = 'grep "BUMMER" %s' % gm_log # check for failure
-    ret = subprocess.call(cmd, shell=True)
-    if ret==0:
-        logger.error('*** FAIL GRIBMASTER ***')
-        raise IOError('gribmaster did not find files')
-
-    cmd = 'grep "ENJOY" %s' % gm_log # check for success
-    ret = subprocess.call(cmd, shell=True)
-    if ret==0:
-        logger.info('*** SUCESS GRIBMASTER ***')
-
 
 def sub_date(s, dt):
     """Substitues a date into a string following standard format codes"""
@@ -773,9 +792,7 @@ def prepare_wps(config):
     directory for the met_em files.
     
     Arguments:
-    config -- dictionary containing various configuration options
-    
-    """
+    config -- dictionary containing various configuration options"""
     
     logger       = get_logger()
     logger.debug('*** PREPARING FILES FOR WPS ***')
