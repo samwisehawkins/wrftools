@@ -103,7 +103,7 @@ def json_to_web(config):
     init_time   = config['init_time']
     json_dir    = '%s/%s/json' % (domain_dir, model_run)
     json_file   = '%s/fcst_data.json' % json_dir
-    web_dir     = wrftools.sub_date(configf'web_dir'], init_time)
+    web_dir     = wrftools.sub_date(config['web_dir'], init_time)
     
     logger.info('*** COPYING JSON TO WEB DIR ***')
     cmd = 'cp -f %s %s' % (json_file, web_dir)
