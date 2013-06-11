@@ -261,8 +261,8 @@ for init_time in init_times:
             except Exception, e:
                 logger.error('*** FAIL TIME SERIES ***')
                 wrftools.handle(e, fail_mode, full_trace)
-                wrftools.tseries_to_json(config)
 
+        wrftools.tseries_to_json(config)
         if web:
             logger.info('*** TRANSFERRING JSON TO WEB DIR ***')
             try:
