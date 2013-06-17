@@ -88,8 +88,8 @@ begin
     ntimes  = dims(0) 
     time    = series&time
     delete(dims)
-    header = (/"domain","model_run","model","nest_id","location_id","latitude","longitude","variable","init_time","valid_time","height","value"/)
-    prefix  = series@domain + "," + series@model_run + "," + series@model + "," + series@nest_id + "," + series@loc_id + "," + series@lat + "," + series@lon + "," +series@var_name
+    header = (/"domain","model_run","model","nest_id","location_id","location_name","latitude","longitude","variable","init_time","valid_time","height","value"/)
+    prefix  = series@domain + "," + series@model_run + "," + series@model + "," + series@nest_id + "," + series@loc_id + "," + series@loc_name + "," + series@lat + "," + series@lon + "," +series@var_name
     print(prefix)
     
     

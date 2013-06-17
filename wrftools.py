@@ -78,6 +78,7 @@
 import os
 import subprocess
 import sys
+import shutil
 import re
 import traceback
 import math
@@ -86,6 +87,7 @@ import glob
 import time, datetime
 from dateutil import rrule
 from namelist import Namelist, read_namelist
+import glob
 
 from visualisation import *
 import logging
@@ -228,7 +230,41 @@ def run_cmd(cmd, config):
     return ret
 
 
+def transfer(flist, dest, mode='copy', debug_level='NONE', full_trace=False):
+    """Transfers a list of files to a destination.
+    
+    Arguments:
+        @flist       -- source files to be copied
+        @dest        -- destination directory
+        @mode        -- copy (leave original) or move (delete original). Default 'copy'
+        @debug_level -- what level to report sucess/failure to 
+        @full_trace  -- whether to print full stack trace on error. Default False"""
+    logger = get_logger()
+    logger.info(' *** TRANSFERRING %d FILES TO %s ***' %(len(flist), dest))
+    
+    n=0
+    for f in flist:
+        try:
+            fname = os.path.split(f)[1]
+            dname = '%s/%s' % (dest, fname)
 
+            shutil.copy2(f, dname)
+            if debug_level=='DEBUG':
+                logger.debug('copied %s ---------> %s' % (f, dname))
+            elif debug_level=='INFO':
+                logger.info('copied %s ---------> %s' % (f, dname))
+            if mode=='move':
+                os.remove(f)                        
+            n+=1
+        
+        except IOError, e:
+            if full_trace:
+                tb = traceback.format_exc()
+                logger.error(tb)
+            else:
+                logger.error(e)                
+
+    logger.info(' *** %d FILES TRANSFERRED ***' % n )
 
 def rsync(source, target, config):
     """ Calls rysnc to transfer files from source to target.
@@ -295,7 +331,10 @@ def prepare(config):
     config['domain']
     config['model']
     config['model_run']
+    
     run_dir = config['run_dir']
+    pre_clean = config['pre_clean'] 
+
 
     logger           = get_logger()
     logger.info('*** PREPARING DIRECTORIES ***')
@@ -309,11 +348,12 @@ def prepare(config):
             logger.debug('creating directory %s ' %d)
             os.mkdir(d) 
    
-    for log in ['ncl_log', 'gm_log']:
-        log_file = config[log]
-        if os.path.exists(log_file):
-            logger.debug('removing log file: %s' % log_file )
-            os.remove(log_file) 
+    for pattern in pre_clean:
+        flist = glob.glob(pattern)
+        for f in flist:
+            if os.path.exists(f):
+                logger.debug('removing file: %s' % f )
+                os.remove(f)
 
     logger.info('*** DONE PREPARE ***')
 
@@ -2128,7 +2168,7 @@ def cleanup(config):
     """Cleans up various files """
     logger = get_logger()
 
-    cleanup_dir = config['cleanup_dirs']
+    cleanup_dir = config['post_clean']
     for d in cleanup_dir:
         cmd = 'rm -f %s' % d
         run_cmd(cmd, config)

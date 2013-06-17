@@ -1,8 +1,15 @@
 ;******************************************************
-; Extract time-series from WRF netcdf files 
-; write output to a simple text file
-; Which variables are extracted are hard coded
-; in this script, starting at around line
+; Extract time-series from WRF netcdf files write output 
+; to a simple text file. Variables extracted are hard coded
+; in this script, but can be turned on or off with options
+; set around line 55.
+;
+; Credit to Dennis Shea's wrfout_to_cf.ncl for some 
+; inspiration
+;
+; Author Sam Hawkins
+; sam.hawkins@vattenfall.com
+; 
 ;******************************************************
 
 load "$NCARG_ROOT/lib/ncarg/nclscripts/csm/gsn_code.ncl"
@@ -12,7 +19,7 @@ load "$NCARG_ROOT/lib/ncarg/nclscripts/csm/shea_util.ncl"
 load "$NCARG_ROOT/lib/ncarg/nclscripts/wrf/WRFUserARW.ncl"
 load "$NCARG_ROOT/lib/ncarg/nclscripts/wrf/WRF_contributed.ncl"
 load "$NCARG_ROOT/lib/ncarg/nclscripts/contrib/time_axis_labels.ncl"
-load "$HOME/code/wrftools/trunk/ncl/wrftools.ncl"
+load "$HOME/code/wrftools/devel/ncl/wrftools.ncl"
 
 
 begin
@@ -26,8 +33,52 @@ begin
   nlevels = dims(0)
   delete(dims)
 
-;  max_level          = 6   ; used to limit the number 
-;                           ; of vertical levels read
+;******************************************************
+; Output options
+  
+  ;****************************
+  ; 2D (surface) variables
+  ;****************************
+  out2dMet                   = True
+  out2dMet@SST               = False     ;sea-surface temperature                  - not yet implemented
+  out2dMet@T_sfc             = False     ;temperature at the surface               - not yet implemented
+  out2dMet@p_sfc             = False     ;pressure at the surface                  - not yet implemented
+  out2dMet@slp               = False     ;sea-level pressure- using WRF-NCL        - not yet implemented
+  out2dMet@slp_b             = False     ;sea-level pressure - lowest eta level    - not yet implemented
+  out2dMet@T_2m              = True      ;temperature at 2m                        - output as T2
+  out2dMet@theta_2m          = False     ;potential temperature at 2m              - not yet implemented
+  out2dMet@Td_2m             = True      ;dewpoint temperature at 2m               - output as TD2
+  out2dMet@r_v_2m            = False     ;mixing ratio at 2m                       - not yet implemented
+  out2dMet@q_2m              = False     ;specific humidity at 2m                  - not yet implemented
+  out2dMet@rh_2m             = False     ;relative humidity at 2m                  - not yet implemented
+  out2dMet@u_10m_gr          = False     ;u wind - grid - at 10m                   - not yet implemented
+  out2dMet@v_10m_gr          = False     ;v wind - grid - at 10m                   - not yet implemented
+  out2dMet@u_10m_tr          = False     ;u wind - rotated to earth- at 10m        - not yet implemented
+  out2dMet@v_10m_tr          = False     ;v wind - rotated to earth - at 10m       - not yet implemented
+  out2dMet@ws_10m            = False     ;wind speed - at 10m                      - not yet implemented
+  out2dMet@wd_10m            = False     ;wind direction - earth - at 10m          - not yet implemented
+  out2dMet@precip_g          = True      ;total grid scale precipitation           - output as RAIN
+  out2dMet@precip_c          = False     ;total cumulus precipitation              - not yet implemented
+  out2dMet@precip_fr         = False     ;fraction of frozen nonconv. precip       - not yet implemented
+  out2dMet@dryairmass        = False     ;total dry air mass in column             - not yet implemented
+  out2dMet@pblh              = False     ;PBL height                               - not yet implemented
+  out2dMet@rho               = False     ;density at lowest eta level              - not yet implemented
+
+
+  ;****************************
+  ; 3D variables interpolated
+  ; to height above surface
+  ;****************************
+  out3dAsl                   = True
+  out3dAsl@u_tr              = False     ;earth relative u-component               - not yet implemented
+  out3dAsl@v_tr              = False     ;earth relative v-component               - not yet implemented
+  out3dAsl@ws                = True      ;wind speed                               - output as SPEED
+  out3dAsl@wd_tr             = True      ;earth-relative wind direction            - output as DIRECTION
+
+
+
+
+;******************************************************
 
 
 ;******************************************************
@@ -40,6 +91,17 @@ begin
   loc_file  = getenv("LOCATIONS_FILE")
   domain    = getenv("DOMAIN")      ; these will get used
   model_run = getenv("MODEL_RUN")   ; to write metadata
+
+
+;******************************************************
+; Give some info
+;******************************************************
+print("NCL Extracting time seres from file: "+fcst_file)
+
+
+
+
+
 
 
 ;******************************************************
@@ -71,7 +133,7 @@ begin
   loc_id    = str_get_field(data, loc_ind+1, ",")                ; str_get_field numbering starts at 1
   lat       = stringtofloat(str_get_field(data, lat_ind+1, ",")) ; so add 1 to indices
   lon       = stringtofloat(str_get_field(data, lon_ind+1, ","))
-  name      = str_get_field(data, name_ind+1, ",")
+  loc_name  = str_get_field(data, name_ind+1, ",")
 
   delete(cmd)
   delete(lines)
@@ -171,12 +233,14 @@ begin
     wrf_series@nest_id      = nest_id
     wrf_series@var_name     = "SPEED"    
     
-    printVarSummary(wrf_series)
+    print("Extracting wind speed")
+    ;printVarSummary(wrf_series)
 
     do i=0,nlocs-1
         do j=0,nlevels-1
             series  = wrf_series(time|:, height|j, loc|i)
-            series@loc_id = loc_id(i)
+            series@loc_id   = loc_id(i)
+            series@loc_name = loc_name(i)
             series@lat    = lat(i)
             series@lon    = lon(i)
             printVarSummary(series)
@@ -218,12 +282,13 @@ begin
     wrf_series@nest_id      = nest_id
     wrf_series@var_name     = "DIRECTION"    
     
-    printVarSummary(wrf_series)
+;    printVarSummary(wrf_series)
 
     do i=0,nlocs-1
         do j=0,nlevels-1
             series  = wrf_series(time|:, height|j, loc|i)
             series@loc_id = loc_id(i)
+            series@loc_name = loc_name(i)
             series@lat    = lat(i)
             series@lon    = lon(i)
             printVarSummary(series)
@@ -266,11 +331,12 @@ begin
         wrf_series(k, :) = wrf_series(k,:)-wrf_series(k-1,:)
     end do
 
-    printVarSummary(wrf_series)
+;    printVarSummary(wrf_series)
 
     do i=0,nlocs-1
         series  = wrf_series(time|:, loc|i)
         series@loc_id = loc_id(i)
+        series@loc_name = loc_name(i)
         series@lat    = lat(i)
         series@lon    = lon(i)
         printVarSummary(series)
@@ -314,11 +380,12 @@ begin
     wrf_series!1            = "loc"
     wrf_series&time         = fcst_hrs
 
-    printVarSummary(wrf_series)
+;   printVarSummary(wrf_series)
 
     do i=0,nlocs-1
         series  = wrf_series(time|:, loc|i)
         series@loc_id = loc_id(i)
+        series@loc_name = loc_name(i)
         series@lat    = lat(i)
         series@lon    = lon(i)
         printVarSummary(series)
@@ -356,11 +423,12 @@ begin
     wrf_series!1            = "loc"
     wrf_series&time         = fcst_hrs
 
-    printVarSummary(wrf_series)
+;    printVarSummary(wrf_series)
 
     do i=0,nlocs-1
         series  = wrf_series(time|:, loc|i)
         series@loc_id = loc_id(i)
+        series@loc_name = loc_name(i)
         series@lat    = lat(i)
         series@lon    = lon(i)
         printVarSummary(series)
@@ -378,9 +446,6 @@ begin
         delete(fname)
     end do
     delete(wrf_series)
-
-exit
-
 
 end
 
