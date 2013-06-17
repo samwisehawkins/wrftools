@@ -243,10 +243,16 @@ def transfer(flist, dest, mode='copy', debug_level='NONE', full_trace=False):
     logger.info(' *** TRANSFERRING %d FILES TO %s ***' %(len(flist), dest))
     
     n=0
+    if type(flist)!=type([]):
+        flist = [flist]
+    
     for f in flist:
         try:
             fname = os.path.split(f)[1]
             dname = '%s/%s' % (dest, fname)
+            # bit dangerous, could delete then fail
+            if os.path.exists(dname):
+                os.remove(dname)
 
             shutil.copy2(f, dname)
             if debug_level=='DEBUG':

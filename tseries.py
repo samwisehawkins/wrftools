@@ -109,14 +109,8 @@ def json_to_web(config):
     web_dir     = wrftools.sub_date(config['web_dir'], init_time)
     
     logger.info('*** COPYING JSON TO WEB DIR ***')
-    cmd = 'cp -f %s %s' % (json_file, web_dir)
-    wrftools.run_cmd(cmd, config)
-    flist = glob.glob(web_dir+'/*.json')
-    for filename in sorted(flist):
-        info  = os.stat(filename)
-        mtime = datetime.datetime.fromtimestamp(info.st_mtime)
-        logger.info('%s : %s ' %(filename, mtime.strftime('%Y-%m-%d %H:%M')))
-
+    
+    wrftools.transfer(json_file,web_dir, mode='copy', debug_level='NONE', full_trace=False)
     logger.info('*** COPIED JSON DATA ***')
 
 

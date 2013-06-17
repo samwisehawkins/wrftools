@@ -247,7 +247,6 @@ for init_time in init_times:
                 logger.debug('Processing domain d%02d' %d)
                 config['dom'] = d
                 wrftools.produce_ncl_plots(config)
-                wrftools.transfer_to_web_dir(config)
             except Exception, e:
                 logger.error('*** FAIL NCL ***')
                 wrftools.handle(e, fail_mode, full_trace)
