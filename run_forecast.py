@@ -91,6 +91,7 @@ wps                 = config['wps']
 wrf                 = config['wrf']
 upp                 = config['upp']
 time_series         = config['time_series']
+json                = config['json']
 power               = config['power']
 ncl                 = config['ncl']
 scripts             = config['scripts']
@@ -183,6 +184,10 @@ for init_time in init_times:
         except Exception, e:
             wrftools.handle(e, fail_mode, full_trace)
     
+    logger.warn('*** SLEEPING FOR 10 SECONDS TO ALLOW FS TIME TO SORT ITSELF OUT ***')
+    time.sleep(10)
+    
+    #
     # Computing time
     #
     if timing:
@@ -247,8 +252,8 @@ for init_time in init_times:
                 logger.error('*** FAIL NCL ***')
                 wrftools.handle(e, fail_mode, full_trace)
     
-    if web:
-        wrftools.transfer_to_web_dir(config)
+        if web:
+            wrftools.transfer_to_web_dir(config)
 
     #
     # Extract time-series from grib files
@@ -262,7 +267,21 @@ for init_time in init_times:
                 logger.error('*** FAIL TIME SERIES ***')
                 wrftools.handle(e, fail_mode, full_trace)
 
-        wrftools.tseries_to_json(config)
+    #
+    # Some bug seems to be creeping in, causing the programme to 
+    # fail silently around here. I'm adding a sleep statement
+    # as I have a hunch this might be some kind of race condition
+    #
+    logger.warn('*** SLEEPING FOR 10 SECONDS TO ENSURE TSERIES FILES ARE CLOSED ***')
+    time.sleep(10)
+
+    if json:
+        try:
+            wrftools.tseries_to_json(config)
+        except Exception, e:
+                logger.error('*** FAIL JSON CONVERSION ***')
+                wrftools.handle(e, fail_mode, full_trace)
+
         if web:
             logger.info('*** TRANSFERRING JSON TO WEB DIR ***')
             try:

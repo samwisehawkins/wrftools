@@ -31,7 +31,9 @@ HOUR = datetime.timedelta(0, 60*60)
 
 def to_json(frame):
 
-    frame = frame.set_index(['location_id','nest_id', 'variable', 'height'])
+    frame = frame.set_index(['location_id','location_name','nest_id', 'variable', 'height'])
+    logger=wrftools.get_logger()
+    logger.debug(frame)
     groupby = frame.index.names
     grouped = frame.groupby(level=groupby)
     ngroups = grouped.ngroups
@@ -68,26 +70,27 @@ def tseries_to_json(config):
     json_dir    = '%s/%s/json' % (domain_dir, model_run)
     json_file   = '%s/fcst_data.json' % json_dir
 
+    logger.debug('json_dir: %s ' %json_dir)
+
     if not os.path.exists(json_dir):
         os.makedirs(json_dir)
     
 
     logger.info('*** CONVERTING TIME SERIES TO JSON ***')
-    logger.debug(json_file)
     pattern = '%s/*%s*' % (tseries_dir, init_time.strftime('%Y-%m-%d_%H'))
     logger.debug(pattern)
     infiles = glob.glob(pattern)
     if len(infiles)==0:
         raise IOError('could not find any time-series files to process')    
 
+    logger.debug('Found %d time-series files to process' % len(infiles))
     for n,f in enumerate(infiles):
         if n==0:
-            frame = pd.read_csv(f, parse_dates=[8,9])
+            frame = pd.read_csv(f, parse_dates=[9,10])
         else:
-            new_frame =  pd.read_csv(f, parse_dates=[8,9])
+            new_frame =  pd.read_csv(f, parse_dates=[9,10])
             frame = pd.concat((frame,new_frame))
 
-    #grouped = frame.groupby(by=['location_id', 'variable', 'height'])
     jstring = to_json(frame)
     f = open(json_file, 'w')
     f.write(jstring)
@@ -157,7 +160,7 @@ def extract_tseries(config):
         #
         # mem_total forces the use postprocessing node
         #
-        cmd  = "ncl %s >> %s" % (script, ncl_log)
+        cmd  = "ncl %s >> %s 2>&1" % (script, ncl_log)
         qcmd = 'qrsh -cwd -l mem_total=36G "%s"' % cmd
         ret = wrftools.run_cmd(cmd, config)
 
