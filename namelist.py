@@ -125,19 +125,31 @@ class Namelist(object):
 # Namelist manipulation
 #*****************************************************************
 
-def clean_lines(fin):
-    for line in fin:
+def clean_lines(lines):
+    """ Cleans lines of trailing endlines, and joins together 
+    logical continuations specified by '\\'
+    
+    Arguments:
+        @lines -- iterable which will yield lines to be cleaned"""
+    
+    for line in lines:
         line = line.lstrip()
         line = line.rstrip('\n')
         line = line.rstrip()
 
+        # join logical continuations
         while line.endswith('\\'):
-            line = line[:-1] + next(fin).rstrip('\n')
+            line = line[:-1] + next(lines).rstrip('\n')
         yield line
 
 def from_file(f):
+    """ Reads a namelist/configuration file and generates a 
+    Namelist object. Anything enclosed in ${...} will be expanded 
+    to a environment variable, while anything enclosed in 
+    %(...) will be expanded to a previously defined variable within 
+    the file """
     
-    sec   = re.compile('.*&')        
+    sec   = re.compile('.*&')               # sections specified by an ampersand 
     eq    = re.compile('.*=.*')             # match rows containing an equals
     evar  = re.compile('\$\{.*?\}')         # match rows containing environment vars
     lvar  = re.compile('%\(.*?\)')          # match rows containing previous definitions
@@ -168,6 +180,10 @@ def from_file(f):
                     if evname in os.environ:
                         val_part = val_part.replace(ev, os.environ[evname])
 
+            #
+            # Note, this means that variables need to be defined in 
+            # order within the conig file.
+            #
             lvars = lvar.findall(val_part)
             if lvars!=[]:
                 for lv in lvars:
@@ -215,9 +231,33 @@ def read_namelist(filename):
     namelist.filename = filename
     return namelist
 
+
+def add_cmd_args(config, cmd_args):
+    """ Parses command-line arguments and updates the config
+    dictionary to add or override existing settings.
+    
+    Arguments:
+        @config   -- a dictionary of existing settings
+        @cmd_args -- list of command-line arguments to parse and add to config
+                     command line arguments should be of the form --key=value"""
+    parts = [a.split('=') for a in cmd_args]
+    updates = dict([(p[0].lstrip('--'), parse(p[1]))for p in parts ])
+    config.update(updates)
+
         
 def parse(str_input):
-    """ Parses entries from namelist file to booelan, float, int, timestamp or string"""
+    """ Parses entries from namelist file to booelan, float, int, timestamp or string
+    Entries are converted to lower case, then tested in the following order:
+    1. Boolean: .true. or .false.
+    2. Float: contains '.'
+    3. Datetime: contains '-' this could be dangerous
+    4. Integer: try int()!
+    5. If all of the above fail, parse as string
+    
+    Arguments:
+        @str_input -- the string to parse
+        
+    Returns a parsed object (bool, float, datetime, int or string) """
     
     stripped = str_input.strip().lower()
     try:
@@ -257,6 +297,7 @@ def sync_namelists(namelist_wps, namelist_input):
         val = wps.settings[setting]
         inp.update(setting, val)
     inp.to_file(namelist_input)
+
 
 def strptime(timestr):
     """ Specific implementation to convert timeformat into

@@ -110,7 +110,7 @@ def json_to_web(config):
     
     logger.info('*** COPYING JSON TO WEB DIR ***')
     
-    wrftools.transfer(json_file,web_dir, mode='copy', debug_level='NONE', full_trace=False)
+    wrftools.transfer(json_file,web_dir, mode='copy', debug_level='NONE')
     logger.info('*** COPIED JSON DATA ***')
 
 

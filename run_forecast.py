@@ -6,8 +6,9 @@
 # and verification which goes with it.
 #
 # This can be run as a command-line script where the first
-# and only argument is a configuration file which sets most 
-# of the options.
+# argument MUST BE a configuration file which sets most 
+# of the options.  These options can be overridden by speciying
+# further arguments in the form: --key=value. 
 #
 # The philosophy is to keep this script as simple and clean 
 # as possible to represent the high-level progamme flow. 
@@ -18,26 +19,10 @@
 # module. This script this ties it all together, initialises 
 # the logging framework and does some basic error checking.  
 #
-# Another design choice is to have output files archived by initial 
-# time, so that subsequent visualisation and verification can 
-# be done using the same outer-loop as this script. 
-#
-#
-# A further  design choice is to use a configuration file 
+# A (questionable) design choice is to use a configuration file 
 # with the same (at least similar)
 # syntax to the namelist.wps and namelist.input files used by WRF
 # so that the same code can be re-used reading these.
-#
-# TODO: get rid of outer case loop. This is unecessary, if we
-#       just generalise the code so that start and end can be lists
-#       and get_init_times et al return init_times which are not 
-#       necessarily contiguous. We want to get rid of test_case in 
-#       the meta-data since it is extraneous, as it is already defined 
-#       by the init_time. 
-#
-#       tidy up logging statements so they are consistent
-#       add performance/timing code - 
-#       add visualisation codes - DONE
 #
 # AUTHOR: sam.hawkins@vattenfall.com
 #**************************************************************
@@ -50,6 +35,16 @@ import logging
 nl      = wrftools.read_namelist(sys.argv[1])
 config  = nl.settings
 
+#
+# Allow command-line arguments to override those in the namelist file
+# no checking is done here, we just merrily assume the arguments 
+# are given in the correct order. They should be specified like this
+#
+# --option=value 
+#
+if len(sys.argv)>2:
+    cmd_args = sys.argv[2:]
+    wrftools.add_cmd_args(config, cmd_args)
 
 #
 # Get some required settings
@@ -57,11 +52,17 @@ config  = nl.settings
 fcst_hours   = config['fcst_hours']               # forecast length
 base_dir     = config['base_dir']
 domain       = config['domain']
-domain_dir   = '%s/%s' % (base_dir, domain)
-config['domain_dir'] = domain_dir                 # domain directory
 max_dom      = config['max_dom']                  # number of nested domains
 fail_mode    = config['fail_mode']                # what to do on failure
 
+
+#************************************************
+# Logging
+#************************************************
+logger = wrftools.create_logger(config)
+
+#for key in config.keys():
+#    logger.debug('%s: %s' %(key, config[key]))
 
 #***********************************************
 # Initial checks
@@ -72,10 +73,6 @@ except KeyError:
     logger.error('required setting missing')
     sys.exit()
 
-#************************************************
-# Logging
-#************************************************
-logger = wrftools.create_logger(config)
 
 
 #************************************************
