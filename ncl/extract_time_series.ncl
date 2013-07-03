@@ -34,20 +34,48 @@ begin
   delete(dims)
 
 ;******************************************************
+
+;******************************************************
+; Horizontal interpolation options
+; 0: none, use grid cell value from wrf_user_ll_to_ij
+; 1: inverse distance weighting as implemented by rcm2points
+; 2: bilinear interpolation as implemented by rcm2points
+; not implemented yet
+;******************************************************
+  interp_option = 1
+
+
+;******************************************************
 ; Output options
+;******************************************************
+  
+  ;****************************
+  ; 3D variables interpolated
+  ; to height above surface
+  ;****************************
+  out3dAgl                   = False
+  out3dAgl@u_tr              = False     ;earth relative u-component               - not yet implemented
+  out3dAgl@v_tr              = False     ;earth relative v-component               - not yet implemented
+  out3dAgl@ws                = True      ;wind speed                               - output as SPEED
+  out3dAgl@wd_tr             = True      ;earth-relative wind direction            - output as DIRECTION
+  out3dAgl@t                 = True      ;temperature                              - output as T
+  out3dAgl@theta             = True      ;potential temperature                    - output as THETA
+  out3dAgl@tke_pbl           = True      ;TKE from PBL scheme                      - output as TKE (not yet implemented)
+
   
   ;****************************
   ; 2D (surface) variables
   ;****************************
   out2dMet                   = True
-  out2dMet@SST               = False     ;sea-surface temperature                  - not yet implemented
+  out2dMet@SST               = False      ;sea-surface temperature                  - output as SST
+  out2dMet@T_skin            = False      ;skin (surface) temperature               - output as TSK
   out2dMet@T_sfc             = False     ;temperature at the surface               - not yet implemented
   out2dMet@p_sfc             = False     ;pressure at the surface                  - not yet implemented
   out2dMet@slp               = False     ;sea-level pressure- using WRF-NCL        - not yet implemented
   out2dMet@slp_b             = False     ;sea-level pressure - lowest eta level    - not yet implemented
   out2dMet@T_2m              = True      ;temperature at 2m                        - output as T2
   out2dMet@theta_2m          = False     ;potential temperature at 2m              - not yet implemented
-  out2dMet@Td_2m             = True      ;dewpoint temperature at 2m               - output as TD2
+  out2dMet@Td_2m             = False      ;dewpoint temperature at 2m               - output as TD2
   out2dMet@r_v_2m            = False     ;mixing ratio at 2m                       - not yet implemented
   out2dMet@q_2m              = False     ;specific humidity at 2m                  - not yet implemented
   out2dMet@rh_2m             = False     ;relative humidity at 2m                  - not yet implemented
@@ -57,28 +85,20 @@ begin
   out2dMet@v_10m_tr          = False     ;v wind - rotated to earth - at 10m       - not yet implemented
   out2dMet@ws_10m            = False     ;wind speed - at 10m                      - not yet implemented
   out2dMet@wd_10m            = False     ;wind direction - earth - at 10m          - not yet implemented
-  out2dMet@precip_g          = True      ;total grid scale precipitation           - output as RAIN
+  out2dMet@precip_g          = False     ;total grid scale precipitation           - output as RAIN
   out2dMet@precip_c          = False     ;total cumulus precipitation              - not yet implemented
   out2dMet@precip_fr         = False     ;fraction of frozen nonconv. precip       - not yet implemented
   out2dMet@dryairmass        = False     ;total dry air mass in column             - not yet implemented
   out2dMet@pblh              = False     ;PBL height                               - not yet implemented
   out2dMet@rho               = False     ;density at lowest eta level              - not yet implemented
-
-
-  ;****************************
-  ; 3D variables interpolated
-  ; to height above surface
-  ;****************************
-  out3dAsl                   = True
-  out3dAsl@u_tr              = False     ;earth relative u-component               - not yet implemented
-  out3dAsl@v_tr              = False     ;earth relative v-component               - not yet implemented
-  out3dAsl@ws                = True      ;wind speed                               - output as SPEED
-  out3dAsl@wd_tr             = True      ;earth-relative wind direction            - output as DIRECTION
-
-
-
-
+  out2dMet@swdown            = False     ;downward short wave flux at ground surface -- output as SWDOWN
+  out2dMet@pblh              = False     ;PBL height                                 -- output as PBLH
+  out2dMet@cldfra_avg        = False     ;Cloud fraction column average              -- output as CLDFRAAVG
+  out2dMet@cldfra_max        = False     ;Cloud fraction column maximun              -- output as CLDFRAMAX
 ;******************************************************
+
+print(out2dMet)
+print(out3dAgl)
 
 
 ;******************************************************
@@ -98,18 +118,6 @@ begin
 ;******************************************************
 print("NCL Extracting time seres from file: "+fcst_file)
 
-
-
-
-
-
-
-;******************************************************
-; Horizontal interpolation options
-; 0: none, use grid cell value
-; 1: bilinear interpolation
-;******************************************************
-  interp_option = 0
 
 ;******************************************************
 ; Add the file
@@ -148,26 +156,35 @@ print("NCL Extracting time seres from file: "+fcst_file)
   nlocs = dims(0)
   delete(dims)
 
+  ;******************************************************
+  ; Get times and dimensions
+  ;******************************************************
+  lat2d =f->XLAT(0,:,:)
+  lon2d =f->XLONG(0,:,:)
+  
+  ;times  = wrf_user_list_times(f)  ; get times in the file
 
-
- ;******************************************************
- ; Get times from file
- ;******************************************************
   times     = f->Times
   fcst_hrs  = WRF_Times_to_udunits(times, 0)    ; using 0 forces the units to be hours since first time in the file
   init_time = chartostring(times(0,0:12))
+  dims = dimsizes(fcst_hrs)
+  ntimes=dims(0)
+  delete(dims)
 
  ;******************************************************
  ; Get coordinates
  ;******************************************************
-
   lat2d  = f->XLAT(0,:,:)
   lon2d  = f->XLONG(0,:,:)
 
-  dims   = dimsizes(times)
-  ntimes = dims(0)
-  tstart = times(0,:)            ;   use the WRF forecast to specify the 
-  tend   = times(ntimes-1, :)    ;   start   and end points
+
+ ;******************************************************
+ ; Get grid indices of locations of interest
+ ;******************************************************
+  loc   = wrf_user_ll_to_ij(f,lon, lat, True)
+  loc   = loc-1          ; To convert to NCL subscripts
+  dims  = dimsizes(loc)
+  nlocs = dims(1)
   delete(dims)
 
 
@@ -179,7 +196,7 @@ print("NCL Extracting time seres from file: "+fcst_file)
 ; where: SLG  = location_id
 ;          VGRD = 'standard' variable name
 ;          d01  = nest_id
-;          100  = height above surface
+;          100  = height above surface, integer 3-digits
 ; 2012-11-17_12 = fcst initial time  
 ;******************************************************
 
@@ -193,15 +210,21 @@ print("NCL Extracting time seres from file: "+fcst_file)
     ter           = wrf_user_getvar(f, "ter", 0)      ; assume terrain doesn't change with time
     hgt_amsl      = wrf_user_getvar(f, "z", -1)       ; height above sea level of model levels
                                                       ; this will be 4D, since height varies (slightly)
-
     new_hgt = conform(hgt_amsl, ter, (/2,3/))         ; ensure they terrain height is right dimensionality
     hgt_agl = hgt_amsl - new_hgt                      ; get the height of model levels above ground level
 
 
 ;************************************************************************
-;  Wind speed and direction
+;  3D variables
 ;************************************************************************
-    uvmet   = wrf_user_getvar(f, "uvmet", -1)     ; these are rotated, but are they unstaggered?
+
+
+    ;**********************************************
+    ;  Wind speed and direction
+    ;**********************************************
+if (out3dAgl@ws) then
+
+    uvmet   = wrf_user_getvar(f, "uvmet", -1)    ; these are rotated, but are they unstaggered?
     u_tr_e  = uvmet(0,:,:,:,:)                   ; u_tr_e
     v_tr_e  = uvmet(1,:,:,:,:)                   ; v_tr_e
     u_agl   = wrf_user_intrp3d(u_tr_e, hgt_agl, "h", extract_heights,0, False) 
@@ -211,10 +234,9 @@ print("NCL Extracting time seres from file: "+fcst_file)
     wd_agl  = atan2(u_agl, v_agl) * r2d + 180.
 
 
-;************************************************************************
-; Speed
-;************************************************************************
-
+    ;**********************************************
+    ; Speed
+    ;**********************************************
     print("Processing wind speed")
     wrf_series              = rcm2points(lat2d, lon2d,  ws_agl, lat, lon, 0)
     wrf_series!0            = "time"
@@ -223,17 +245,15 @@ print("NCL Extracting time seres from file: "+fcst_file)
     wrf_series&time         = fcst_hrs
     wrf_series&height       = extract_heights
 
-
-    ;********************************************************
+    ;*******************
     ; Attach metadata
-    ;********************************************************
+    ;*******************
     wrf_series@domain       = domain
     wrf_series@model        = "WRF"
     wrf_series@model_run    = model_run
     wrf_series@nest_id      = nest_id
     wrf_series@var_name     = "SPEED"    
     
-    print("Extracting wind speed")
     ;printVarSummary(wrf_series)
 
     do i=0,nlocs-1
@@ -243,7 +263,6 @@ print("NCL Extracting time seres from file: "+fcst_file)
             series@loc_name = loc_name(i)
             series@lat    = lat(i)
             series@lon    = lon(i)
-            printVarSummary(series)
             ihgt = floattoint(series@height)
             shgt = sprinti("%0.3i", ihgt)
             fname   = out_dir + "/" +\
@@ -252,19 +271,22 @@ print("NCL Extracting time seres from file: "+fcst_file)
                          series@nest_id + us +\
                          shgt+ us +\
                          init_time +".txt"
-            print(fname)
             write_series(series, fname)
             delete(series)
             delete(fname)
         end do
     end do
     delete(wrf_series)
+end if
 
-;************************************************************************
-; Direction. Direction can't realy be interpolated
-; but we do it for now and hope for the best
-;************************************************************************
 
+
+    ;**********************************************
+    ; Direction. Direction can't really be 
+    ; horizontally interpolated but we do it 
+    ; anyway and hope for the best
+    ;**********************************************
+if (out3dAgl@wd_tr) then
     print("Processing wind direction")
     wrf_series              = rcm2points(lat2d, lon2d,  wd_agl, lat, lon, 0)
     wrf_series!0            = "time"
@@ -282,7 +304,7 @@ print("NCL Extracting time seres from file: "+fcst_file)
     wrf_series@nest_id      = nest_id
     wrf_series@var_name     = "DIRECTION"    
     
-;    printVarSummary(wrf_series)
+    ;printVarSummary(wrf_series)
 
     do i=0,nlocs-1
         do j=0,nlevels-1
@@ -291,7 +313,6 @@ print("NCL Extracting time seres from file: "+fcst_file)
             series@loc_name = loc_name(i)
             series@lat    = lat(i)
             series@lon    = lon(i)
-            printVarSummary(series)
             ihgt = floattoint(series@height)
             shgt = sprinti("%0.3i", ihgt)
             fname   = out_dir + "/" +\
@@ -300,19 +321,167 @@ print("NCL Extracting time seres from file: "+fcst_file)
                          series@nest_id + us +\
                          shgt+ us +\
                          init_time +".txt"
-            print(fname)
+            ;print(fname)
             write_series(series, fname)
             delete(series)
             delete(fname)
         end do
     end do
     delete(wrf_series)
+end if
 
 
-;**********************************************************
-; RAIN
-;**********************************************************
-   
+    ;**********************************************
+    ; T
+    ;**********************************************
+if(out3dAgl@t) then
+    print("processing T")
+    print("Waring. Check that temperature has been properly interpolated to heights above ground")
+    t = wrf_user_getvar (f, "tc", -1)
+    t_agl   = wrf_user_intrp3d(t, hgt_agl, "h", extract_heights,0, False) 
+    t_agl@units  = "C"
+    wrf_series = rcm2points(lat2d, lon2d,  t_agl, lat, lon, 0)
+    wrf_series@domain       = domain
+    wrf_series@model        = "WRF"
+    wrf_series@model_run    = model_run
+    wrf_series@nest_id      = nest_id
+    wrf_series@var_name     = "T"    
+    wrf_series!0            = "time"
+    wrf_series!1            = "height"
+    wrf_series!2            = "loc"
+    wrf_series&time         = fcst_hrs
+    wrf_series&height       = extract_heights
+
+    do i=0,nlocs-1
+        do j=0,nlevels-1
+            series  = wrf_series(time|:, height|j, loc|i)
+            series@loc_id = loc_id(i)
+            series@loc_name = loc_name(i)
+            series@lat    = lat(i)
+            series@lon    = lon(i)
+            ihgt = floattoint(series@height)
+            shgt = sprinti("%0.3i", ihgt)
+            fname   = out_dir + "/" +\
+                     series@loc_id + us +\
+                     series@var_name + us + "d" +\
+                     series@nest_id + us +\
+                     shgt+ us +\
+                     init_time +".txt"
+            ;print(fname)
+            write_series(series, fname)
+            delete(series)
+            delete(fname)
+        end do
+    end do
+    delete(wrf_series)
+    delete(t)
+    delete(t_agl)
+end if
+
+
+    ;**********************************************
+    ; THETA
+    ;**********************************************
+if(out3dAgl@theta) then
+    print("processing THETA")
+    theta = wrf_user_getvar (f, "theta", -1)
+
+
+    theta_agl   = wrf_user_intrp3d(theta, hgt_agl, "h", extract_heights,0, False) 
+    theta_agl@units  = "C"
+    
+    wrf_series = rcm2points(lat2d, lon2d,  theta_agl, lat, lon, 0)
+    wrf_series@domain       = domain
+    wrf_series@model        = "WRF"
+    wrf_series@model_run    = model_run
+    wrf_series@nest_id      = nest_id
+    wrf_series@var_name     = "THETA"    
+    wrf_series!0            = "time"
+    wrf_series!1            = "height"
+    wrf_series!2            = "loc"
+    wrf_series&time         = fcst_hrs
+    wrf_series&height       = extract_heights
+
+    do i=0,nlocs-1
+        do j=0,nlevels-1
+           series  = wrf_series(time|:,height|j, loc|i)
+            series@loc_id = loc_id(i)
+            series@loc_name = loc_name(i)
+            series@lat    = lat(i)
+            series@lon    = lon(i)
+            ihgt = floattoint(series@height)
+            shgt = sprinti("%0.3i", ihgt)
+            fname   = out_dir + "/" +\
+                     series@loc_id + us +\
+                     series@var_name + us + "d" +\
+                     series@nest_id + us +\
+                     shgt+ us +\
+                     init_time +".txt"
+            ;print(fname)
+            write_series(series, fname)
+            delete(series)
+            delete(fname)
+        end do
+    end do
+    delete(wrf_series)
+    delete(theta)
+    delete(theta_agl)
+end if
+
+    ;**********************************************
+    ; TKE
+    ;**********************************************
+if(out3dAgl@tke_pbl) then
+    print("processing TKE")
+    tke = f->TKE_PBL(:,:,:,:)
+    tke_agl   = wrf_user_intrp3d(tke, hgt_agl, "h", extract_heights,0, False) 
+    tke_agl@units  = "m2 s-2"
+    
+    wrf_series = rcm2points(lat2d, lon2d,  tke_agl, lat, lon, 0)
+    wrf_series@domain       = domain
+    wrf_series@model        = "WRF"
+    wrf_series@model_run    = model_run
+    wrf_series@nest_id      = nest_id
+    wrf_series@var_name     = "TKE"    
+    wrf_series!0            = "time"
+    wrf_series!1            = "height"
+    wrf_series!2            = "loc"
+    wrf_series&time         = fcst_hrs
+    wrf_series&height       = extract_heights
+    do i=0,nlocs-1
+        do j=0,nlevels-1
+           series  = wrf_series(time|:,height|j, loc|i)
+            series@loc_id = loc_id(i)
+            series@loc_name = loc_name(i)
+            series@lat    = lat(i)
+            series@lon    = lon(i)
+            ihgt = floattoint(series@height)
+            shgt = sprinti("%0.3i", ihgt)
+            fname   = out_dir + "/" +\
+                     series@loc_id + us +\
+                     series@var_name + us + "d" +\
+                     series@nest_id + us +\
+                     shgt+ us +\
+                     init_time +".txt"
+            ;print(fname)
+            write_series(series, fname)
+            delete(series)
+            delete(fname)
+        end do
+    end do
+    delete(wrf_series)
+    delete(tke)
+end if
+
+;************************************************************************
+;  2D Surface Variables
+;************************************************************************
+
+
+    ;**********************************************
+    ; RAIN
+    ;**********************************************
+if (out2dMet@precip_g) then   
     rain = f->RAINNC(:,:,:) + f->RAINC(:,:,:)
     wrf_series = rcm2points(lat2d, lon2d,  rain, lat, lon, 0)
     wrf_series@domain       = domain
@@ -331,15 +500,12 @@ print("NCL Extracting time seres from file: "+fcst_file)
         wrf_series(k, :) = wrf_series(k,:)-wrf_series(k-1,:)
     end do
 
-;    printVarSummary(wrf_series)
-
     do i=0,nlocs-1
         series  = wrf_series(time|:, loc|i)
-        series@loc_id = loc_id(i)
-        series@loc_name = loc_name(i)
-        series@lat    = lat(i)
-        series@lon    = lon(i)
-        printVarSummary(series)
+        series@loc_id    = loc_id(i)
+        series@loc_name  = loc_name(i)
+        series@lat       = lat(i)
+        series@lon       = lon(i)
 
         fname   = out_dir + "/" +\
                      series@loc_id + us +\
@@ -347,29 +513,40 @@ print("NCL Extracting time seres from file: "+fcst_file)
                      series@nest_id + us +\
                      "SFC"+ us +\
                      init_time +".txt"
-        print(fname)
+        ;print(fname)
         write_series(series, fname)
         delete(series)
         delete(fname)
     end do
     delete(wrf_series)
-    
+end if    
 
 
-    ;**********************************************************
-    ; See level pressure
-    ;**********************************************************
-    ;slp = wrf_user_getvar(f,"slp",0)    ; slp
-
-;**********************************************************
-; T2
-;**********************************************************
+    ;**********************************************
+    ; T2
+    ;**********************************************
+if (out2dMet@T_2m) then
     print("processing T2")
-    tc2 = wrf_user_getvar(f,"T2",-1)     ; T2 in Kelvin
-    tc2 = tc2 - 273.16                   ; T2 in C
-    tc2@units  = "C"
     
-    wrf_series = rcm2points(lat2d, lon2d,  tc2, lat, lon, 0)
+    tc2 = wrf_user_getvar(f,"T2",-1)- 273.15   ; T2 in C
+    printVarSummary(tc2)
+    if (interp_option.eq.0)
+        wrf_series = new((/ntimes,nlocs/),"float")
+        do i=0,nlocs-1
+            print(loc_name(i))
+            print(loc(:,i))
+            print(lat(i))
+            print(lon(i))
+            print(lat2d(loc(1,i), loc(0,i)))
+            print(lon2d(loc(1,i), loc(0,i)))
+            wrf_series(:,i) = tc2(:, loc(1,i), loc(0,i))
+        end do
+    end if
+    if (interp_option.eq.1)
+       wrf_series = rcm2points(lat2d, lon2d,  tc2, lat, lon, 0)
+    end if
+    
+    printVarSummary(wrf_series)
     wrf_series@domain       = domain
     wrf_series@model        = "WRF"
     wrf_series@model_run    = model_run
@@ -379,16 +556,20 @@ print("NCL Extracting time seres from file: "+fcst_file)
     wrf_series!0            = "time"
     wrf_series!1            = "loc"
     wrf_series&time         = fcst_hrs
+   
 
-;   printVarSummary(wrf_series)
-
+    
     do i=0,nlocs-1
-        series  = wrf_series(time|:, loc|i)
+        print(loc_name(i))
+        print(lat(i))
+        print(lon(i))
+        printVarSummary(lon)
+        series  = wrf_series(:, i)
+        
         series@loc_id = loc_id(i)
         series@loc_name = loc_name(i)
         series@lat    = lat(i)
         series@lon    = lon(i)
-        printVarSummary(series)
         ihgt = floattoint(series@height)
         shgt = sprinti("%0.3i", ihgt)
         fname   = out_dir + "/" +\
@@ -397,17 +578,19 @@ print("NCL Extracting time seres from file: "+fcst_file)
                      series@nest_id + us +\
                      shgt+ us +\
                      init_time +".txt"
-        print(fname)
+        print(min(series))
+        print(max(series))
         write_series(series, fname)
         delete(series)
         delete(fname)
     end do
     delete(wrf_series)
+end if
 
-
-;**********************************************************
-; TD2
-;**********************************************************
+    ;**********************************************
+    ; TD2
+    ;**********************************************
+if (out2dMet@Td_2m) then
     print("processing TD2")
     td2 = wrf_user_getvar(f,"td2",-1)    ; T2 in C
     td2@units  = "C"
@@ -431,7 +614,6 @@ print("NCL Extracting time seres from file: "+fcst_file)
         series@loc_name = loc_name(i)
         series@lat    = lat(i)
         series@lon    = lon(i)
-        printVarSummary(series)
         ihgt = floattoint(series@height)
         shgt = sprinti("%0.3i", ihgt)
         fname   = out_dir + "/" +\
@@ -440,12 +622,302 @@ print("NCL Extracting time seres from file: "+fcst_file)
                      series@nest_id + us +\
                      shgt+ us +\
                      init_time +".txt"
-        print(fname)
+        ;print(fname)
         write_series(series, fname)
         delete(series)
         delete(fname)
     end do
     delete(wrf_series)
+    delete(td2)
+end if
+
+    ;**********************************************
+    ; SST
+    ;**********************************************
+if (out2dMet@SST) then
+    print("processing SST")
+    sst = f->SST(:,:,:)-272.15
+    sst@units  = "C"
+    wrf_series = rcm2points(lat2d, lon2d,  sst, lat, lon, 0)
+    wrf_series@domain       = domain
+    wrf_series@model        = "WRF"
+    wrf_series@model_run    = model_run
+    wrf_series@nest_id      = nest_id
+    wrf_series@var_name     = "SST"    
+    wrf_series@height       = 0    
+    wrf_series!0            = "time"
+    wrf_series!1            = "loc"
+    wrf_series&time         = fcst_hrs
+
+;    printVarSummary(wrf_series)
+
+    do i=0,nlocs-1
+        series  = wrf_series(time|:, loc|i)
+        series@loc_id = loc_id(i)
+        series@loc_name = loc_name(i)
+        series@lat    = lat(i)
+        series@lon    = lon(i)
+        ihgt = floattoint(series@height)
+        shgt = sprinti("%0.3i", ihgt)
+        fname   = out_dir + "/" +\
+                     series@loc_id + us +\
+                     series@var_name + us + "d" +\
+                     series@nest_id + us +\
+                     shgt+ us +\
+                     init_time +".txt"
+        ;print(fname)
+        write_series(series, fname)
+        delete(series)
+        delete(fname)
+    end do
+    delete(wrf_series)
+    delete(sst)
+end if
+  
+
+
+    ;**********************************************
+    ; TSK
+    ;**********************************************
+
+if (  out2dMet@T_skin) then
+    print("processing TSK")
+    tsk = f->TSK(:,:,:)-272.15
+    tsk@units  = "C"
+    wrf_series = rcm2points(lat2d, lon2d,  tsk, lat, lon, 0)
+    wrf_series@domain       = domain
+    wrf_series@model        = "WRF"
+    wrf_series@model_run    = model_run
+    wrf_series@nest_id      = nest_id
+    wrf_series@var_name     = "TSK"    
+    wrf_series@height       = 0    
+    wrf_series!0            = "time"
+    wrf_series!1            = "loc"
+    wrf_series&time         = fcst_hrs
+
+;    printVarSummary(wrf_series)
+
+    do i=0,nlocs-1
+        series  = wrf_series(time|:, loc|i)
+        series@loc_id = loc_id(i)
+        series@loc_name = loc_name(i)
+        series@lat    = lat(i)
+        series@lon    = lon(i)
+        ihgt = floattoint(series@height)
+        shgt = sprinti("%0.3i", ihgt)
+        fname   = out_dir + "/" +\
+                     series@loc_id + us +\
+                     series@var_name + us + "d" +\
+                     series@nest_id + us +\
+                     shgt+ us +\
+                     init_time +".txt"
+        ;print(fname)
+        write_series(series, fname)
+        delete(series)
+        delete(fname)
+    end do
+    delete(wrf_series)
+    delete(tsk)
+end if
+
+
+
+
+
+    ;**********************************************
+    ; SWDOWN
+    ;**********************************************
+if (out2dMet@swdown) then
+    print("processing SWDOWN")
+    swdown = f->SWDOWN(:,:,:)
+
+    wrf_series = rcm2points(lat2d, lon2d,  swdown, lat, lon, 0)
+    wrf_series@domain       = domain
+    wrf_series@model        = "WRF"
+    wrf_series@model_run    = model_run
+    wrf_series@nest_id      = nest_id
+    wrf_series@var_name     = "SWDOWN"    
+    wrf_series@height       = 0    
+    wrf_series!0            = "time"
+    wrf_series!1            = "loc"
+    wrf_series&time         = fcst_hrs
+
+;    printVarSummary(wrf_series)
+
+    do i=0,nlocs-1
+        series  = wrf_series(time|:, loc|i)
+        series@loc_id = loc_id(i)
+        series@loc_name = loc_name(i)
+        series@lat    = lat(i)
+        series@lon    = lon(i)
+        ihgt = floattoint(series@height)
+        shgt = sprinti("%0.3i", ihgt)
+        fname   = out_dir + "/" +\
+                     series@loc_id + us +\
+                     series@var_name + us + "d" +\
+                     series@nest_id + us +\
+                     shgt+ us +\
+                     init_time +".txt"
+        ;print(fname)
+        write_series(series, fname)
+        delete(series)
+        delete(fname)
+    end do
+    delete(wrf_series)
+    delete(swdown)
+end if
+
+    ;**********************************************
+    ; CLOUD FRACTION.
+    ; This is computed in WRF on each model level
+    ; What to do? Average? Maximum?
+    ; Note that in WRF, threre is no feedback between
+    ; sub-grid (paramterised cumulus) clouds, and
+    ; SW downward radiation! See: 
+    ;http://www.cmascenter.org/mwg-internal/de5fs23hu73ds/progress?id=DZMAIffR/q
+    ;
+    ; Currently take average over column!
+    ;**********************************************
+
+    ;**********************************************
+    ; CLOUD FRACTION
+    ;**********************************************
+if (out2dMet@cldfra_avg) .or. (out2dMet@cldfra_max)
+    print("processing CLDFRA")
+    cldfra_eta = f->CLDFRA(:,:,:,:)
+
+    cldfra_avg = dim_avg_n_Wrap(cldfra_eta, 1)
+    cldfra_max = dim_max_n(cldfra_eta, 1)
+
+    delete(cldfra_eta)
+        
+    ;*************************************
+    ; CLOUD FRACTION AVG
+    ;*************************************
+    if (out2dMet@cldfra_avg)
+        wrf_series = rcm2points(lat2d, lon2d,  cldfra_avg, lat, lon, 0)
+        wrf_series@domain       = domain
+        wrf_series@model        = "WRF"
+        wrf_series@model_run    = model_run
+        wrf_series@nest_id      = nest_id
+        wrf_series@var_name     = "CLDFRAAVG"    
+        wrf_series@height       = 0    
+        wrf_series!0            = "time"
+        wrf_series!1            = "loc"
+        wrf_series&time         = fcst_hrs
+
+
+        do i=0,nlocs-1
+            series  = wrf_series(time|:, loc|i)
+            series@loc_id = loc_id(i)
+            series@loc_name = loc_name(i)
+            series@lat    = lat(i)
+            series@lon    = lon(i)
+            ihgt = floattoint(series@height)
+            shgt = sprinti("%0.3i", ihgt)
+            fname   = out_dir + "/" +\
+                         series@loc_id + us +\
+                         series@var_name + us + "d" +\
+                         series@nest_id + us +\
+                         shgt+ us +\
+                         init_time +".txt"
+            ;print(fname)
+            write_series(series, fname)
+            delete(series)
+            delete(fname)
+        end do
+        delete(wrf_series)
+        delete(cldfra_avg)
+    end if    
+    
+    
+    ;*************************************
+    ; CLOUD FRACTION MAX
+    ;*************************************
+    if (out2dMet@cldfra_max)
+        wrf_series = rcm2points(lat2d, lon2d,  cldfra_max, lat, lon, 0)
+        wrf_series@domain       = domain
+        wrf_series@model        = "WRF"
+        wrf_series@model_run    = model_run
+        wrf_series@nest_id      = nest_id
+        wrf_series@var_name     = "CLDFRAMAX"    
+        wrf_series@height       = 0    
+        wrf_series!0            = "time"
+        wrf_series!1            = "loc"
+        wrf_series&time         = fcst_hrs
+    
+    ;    printVarSummary(wrf_series)
+    
+        do i=0,nlocs-1
+            series  = wrf_series(time|:, loc|i)
+            series@loc_id = loc_id(i)
+            series@loc_name = loc_name(i)
+            series@lat    = lat(i)
+            series@lon    = lon(i)
+            ihgt = floattoint(series@height)
+            shgt = sprinti("%0.3i", ihgt)
+            fname   = out_dir + "/" +\
+                         series@loc_id + us +\
+                         series@var_name + us + "d" +\
+                         series@nest_id + us +\
+                         shgt+ us +\
+                         init_time +".txt"
+            ;print(fname)
+            write_series(series, fname)
+            delete(series)
+            delete(fname)
+        end do
+        delete(wrf_series)
+    delete(cldfra_max)
+    end if
+end if
+
+
+    ;**********************************************
+    ; PBLH
+    ;**********************************************
+if (out2dMet@pblh) then
+    print("processing PBLH")
+    pblh = f->PBLH(:,:,:)
+
+    wrf_series = rcm2points(lat2d, lon2d,  pblh, lat, lon, 0)
+    wrf_series@domain       = domain
+    wrf_series@model        = "WRF"
+    wrf_series@model_run    = model_run
+    wrf_series@nest_id      = nest_id
+    wrf_series@var_name     = "PBLH"    
+    wrf_series@height       = 0    
+    wrf_series!0            = "time"
+    wrf_series!1            = "loc"
+    wrf_series&time         = fcst_hrs
+
+;    printVarSummary(wrf_series)
+
+    do i=0,nlocs-1
+        series  = wrf_series(time|:, loc|i)
+        series@loc_id = loc_id(i)
+        series@loc_name = loc_name(i)
+        series@lat    = lat(i)
+        series@lon    = lon(i)
+        ihgt = floattoint(series@height)
+        shgt = sprinti("%0.3i", ihgt)
+        fname   = out_dir + "/" +\
+                     series@loc_id + us +\
+                     series@var_name + us + "d" +\
+                     series@nest_id + us +\
+                     shgt+ us +\
+                     init_time +".txt"
+        ;print(fname)
+        write_series(series, fname)
+        delete(series)
+        delete(fname)
+    end do
+    delete(wrf_series)
+    delete(pblh)
+end if
+
+  
+
+print("*** SUCCESS NCL EXTRACT TIME SERIES ***")
 
 end
-

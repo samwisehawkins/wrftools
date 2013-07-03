@@ -156,6 +156,8 @@ begin
     loc = wrf_user_latlon_to_ij(file_handle, lat(ip), lon(ip))
     loc = loc - 1
     print("LOC: "+loc(0)+"  "+loc(1))
+    print(lat(ip))
+    print(lon(ip))
 
     var = file_handle->PH(0,0:4,:,:)
     PHB = file_handle->PHB(0,0:4,:,:)
@@ -164,6 +166,7 @@ begin
     z = z/9.81 
     topo = file_handle->HGT(0,loc(0),loc(1))
     ;;print(z(:,loc(0),loc(1))-topo)
+ 
  
     t2 = file_handle->T2(:,loc(0),loc(1))
     t2 = t2 - 273.15

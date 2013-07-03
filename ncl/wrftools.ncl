@@ -90,7 +90,7 @@ begin
     delete(dims)
     header = (/"domain","model_run","model","nest_id","location_id","location_name","latitude","longitude","variable","init_time","valid_time","height","value"/)
     prefix  = series@domain + "," + series@model_run + "," + series@model + "," + series@nest_id + "," + series@loc_id + "," + series@loc_name + "," + series@lat + "," + series@lon + "," +series@var_name
-    print(prefix)
+    ;print(prefix)
     
     
     timestrs = ut_string(time, "%Y-%N-%D %H:%M:%S") ; convert times to strings
