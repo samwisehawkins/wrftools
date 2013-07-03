@@ -131,7 +131,7 @@ def transfer_to_web_dir(config):
         os.makedirs(web_out_dir)
     
     flist = glob.glob(ncl_out_dir+'/*')
-    wrftools.transfer(flist, web_out_dir, mode='move', debug_level='NONE', full_trace=full_trace)
+    wrftools.transfer(flist, web_out_dir, mode='move', debug_level='NONE')
     
     #cmd            = "cp -f %s/* %s" % (ncl_out_dir,  web_out_dir)
     #ret            = wrftools.run_cmd(cmd, config)

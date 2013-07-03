@@ -245,6 +245,7 @@ def transfer(flist, dest, mode='copy', debug_level='NONE'):
     for f in flist:
         fname = os.path.split(f)[1]
         dname = '%s/%s' % (dest, fname)
+        logger.debug(dname)
         # bit dangerous, could delete then fail
         if os.path.exists(dname):
             os.remove(dname)
@@ -327,8 +328,7 @@ def prepare(config):
     model_run_dir  = config['model_run_dir']
     wrf_dir        = config['wrf_dir']
     wrf_run_dir    = config['wrf_run_dir']
-    link_from      = config['link_from']
-    link_to        = config['link_to']
+    links          = config['link']
     pre_clean      = config['pre_clean'] 
     subdirs        = config['create_dirs']
 
@@ -351,32 +351,24 @@ def prepare(config):
                 logger.debug('removing file: %s' % f )
                 os.remove(f)
 
-    #
-    # In case these are not specified as lists
-    # package them together in a list so we 
-    # only have one subsequent code section
-    #
-    if type(link_from)!=type([]):
-        link_from = [link_from]
 
-    if type(link_to)!=type([]):
-        link_from = [link_to]
-        
-        
-    if len(link_from)!=len(link_to):
-        raise ConfigError("link_from and link_to must have the same number of entries: %d vs %d" %(len(link_from), len(link_to)))
-
-    for source,dest in zip(link_from, link_to):
-        cmd = 'ln -sf %s %s' %(source, dest) 
-        logger.debug(cmd)
-        subprocess.call(cmd, shell=True)
-
+    for pattern in links:
+        link(pattern)
     logger.info('*** DONE PREPARE ***')
 
 
-
-
-
+def link(pattern):
+    """ Processes a link specified in the format
+    source --> dest, and creates links.
+    
+    'source' and 'dest' will be passed directly to a sytem call to ln -sf """
+    logger=get_logger()
+    parts = pattern.split('-->')
+    source = parts[0].strip()
+    dest   = parts[1].strip()
+    cmd = 'ln -sf %s %s' %(source, dest)
+    logger.debug(cmd)
+    subprocess.call(cmd, shell=True)
 
 #*****************************************************************
 # Post-checking logging
@@ -704,6 +696,7 @@ def sub_date2(s, init_time=None, valid_time=None):
     Returns: string with codes expanded"""
     
     if init_time:
+    
         yi  = str(init_time.year)[2:]
         Yi  = str(init_time.year)
         mi  = '%02d' % init_time.month
@@ -711,15 +704,16 @@ def sub_date2(s, init_time=None, valid_time=None):
         Hi  = '%02d' % init_time.hour
         Mi  = '%02d' % init_time.minute
         Si  = '%02d' % init_time.second
-        
+
+        #s = s.replace('%iY', Yi).replace('%iy',yi).replace('%im',mi).replace('%id', di).replace('%iH', Hi).replace('%iM', Mi).replace('%iS', Si)
+
         s = s.replace('%iY', Yi)
-        s = s.replace('%iy',yi)
-        s = s.replace('%im',mi)
+        s = s.replace('%iy', yi)
+        s = s.replace('%im', mi)
         s = s.replace('%id', di) 
         s = s.replace('%iH', Hi)
         s = s.replace('%iM', Mi)
         s = s.replace('%iS', Si)
-
 
     if valid_time:
         yv  = str(init_time.year)[2:]
@@ -738,12 +732,12 @@ def sub_date2(s, init_time=None, valid_time=None):
         s = s.replace('%M', Mv)
         s = s.replace('%S', Sv)
 
-
-    delta = valid_time - init_time
-    fhr   = delta.days * 24 + int(delta.seconds / (60*60))
-    fH    = '%02d' % fhr
+    if init_time and valid_time:
+        delta = valid_time - init_time
+        fhr   = delta.days * 24 + int(delta.seconds / (60*60))
+        fH    = '%02d' % fhr
+        s = s.replace('%fH', fH)
     
-    s = s.replace('%fH', fH)
     return s
 
 
@@ -1015,8 +1009,14 @@ def update_namelist_wps(config):
     bdy_times  = get_bdy_times(config)
     max_dom    = config['max_dom']
     init_time  = config['init_time']
-    met_em_dir = config['met_em_dir']
+    
+    # hack alert, this should not be being expanded here
+    logger.warn('FIX THIS. update_namelist_wps is expadning met_em_dir, this should be done elsewhere') 
+    met_em_dir = sub_date2(config['met_em_dir'], init_time=init_time)
+    
+    
     geo_em_dir = '%s/geo_em' % domain_dir
+    wps_run_dir = config['wps_run_dir']
     bdy_interval = config['bdy_interval']
     interval_seconds = bdy_interval * 60 * 60
     bdy_conditions = config['bdy_conditions'] 
@@ -1034,6 +1034,8 @@ def update_namelist_wps(config):
     namelist.update('max_dom', max_dom)
     namelist.update('opt_output_from_metgrid_path', met_em_dir, section='metgrid')
     namelist.update('opt_output_from_geogrid_path', geo_em_dir, section='share')
+    namelist.update('opt_geogrid_tbl_path', wps_run_dir, section='geogrid')
+    namelist.update('opt_metgrid_tbl_path', wps_run_dir, section='metgrid')
     namelist.update('interval_seconds', [interval_seconds])
     namelist.update('prefix', bdy_conditions)   
     namelist.update('fg_name', bdy_conditions) 
@@ -1170,7 +1172,9 @@ def prepare_wrf(config):
     logger.debug('*** PREPARING FILES FOR WRF ***')
     
     domain_dir   = config['domain_dir']
+    
     wrf_run_dir  = config['wrf_run_dir']
+    model_run_dir  = config['model_run_dir']
     max_dom      = config['max_dom']
     domains      = range(1,max_dom+1)
     init_time    = config['init_time']
@@ -1179,8 +1183,8 @@ def prepare_wrf(config):
     bdy_times    = get_bdy_times(config)
     met_em_dir   = '%s/met_em/%s' % (domain_dir, init_time.strftime('%Y-%m-%d_%H'))    
     met_em_files = ['%s/met_em.d%02d.%s.nc' % (met_em_dir,d, t.strftime(out_format)) for d in domains for t in bdy_times] 
-
-
+    namelist_run    = '%s/namelist.input' % wrf_run_dir
+    namelist_dom    = '%s/namelist.input' % model_run_dir
     logger.debug('linking met_em files:')
     
     #
@@ -1201,8 +1205,15 @@ def prepare_wrf(config):
             raise IOError('met_em file missing : %s' %f)
         cmd = 'ln -sf %s %s/'%(f, wrf_run_dir)
         run_cmd(cmd, config)
-
     
+    
+    logger.debug('linking namelist.input to wrf_run_dir')
+    cmd = 'rm -f %s' % namelist_run
+    run_cmd(cmd, config)
+    cmd = 'ln -sf %s %s' %(namelist_dom, namelist_run)
+    run_cmd(cmd, config)
+
+
     logger.debug('*** FINISHED PREPARING FILES FOR WRF ***')
     return 0
 
@@ -1226,7 +1237,6 @@ def update_namelist_input(config):
     domain       = config['domain']
     
     namelist_domain = '%s/%s/namelist.input'  %(domain_dir, model_run)
-    namelist_run    = '%s/run/namelist.input' %wrf_dir
     namelist_wps    = '%s/%s/namelist.wps'  %(domain_dir, model_run)
     
     
@@ -1338,12 +1348,6 @@ def update_namelist_input(config):
     logger.debug('writing new settings to file')
     namelist.to_file(namelist_domain)
     
-    logger.debug('linking namelist.input to WRF/run directory')
-    cmd = 'rm -f %s' % namelist_run
-    run_cmd(cmd, config)
-    cmd = 'ln -sf %s %s' %(namelist_domain, namelist_run)
-    run_cmd(cmd, config)
-
     #logger.debug(namelist)
     logger.debug('*** FINISHED UPDATING namelist.input ***')  
     return 0    
@@ -1364,8 +1368,13 @@ def run_real(config):
     model_run       = config['model_run']
     init_time       = config['init_time']
 
+    # Log files from real appear in the current directory, 
+    # so we need to change directory first.
+    os.chdir(wrf_run_dir)
     cmd     =  "%s/real.exe" % wrf_run_dir
     mpirun(cmd, 1, config['host_file'], config['run_level'], config['cmd_timing'])
+    
+
     
     rsl = '%s/rsl.error.0000' % wrf_run_dir
     if not os.path.exists(rsl):
@@ -1433,9 +1442,17 @@ def move_wrfout_files(config):
     namelist_dir  = '%s/namelist' % model_run_dir
     run_key       = '%s.%s'       %(domain, model_run)    # composite key  
 
-    flist = glob.glob(model_run_dir+'/wrfout*')
-    transfer(flist, dest, mode='move', debug_level='debug')
+    logger.debug('Moving wrfout files from %s to %s' %(wrf_run_dir, wrfout_dir) )
 
+    # Move WRF output files to new directory
+    flist = glob.glob(wrf_run_dir+'/wrfout*')
+    for f in flist:
+        logger.debug(f)
+    transfer(flist, wrfout_dir, mode='move', debug_level='debug')
+
+    # Move log files to new directoy
+    flist = glob.glob(wrf_run_dir+'/rsl.*')
+    transfer(flist, rsl_dir, mode='move', debug_level='debug')
 
 #    cmd = 'cp %s/namelist.input %s/namelist.input.%s.%s' % (wrf_run_dir, namelist_dir, run_key, init_str)
 #    run_cmd(cmd, config)

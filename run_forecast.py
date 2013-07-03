@@ -85,6 +85,9 @@ full_trace          = config['full_trace']
 gribmaster          = config['gribmaster']
 sst                 = config['sst']
 wps                 = config['wps']
+ungrib              = config['ungrib']
+geogrid             = config['geogrid']
+metgrid             = config['metgrid']
 wrf                 = config['wrf']
 upp                 = config['upp']
 time_series         = config['time_series']
@@ -140,18 +143,19 @@ for init_time in init_times:
 
     #
     # WPS
-    # bit of a hack calling prepare_wps twice, but need to re-link things after 
-    # running for SST
     #
     if wps:
         try:
             wrftools.prepare_wps(config)
             wrftools.update_namelist_wps(config)
-            wrftools.run_ungrib(config)
+            if ungrib:
+                wrftools.run_ungrib(config)
             if sst:
                 wrftools.ungrib_sst(config)
-            wrftools.run_geogrid(config)
-            wrftools.run_metgrid(config)
+            if geogrid:
+                wrftools.run_geogrid(config)
+            if metgrid:
+                wrftools.run_metgrid(config)
         except IOError, e:
             logger.error('WPS failed for initial time %s' %init_time)
             wrftools.handle(e, fail_mode, full_trace)
@@ -173,7 +177,6 @@ for init_time in init_times:
             wrftools.handle(e, fail_mode, full_trace)
         try:
             wrftools.run_wrf(config)
-            #pass
         except Exception, e:
             wrftools.handle(e, fail_mode, full_trace)
         try:
@@ -181,8 +184,8 @@ for init_time in init_times:
         except Exception, e:
             wrftools.handle(e, fail_mode, full_trace)
     
-    logger.warn('*** SLEEPING FOR 10 SECONDS TO ALLOW FS TIME TO SORT ITSELF OUT ***')
-    time.sleep(10)
+    #logger.warn('*** SLEEPING FOR 10 SECONDS TO ALLOW FS TIME TO SORT ITSELF OUT ***')
+    #time.sleep(10)
     
     #
     # Computing time
@@ -268,8 +271,8 @@ for init_time in init_times:
     # fail silently around here. I'm adding a sleep statement
     # as I have a hunch this might be some kind of race condition
     #
-    logger.warn('*** SLEEPING FOR 10 SECONDS TO ENSURE TSERIES FILES ARE CLOSED ***')
-    time.sleep(10)
+    logger.warn('*** SLEEPING FOR 1 SECONDS TO ENSURE TSERIES FILES ARE CLOSED ***')
+    time.sleep(1)
 
     if json:
         try:
