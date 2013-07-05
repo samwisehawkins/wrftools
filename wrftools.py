@@ -1011,8 +1011,11 @@ def update_namelist_wps(config):
     init_time  = config['init_time']
     
     # hack alert, this should not be being expanded here
-    logger.warn('FIX THIS. update_namelist_wps is expadning met_em_dir, this should be done elsewhere') 
+    logger.warn('FIX THIS. update_namelist_wps is expanding and creating met_em_dir, this should be done elsewhere') 
     met_em_dir = sub_date2(config['met_em_dir'], init_time=init_time)
+    if not os.path.exists(met_em_dir):
+        logger.debug('Creating met_em_dir: %s ' % met_em_dir)
+        os.makedirs(met_em_dir)
     
     
     geo_em_dir = '%s/geo_em' % domain_dir
@@ -1146,6 +1149,12 @@ def run_metgrid(config):
     logger.info("*** RUNNING METGRID ***")
     
     wps_run_dir    = config['wps_run_dir']
+    met_em_dir = datesub2(config['met_em_dir'], config['init_time'])
+    logger.debug('met_em_dir: %s' % met_em_dir)
+    if not os.path.exists(met_em_dir):
+        logger.debug('Creating met_em_dir: %s ' % met_em_dir)
+        os.makedirs(met_em_dir)
+
 
     #settings = {'num_procs':8, 'mpi_cmd':config['mpi_cmd'],'host_file':config['host_file']}
     #mpi_cmd = config['mpi_cmd']  % settings             # subsitute values into mpi command
