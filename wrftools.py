@@ -1618,12 +1618,12 @@ def run_unipost(config):
     # Everything is done within the postprd directory
     #
     logger.debug('Going into postprd directory: %s' %post_dir)
-    os.chdir(post_dir)
+    #os.chdir(post_dir)
 
     #
     # Clean up old output files
     #
-    logger.debug('Removing old output files')
+    #logger.debug('Removing old output files')
     cmd = 'rm -f %s/*.out' % post_dir
     run_cmd(cmd, config)
     cmd = 'rm -f %s/*.tm00' % post_dir
