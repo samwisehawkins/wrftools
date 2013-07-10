@@ -1,0 +1,34 @@
+#!/bin/bash
+
+
+#
+# Active comments for SGE 
+#
+#$ -S /bin/bash
+#$ -N SAM
+#$ -v MPI_HOME
+#$ -cwd
+#$ -q all.q
+#$ -pe openmpi 1
+
+
+. /etc/profile.d/modules.sh
+
+# Module stuff
+module add gcc
+# Load one of these
+module add openmpi/gcc
+# module add openmpi/psc
+# module add openmpi/pgi
+# module add openmpi/intel 
+  
+
+
+# Does not require the -machinefile flag
+cd /home/slha/WRFV3/run
+CMD="$MPI_HOME/bin/mpirun -np $NSLOTS /home/slha/code/wrftools/devel/pbs/test.sh"
+ 
+echo $CMD
+ 
+$CMD
+
