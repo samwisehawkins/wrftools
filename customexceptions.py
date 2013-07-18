@@ -12,3 +12,6 @@ class QueueError(Exception):
     """Represents an queueing system error state for a job """
     pass
    
+class NamelistError(Exception):
+    """Represents an error in the namelist settings file """ 
+    pass

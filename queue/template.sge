@@ -1,6 +1,5 @@
 #!/bin/bash
 
-
 #
 # Active comments for SGE 
 #
@@ -10,7 +9,8 @@
 #$ -cwd
 #$ -q <qname>
 #$ -pe openmpi <nprocs>
-
+#$ -j yes
+#$ -o <logfile>
 
 . /etc/profile.d/modules.sh
 
@@ -25,7 +25,7 @@ module add openmpi/gcc
 
 
 # Does not require the -machinefile flag
-cd /home/slha/WRFV3/run
+
 CMD="$MPI_HOME/bin/mpirun -np $NSLOTS <executable>"
  
 echo $CMD

@@ -119,32 +119,33 @@ def extract_tseries(config):
     logger = wrftools.get_logger()
     logger.info('*** EXTRACTING TIME SERIES ***')
      
+    queue          = config['queue']
     domain_dir     = config['domain_dir']
     domain         = config['domain']
     model_run      = config['model_run']
-    wrfout_dir     = '%s/%s/wrfout'%(domain_dir, model_run)
+    wrfout_dir     = config['wrfout_dir']
+    tseries_dir    = config['tseries_dir']
     init_time      = config['init_time']
     dom            = config['dom']
-    fcst_file      = '%s/%s/wrfout/wrfout_d%02d_%s:00:00.nc' %(domain_dir, model_run, dom, init_time.strftime("%Y-%m-%d_%H"))
+    fcst_file      = '%s/wrfout_d%02d_%s:00:00.nc' %(wrfout_dir, dom, init_time.strftime("%Y-%m-%d_%H"))
     loc_file       = config['locations_file']
-    ncl_out_dir    = '%s/%s/tseries' % (config['domain_dir'], config['model_run'])
     ncl_code       = config['tseries_code']
     nest_id        =  '%02d' % dom
     ncl_log        = config['ncl_log']
-    if not os.path.exists(ncl_out_dir):
-        os.makedirs(ncl_out_dir)
+    if not os.path.exists(tseries_dir):
+        os.makedirs(tseries_dir)
 
 
     os.environ['FCST_FILE']      = fcst_file
     os.environ['LOCATIONS_FILE'] = loc_file
-    os.environ['NCL_OUT_DIR']    = ncl_out_dir
+    os.environ['NCL_OUT_DIR']    = tseries_dir
     os.environ['NEST_ID']        = nest_id
     os.environ['DOMAIN']         = domain
     os.environ['MODEL_RUN']      = model_run
 
     logger.debug('Setting environment variables')
     logger.debug('FCST_FILE    ----> %s' % fcst_file)
-    logger.debug('NCL_OUT_DIR  ----> %s' % ncl_out_dir)
+    logger.debug('NCL_OUT_DIR  ----> %s' % tseries_dir)
     logger.debug('NEST_ID      ----> %s' % nest_id)
     logger.debug('DOMAIN       ----> %s' % domain)
     logger.debug('MODEL_RUN    ----> %s' % model_run)
@@ -154,9 +155,12 @@ def extract_tseries(config):
         #
         # mem_total forces the use postprocessing node
         #
+        #if queue:
+        #    cmd = 'ncl %s' % script
+        #    wrftools.run_cmd_queue(cmd, config, log_file=ncl_log)
+        
         cmd  = "ncl %s >> %s 2>&1" % (script, ncl_log)
-        qcmd = 'qrsh -cwd -l mem_total=36G "%s"' % cmd
-        ret = wrftools.run_cmd(cmd, config)
+        wrftools.run_cmd(cmd, config)
 
 
 

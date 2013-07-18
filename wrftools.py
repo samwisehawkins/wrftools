@@ -36,7 +36,7 @@
 # * Summarise file transfers in logging output -- done
 #
 # CHANGES
-#
+# 2013-07-11 Added job scheduling/queing functionality
 #
 # 2013-06-19 Updated code to allow WRF to be run from any directory. Executables 
 #            and other required files will be linked in.
@@ -84,13 +84,15 @@ import glob
 import time, datetime
 from dateutil import rrule
 from namelist import Namelist, read_namelist, add_cmd_args
+
 import glob
 
 from visualisation import *
+from customexceptions import *
 import logging
 
 from tseries import extract_tseries, power, tseries_to_json, json_to_web
-
+from queue import fill_template, qsub, qstat
 
 LOGGER         = 'wrf_forecast'
 
@@ -176,22 +178,34 @@ def get_logger():
 #******************************************************************************
 
 def mpirun(cmd, num_procs, hostfile, run_level, cmd_timing=False):
+    """Wrapper around the system mpirun command.
+    
+    Arguments:
+        @cmd       -- path of the executable
+        @num_procs -- int or dict specifying number of processors. If dict, executable name (not full path) used as key
+        @hostfile  -- path to machine file
+        @run_level -- string: 'RUN' command will get run, anything else command is logged but not run
+        @cmd_timing -- boolean flag,if True, execution timing information logged"""
     
     logger = get_logger()
-    cmd = 'mpirun -n %d -hostfile %s %s' % (num_procs, hostfile, cmd)
+    exe = os.path.split(cmd)[1]
+    
+    if type(num_procs) == type({}):
+        nprocs = num_procs[exe]
+    else:
+        nprocs = num_procs
+        
+    cmd = 'mpirun -n %d -hostfile %s %s' % (nprocs, hostfile, cmd)
     logger.debug(cmd)
     
     t0          = time.time()
     if run_level=='RUN':
         ret = subprocess.call(cmd, shell=True)        
-    else:
-        ret = 0
-    
+   
     telapsed = time.time() - t0
     if cmd_timing:
         logger.debug("done in %0.1f seconds" %telapsed)
     
-    return ret
 
 def run_cmd(cmd, config):
     """Executes and logs a shell command. If config['run_level']=='DUMMY', then
@@ -226,6 +240,108 @@ def run_cmd(cmd, config):
     
     return ret
 
+
+def run_cmd_queue(cmd,config, run_from_dir, log_file):
+    """ Run a command via the scheduler, and wait in loop until
+    command is expected to finish.
+    
+    Arguments:
+        @executable -- full path of the executable
+        @config     -- all the other settings!
+        @run_from_dir   -- directory to run from 
+        @log_file       -- redirect to different log file"""
+    
+    logger          = get_logger()    
+
+    run_level       = config['run_level']
+    num_procs       = config['num_procs']
+    job_template    = config['job_template']
+    job_script      = config['job_script']
+    queue_name      = config['queue_name']
+    poll_interval   = config['poll_interval']
+    max_job_time    = config['max_job_time']
+
+
+    #
+    # Either cmd, or cmd args other_stuff
+    #
+    parts = cmd.split()
+    if len(parts)==0:
+        executable = cmd
+    else:
+        executable = parts[0]
+
+    exe = os.path.split(executable)[-1]
+    
+
+    if log_file:
+        log = log_file
+    else:
+        log = exe
+
+    try:
+        if type(queue_name)==type({}):
+            qname = queue_name[exe]
+        else:
+            qname = queue_name
+    
+        if type(num_procs)==type({}):
+            nprocs = num_procs[exe]
+        else:
+            nprocs = num_procs
+    
+        if type(max_job_time)==type({}):
+            mjt = max_job_time[exe]
+        else:
+            mjt = max_job_time
+            
+        if type(poll_interval)==type({}):
+            pint = poll_interval[exe]        
+        else:        
+            pint = poll_interval
+
+    except KeyError, e:
+        tb = traceback.format_exc()
+        raise ConfigError(tb)    
+    
+    attempts = mjt / pint
+    
+    logger.debug('Submitting %s to %d slots on %s, polling every %s minutes for %d attempts' %(exe, nprocs, qname, pint, attempts ))
+    replacements = {'<executable>': executable,
+                '<jobname>': exe,
+                '<qname>'  : qname,
+                '<nprocs>' : nprocs,
+                '<logfile>': log}
+
+    fill_template(job_template,job_script,replacements)
+    os.chdir(run_from_dir)
+    logger.debug(job_script)
+    
+    if run_level!='RUN':
+        return
+
+
+    job_id = qsub(job_script)
+   
+    for i in range(attempts):
+        output = qstat(job_id)
+        if output=='':
+            logger.debug('no queue status for job, presume complete')
+            return
+        
+        logger.debug(output)
+        tokens =  output.split()
+        status = tokens[4].strip()
+
+        if 'E' in status:
+            raise QueueError('job %s has queue status of %s' %(job_id, status))
+
+        time.sleep(pint*60)
+
+    # what to do?
+    logger.error('Job did not complete within max number of poll attempts')
+    logger.error('Suggest changing max_job_time in config file')
+    raise QueueError('job %s has queue status of %s' %(job_id, status))
 
 def transfer(flist, dest, mode='copy', debug_level='NONE'):
     """Transfers a list of files to a destination.
@@ -374,7 +490,8 @@ def link(pattern):
 # Post-checking logging
 #*****************************************************************
 def summarise(config):
-    """Reports which file exist in different directories """
+    """Reports which file exist in different directories.
+    Deprecated. Here only for useful code snippet """
     logger           = get_logger()
     config['domain']
     config['model']
@@ -814,7 +931,7 @@ def ungrib_sst(config):
     tmp_dir      = config['tmp_dir']
     domain_dir   = config['domain_dir']
     model_run    = config['model_run']
-    model_run    = config['model_run_dir']
+    model_run_dir = config['model_run_dir']
     init_time    = config['init_time']
     max_dom      = config['max_dom']
     sst_local_dir = config['sst_local_dir']
@@ -823,7 +940,8 @@ def ungrib_sst(config):
     vtable_sst   = wps_dir+'/ungrib/Variable_Tables/'+config['sst_vtable']
     vtable_dom   = wps_dir+'/ungrib/Variable_Tables/'+config['vtable']
     vtable       = wps_run_dir+'/Vtable'
-
+    queue        = config['queue']
+    log_file     = '%s/ungrib.sst.log' % wps_run_dir
     namelist_wps  = wps_run_dir+'/namelist.wps'
     namelist_dom  = '%s/namelist.wps' % model_run_dir
     namelist_sst  = '%s/namelist.sst' % model_run_dir
@@ -882,7 +1000,10 @@ def ungrib_sst(config):
 
     logger.info('*** RUNNING UNGRIB FOR SST ***')
     cmd     =  '%s/ungrib.exe' % wps_run_dir
-    mpirun(cmd, 1, config['host_file'], config['run_level'], config['cmd_timing']) 
+    if queue:
+        run_cmd_queue(cmd, config, wps_run_dir,log_file )
+    else:
+        mpirun(cmd, config['num_procs'], config['host_file'], config['run_level'], config['cmd_timing']) 
 
 
     cmd = 'grep "Successful completion" ./ungrib.log' # check for success
@@ -1063,27 +1184,20 @@ def run_ungrib(config):
     config -- dictionary specifying configuration options
     
     """
-    logger          = get_logger()
+    logger        = get_logger()
+    queue         = config['queue']
+    wps_run_dir   = config['wps_run_dir']
+    log_file      = '%s/ungrib.log' % wps_run_dir
     logger.info("*** RUNNING UNGRIB ***")
-    
-    
-    wps_run_dir = config['wps_run_dir']
-    os.chdir(wps_run_dir)
-    
-    namelist_wps = read_namelist('%s/namelist.wps' % wps_run_dir)
-    #logger.debug('Contents of namelist.wps: ')
-    #logger.debug(str(namelist_wps))
-
-    
-    #
-    # Override some settings, only run ungrib with 1 processor
-    #
-    #settings = {'num_procs':1, 'mpi_cmd':config['mpi_cmd'],'host_file':config['host_file']}
-    #mpi_cmd  = config['mpi_cmd']  % settings             # subsitute values into mpi command
 
     cmd     =  '%s/ungrib.exe' % wps_run_dir
-    mpirun(cmd, 1, config['host_file'], config['run_level'], config['cmd_timing'])
     
+    if queue:
+        run_cmd_queue(cmd, config, wps_run_dir, log_file)
+    
+    else:
+        mpirun(cmd, config['num_procs'], config['host_file'], config['run_level'], config['cmd_timing'])
+
 
     cmd = 'grep "Successful completion" %s/ungrib.log' % wps_run_dir # check for success
     ret = run_cmd(cmd,config)
@@ -1103,29 +1217,23 @@ def run_geogrid(config):
     logger.info("*** RUNINING GEOGRID ***")
     wps_run_dir    = config['wps_run_dir']
     domain_dir     = config['domain_dir']
-
-    geogrid_dom = '%(domain_dir)s/%(model_run)s/GEOGRID.TBL' % config
+    queue          = config['queue']
+    log_file       = '%s/geogrid.log' % wps_run_dir
+    
     geogrid_wps = '%(wps_run_dir)s/GEOGRID.TBL' % config
 
-    logger.debug("Linking GEOGRID.TBL into WPS dir")
-    if not os.path.exists(geogrid_dom):
-        raise IOError("Could not find GEOGRID.TBL at: %s " % geogrid_dom)
+    if not os.path.exists(geogrid_wps):
+        raise IOError("Could not find GEOGRID.TBL at: %s " % geogrid_wps)
     
-    if os.path.exists(geogrid_wps):
-        os.remove(geogrid_wps)
-    
-    cmd = "ln -sf %s %s" %(geogrid_dom, geogrid_wps)
-    run_cmd(cmd, config)
 
-    cmd = 'rm -f %s/geogrid.log.*' % wps_run_dir
-    run_cmd(cmd, config)
-        
-    #settings = {'num_procs':8, 'mpi_cmd':config['mpi_cmd'],'host_file':config['host_file']}
-    #mpi_cmd  = config['mpi_cmd']  % settings             # subsitute values into mpi command
-    cmd      =  '%s/geogrid.exe' % wps_run_dir
+    cmd       =  '%s/geogrid.exe' % wps_run_dir
     
-    mpirun(cmd, 8, config['host_file'], config['run_level'], config['cmd_timing'])
-    #run_cmd(cmd, config)
+    if queue:        
+        run_cmd_queue(cmd, config, wps_run_dir, log_file)
+    
+    else:
+        mpirun(cmd, config['num_procs'], config['host_file'], config['run_level'], config['cmd_timing'])
+
     
     cmd = 'grep "Successful completion" %s/geogrid.log.*' %(wps_run_dir)
     ret = run_cmd(cmd, config)
@@ -1144,18 +1252,24 @@ def run_metgrid(config):
     logger = get_logger()
     logger.info("*** RUNNING METGRID ***")
     
+    queue          = config['queue']
     wps_run_dir    = config['wps_run_dir']
-    met_em_dir = sub_date2(config['met_em_dir'], config['init_time'])
+    log_file       = '%s/metgrid.log' % wps_run_dir
+
+    met_em_dir     = sub_date2(config['met_em_dir'], config['init_time'])
     logger.debug('met_em_dir: %s' % met_em_dir)
     if not os.path.exists(met_em_dir):
         logger.debug('Creating met_em_dir: %s ' % met_em_dir)
         os.makedirs(met_em_dir)
 
 
-    #settings = {'num_procs':8, 'mpi_cmd':config['mpi_cmd'],'host_file':config['host_file']}
-    #mpi_cmd = config['mpi_cmd']  % settings             # subsitute values into mpi command
     cmd      =  "%s/metgrid.exe" % wps_run_dir
-    mpirun(cmd, 8, config['host_file'], config['run_level'], config['cmd_timing'])
+    
+    if queue:
+        run_cmd_queue(cmd, config, wps_run_dir, log_file)
+    
+    else:
+        mpirun(cmd, config['num_procs'], config['host_file'], config['run_level'], config['cmd_timing'])
 
 
     cmd = 'grep "Successful completion" %s/metgrid.log.*' % wps_run_dir
@@ -1366,20 +1480,25 @@ def run_real(config):
     logger = get_logger()    
     logger.info('*** RUNNING REAL ***')
     
+    queue           = config['queue']
     model_run_dir   = config['model_run_dir']
     wrf_run_dir     = config['wrf_run_dir']
     wps_dir         = config['wps_dir']
     domain          = config['domain']
     model_run       = config['model_run']
     init_time       = config['init_time']
+    log_file        = '%s/real.log' % wrf_run_dir
+
 
     # Log files from real appear in the current directory, 
     # so we need to change directory first.
     os.chdir(wrf_run_dir)
     cmd     =  "%s/real.exe" % wrf_run_dir
-    mpirun(cmd, 1, config['host_file'], config['run_level'], config['cmd_timing'])
+    if queue:
+        run_cmd_queue(cmd, config, wrf_run_dir, log_file)
+    else:
+        mpirun(cmd, 1, config['host_file'], config['run_level'], config['cmd_timing'])
     
-
     
     rsl = '%s/rsl.error.0000' % wrf_run_dir
     if not os.path.exists(rsl):
@@ -1411,11 +1530,16 @@ def run_wrf(config):
     """
     logger          = get_logger()    
     logger.info('*** RUNNNING WRF ***')
-    num_procs       = config['num_procs']
-    wrf_run_dir     = config['wrf_run_dir']
+    queue         = config['queue']
+    wrf_run_dir   = config['wrf_run_dir']
+    log_file      = '%s/wrf.log' % wrf_run_dir
     
-    cmd   = '%s/wrf.exe' % wrf_run_dir
-    mpirun(cmd, config['num_procs'], config['host_file'], config['run_level'], config['cmd_timing'])
+    executable  = '%s/wrf.exe' % wrf_run_dir
+    if queue:
+        run_cmd_queue(executable, config, wrf_run_dir, log_file)
+    
+    else:
+        mpirun(cmd, config['num_procs'], config['host_file'], config['run_level'], config['cmd_timing'])
 
     #
     # Check for success
@@ -1860,9 +1984,9 @@ def timing(config):
     #
     logger = get_logger()
     logger.info('*** Computing timing information ***')
-    wrf_dir        = config['wrf_dir']
-    rsl_file       = '%s/run/rsl.error.0000'%wrf_dir
-    namelist_input = '%s/run/namelist.input' % wrf_dir
+    wrf_run_dir    = config['wrf_run_dir']
+    rsl_file       = '%s/rsl.error.0000' % wrf_run_dir
+    namelist_input = '%s/namelist.input' % wrf_run_dir
     namelist       = read_namelist(namelist_input).settings
     timestep       = namelist['time_step'][0]
     f              = open(rsl_file, 'r')

@@ -1,31 +1,12 @@
-#!/usr/bin/env python
+""" Script for running a WRF forecast and all of the pre-processsing, 
+post-processing, visualization and verification which goes with it.
+The philosophy is to keep this script as simple and clean as possible 
+to represent the high-level progamme flow. 
 
-#*************************************************************
-# Top-level script for running a WRF forecast and all of 
-# the pre-processsing, post-processing, visualization
-# and verification which goes with it.
-#
-# This can be run as a command-line script where the first
-# argument MUST BE a configuration file which sets most 
-# of the options.  These options can be overridden by speciying
-# further arguments in the form: --key=value. 
-#
-# The philosophy is to keep this script as simple and clean 
-# as possible to represent the high-level progamme flow. 
-# Each stage in the process should try and follow the same 
-# loop structure.
-#
-# All of the heavy lifting is done in the wrftools
-# module. This script this ties it all together, initialises 
-# the logging framework and does some basic error checking.  
-#
-# A (questionable) design choice is to use a configuration file 
-# with the same (at least similar)
-# syntax to the namelist.wps and namelist.input files used by WRF
-# so that the same code can be re-used reading these.
-#
-# AUTHOR: sam.hawkins@vattenfall.com
-#**************************************************************
+The first argument MUST BE a configuration file which sets most of the options.  
+These options can be overridden by speciying further arguments in the form: --key=value. 
+Each stage in the process should try and follow the same loop structure."""
+
 
 import sys
 import time, datetime
@@ -100,7 +81,6 @@ convert_grb         = config['convert_grb']
 timing              = config['timing'] # produce timing information
 web                 = config['web']
 archive             = config['archive']
-summarise           = config['summarise']
 cleanup             = config['cleanup']
 
 
@@ -179,6 +159,12 @@ for init_time in init_times:
             wrftools.run_wrf(config)
         except Exception, e:
             wrftools.handle(e, fail_mode, full_trace)
+        
+        if timing:
+            try:
+                wrftools.timing(config)
+            except Exception, e:
+                wrftools.handle(e, fail_mode, full_trace)
         try:
            wrftools.move_wrfout_files(config) # this will also copy namelists, logs etc
         except Exception, e:
@@ -187,15 +173,7 @@ for init_time in init_times:
     #logger.warn('*** SLEEPING FOR 10 SECONDS TO ALLOW FS TIME TO SORT ITSELF OUT ***')
     #time.sleep(10)
     
-    #
-    # Computing time
-    #
-    if timing:
-        try:
-            wrftools.timing(config)
-        except Exception, e:
-            logger.error('*** FAIL TIMING ***')
-            wrftools.handle(e, fail_mode, full_trace)
+
     #
     # Post processing
     #
@@ -216,14 +194,6 @@ for init_time in init_times:
                 wrftools.convert_grib(config)
             except Exception, e:
                 logger.error('*** FAIL GRIB CONVERSION ***')
-                wrftools.handle(e, fail_mode, full_trace)
-    if power:
-        for d in range(1,max_dom+1):
-            try:
-                config['dom'] = d
-                wrftools.power(config)
-            except Exception, e:
-                logger.error('*** FAIL POWER CONVERSION ***')
                 wrftools.handle(e, fail_mode, full_trace)
 
     #
@@ -274,6 +244,16 @@ for init_time in init_times:
     logger.warn('*** SLEEPING FOR 1 SECONDS TO ENSURE TSERIES FILES ARE CLOSED ***')
     time.sleep(1)
 
+    if power:
+        for d in range(1,max_dom+1):
+            try:
+                config['dom'] = d
+                wrftools.power(config)
+            except Exception, e:
+                logger.error('*** FAIL POWER CONVERSION ***')
+                wrftools.handle(e, fail_mode, full_trace)
+
+
     if json:
         try:
             wrftools.tseries_to_json(config)
@@ -306,9 +286,6 @@ for init_time in init_times:
     if cleanup:
         logger.debug("cleaning up files")
         wrftools.cleanup(config)
-
-    if summarise:
-        wrftools.summarise(config)
 
 
 # Final code to get executed

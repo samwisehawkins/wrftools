@@ -44,12 +44,9 @@ def qsub(job_script):
     # The output from PBS is of the format
     # "Your job 3681 ("TEST") has been submitted"
     #
-    print cmd
     proc = subprocess.Popen([cmd], stdout=subprocess.PIPE, shell=True)
     output = proc.stdout.read()
-    print output
     job_id = output.split(' ')[2]
-    print job_id
     return job_id
     
     
@@ -64,13 +61,10 @@ def qstat(job_id):
         
     cmd = 'qstat -f | grep %s' % job_id
     proc = subprocess.Popen([cmd], stdout=subprocess.PIPE, shell=True)
-    output = proc.stdout.read()
-    if output==None:
-        return output
-    
-    else:
-        status = output.split()[4].strip()
-        return status
+    output = proc.stdout.read().rstrip('\n')
+    return output
+
+
 
 def test():
     logger = wrftools.get_logger()
@@ -78,12 +72,13 @@ def test():
     #logger.debug('running test')
     
 
-    template   = '/home/slha/code/wrftools/devel/pbs/template.sge'
-    job_script = '/home/slha/code/wrftools/devel/pbs/job.sge'
-    executable = '/home/slha/code/wrftools/devel/pbs/test.sh'
-    jobname    = 'SAM'
+    template   = '/home/slha/code/wrftools/devel/queue/template.sge'
+    job_script = '/home/slha/code/wrftools/devel/queue/job.sge'
+    executable = '/home/slha/forecasting/development/run/wrf.exe'
+    run_dir    = '/home/slha/forecasting/development/run'
+    jobname    = 'WRF'
     qname      = 'all.q'
-    nprocs     = 1
+    nprocs     = 8
  
     replacements = {'<executable>': executable,
                     '<jobname>': jobname,
@@ -91,6 +86,8 @@ def test():
                     '<nprocs>' : nprocs}
     
     fill_template(template, job_script, replacements)
+
+    os.chdir(run_dir)
     job_id = qsub(job_script)
     
     for i in range(3):
@@ -98,6 +95,10 @@ def test():
         print status
         if status==None:
             'print job not in queue, presume complete'
+            break
+        if 'E' in status:
+            raise QueueError('job %s has queue status of %s' %(job_id, status))
+        
 
         time.sleep(5)
 

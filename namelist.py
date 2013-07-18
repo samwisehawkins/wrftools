@@ -2,7 +2,9 @@ import time, datetime
 import collections
 import re
 from StringIO import StringIO
-from odict import OrdDict
+import ast
+#from odict import OrdDict # we can switch to native OrderedDict now
+from collections import OrderedDict
 from csvtools import CommentedFile
 import os
 
@@ -16,8 +18,8 @@ class Namelist(object):
     Bit of a hack, there are surely much better ways to do this"""
 
     def __init__(self):
-       self.settings = OrdDict()
-       self.sections = OrdDict()
+       self.settings = OrderedDict()
+       self.sections = OrderedDict()
     
     def val_to_str(self, val):
         if val=='':
@@ -58,7 +60,7 @@ class Namelist(object):
     
     def __str__(self):
         output = ''
-        for section in self.sections.keys():
+        for section,v in self.sections.items():
             sectionstring = '&%s\n'%section
             output+=sectionstring
             keys = self.sections[section]
@@ -147,12 +149,14 @@ def from_file(f):
     Namelist object. Anything enclosed in ${...} will be expanded 
     to a environment variable, while anything enclosed in 
     %(...) will be expanded to a previously defined variable within 
-    the file """
+    the file. Anything enclosed in {} will be parsed as a string """
     
     sec   = re.compile('.*&')               # sections specified by an ampersand 
     eq    = re.compile('.*=.*')             # match rows containing an equals
+    
     evar  = re.compile('\$\{.*?\}')         # match rows containing environment vars
     lvar  = re.compile('%\(.*?\)')          # match rows containing previous definitions
+    dic  =  re.compile('\{.*?\}')           # match rows entirely contained in {}
 
     namelist_file = CommentedFile(f)
     namelist  = Namelist()
@@ -167,7 +171,7 @@ def from_file(f):
         if eq.match(l):
             parts  = l.split('=')
             key_part    = parts[0].strip()
-            val_part    = parts[1] 
+            val_part    = parts[1].strip() 
             
             #
             # Substitute any environment variables
@@ -192,10 +196,20 @@ def from_file(f):
                         val_part = val_part.replace(lv, str(namelist.settings[lvname]))            
             
             
+            # if it is a dictionary, enclosed in {}, parse as a string, or dict?
+            # if we parse as dict, this will have slightly different syntax to 
+            # other settings, e.g True will be needed rather than .True.
+            if dic.match(val_part):
+                vals = ast.literal_eval(val_part)
+
+
+
             #
-            # Parse as list, ignore any empty strings
+            # If line contains a comma, parse as a list
             #
-            if ',' in val_part:
+            
+            
+            elif ',' in val_part:
                 tokens = val_part.split(',')
                 vals   = []
                 for t in tokens:
@@ -316,71 +330,137 @@ def test():
 # automated WRF forecasts. This will overide some settings in 
 # 'namelist.wps' and 'namelist.input' files
 #
+# Environment variables can now be accessed using ${var} syntax
+# Variables defined in this file can be accessed using %(syntax)
+# If the variable in {} or () is not defined, it will not be expanded
 #***************************************************************
-
-#************************************************
-# Directories/processors
-#************************************************
-&directories
-log_file          = /home/slha/forecasting/operational.log
-mpi_cmd           = mpirun -n %(num_procs)d -hostfile %(host_file)s 
-host_file         = /home/slha/wrfmachines
-base_dir          = /home/slha/forecasting/domains
-backup_dir        = /longbackup/slha/forecasting/domains
-wrf_dir           = /home/slha/WRFV3
-wps_dir           = /home/slha/WPS
-grb_dir           = /home/slha/forecasting/domains/GFS/operational
-tmp_dir           = /home/slha/forecasting/tmp
-upp_dir           = /home/slha/UPPV1.0
-locations_file    = /home/slha/forecasting/locations/locations.csv
-pcurve_dir        = /home/slha/forecasting/pcurves/fuga
-archive_fmt       = '%Y-%m-%d_%H'
-from_backup       = .False.       # look for output files in backup dir
 
 #************************************************
 # Metadata
 #************************************************
 &metadata
+test1             = {'ungrib.exe': 4, 'metgrid.exe': True, 'real.exe': 6.9, 'wrf.exe': 24}
+test2             = {'ungrib.exe': 4, 'metgrid.exe':4, 'real.exe': 4, 'wrf.exe': 24},{'ungrib.exe': 4, 'metgrid.exe':4, 'real.exe': 4, 'wrf.exe': 24}
 domain            = baseline_europe 
 model             = WRF
-model_run         = operational
+model_run         = development
 bdy_conditions    = GFS
 
 
 #************************************************
+# Directories/processors. 
+#************************************************
+&directories
+base_dir          = ${HOME}/forecasting/domains
+domain_dir        = %(base_dir)/%(domain) 
+model_run_dir     = %(domain_dir)/%(model_run)
+wps_run_dir       = %(model_run_dir)/wps
+wrf_run_dir       = %(model_run_dir)/run 
+host_file         = ${HOME}/wrfmachines
+log_file          = %(model_run_dir)/operational.log
+backup_dir        = /longbackup/slha/forecasting/domains
+wrf_dir           = ${HOME}/WRFV3_devel
+wps_dir           = ${HOME}/WPS
+grb_dir           = ${HOME}/forecasting/domains/GFS/operational
+tmp_dir           = ${HOME}/forecasting/tmp
+upp_dir           = ${HOME}/UPPV1.0
+web_dir           = ${HOME}/web/html/NSeaWRF/%HZ                                        # plots will be moved here after all plots done
+met_em_dir        = %(domain_dir)/met_em/%iY-%im-%id_%iH
+locations_file    = ${HOME}/forecasting/locations/locations_devel.csv
+pcurve_dir        = ${HOME}/forecasting/pcurves/fuga
+wrftools_dir      = ${HOME}/code/wrftools/devel
+
+#************************************************
 # Logging
 #************************************************
+&logging
 debug_level       = DEBUG
+full_trace        = .True.         # whether to print a stack trace of exceptions
 mail_level        = INFO 
-mailto            = sam.hawkins@vattenfall.com
+#mailto            = sam.hawkins@vattenfall.com
 mail_buffer       = 1000            # how many messages to collate in one email
 mail_subject      = "Operational WRF log"
+
+#***********************************************
+# Forecast settings 
+# Date syntax
+# i: initial time
+# v: valid time
+# f: forecast 
+# y,m,d,H,M,S: two-digit year, month,day,Hour,Minute,Second
+# Y : four-digit year
+#***********************************************
+&forecast
+max_dom            = 1
+grb_input_fmt      = %(grb_dir)/GFS_Global_0p5deg_%iy%im%id_%iM%iH_fh%fH.grb
+start              = 2013-06-14 00:00:00,
+end                = 2013-06-14 00:00:00,
+fcst_hours        = 6
+history_interval  = 60
+init_interval     = 24
+bdy_interval      = 3
+vtable            = Vtable.GFS
+num_procs         = 8
+cycles            = 00, 12,
+
 
 #************************************************
 # Components to run
 #************************************************
-&share
-fail_mode         = CONTINUE    # CONTINUE, EXIT
-run_level         = RUN         # RUN, DUMMY
+&control
+fail_mode         = EXIT       # CONTINUE, EXIT
+run_level         = RUN        # RUN, DUMMY
 cmd_timing        = .False.
-operational       = .True.      # If True, start time is based on system time
+operational       = .True.    # If True, start time is based on system time
+prepare           = .True.
 gribmaster        = .True.
-sst               = .True.      # Source SST field from seperate source
+sst               = .False.    # Source SST field from seperate source
 wps               = .True.
+ungrib            = .True.
+geogrid           = .True.
+metgrid           = .True.
 wrf               = .True.
-upp               = .True.      # run universal post processor 
+upp               = .False.    # run universal post processor 
 timing            = .False.
-time_series       = .False.     # Extract time series of variables to points
-power             = .False.     # Calculate power production at points
-met               = .False.     # Run MET verification tool
-ncl               = .True.      # Run ncl visualisations
-jesper            = .False.      # Run Jesper's visualisation script
-archive           = .True.      # Use rysnc to copy to backup dir
-cleanup           = .True.      # Run cleanup script to delete various leftovers
+power             = .False.    # Calculate power production at points
+met               = .False.    # Run MET verification tool
+ncl               = .True.     # Run ncl visualisations
+time_series       = .True.     # Extract time series of variables to points
+json              = .True.     # convert time series data to JSON
+scripts           = .False.    # run additional scripts
+web               = .True.     # copy plots to web out dir
+archive           = .False.    # Use rysnc to copy to backup dir
+summarise         = .False.    # list which files have been transferred
+cleanup           = .True.     # Run cleanup script to delete various leftovers
+
+#************************************************
+# Queue settings
+#***********************************************
+job_template   = %(wrftools_dir)/queue/template.sge    # template to expand for SGE/PBS
+job_script    = %(wrf_run_dir)/job.sge                 # expanded template gets written here
+queue_name    = all.q                                  # queue to use
+poll_interval = 10                                     # minutes between checking queue status  
+max_job_time  = 60                                     # maximum number of hours to keep polling queue
+
+
+#************************************************
+# Gribmaster settings
+# Note that most gribmaster settings are defined in the gribmaster/conf directory
+# these are just the command line options
+#************************************************
+&gribmaster
+gm_dir            = /home/slha/gribmaster
+gm_log            = %(run_dir)/gribmaster.log
+gm_dataset        = gfs004grb2
+gm_transfer       = http
+grb_fmt           = grib2
+gm_delay          = 4 
+gm_sleep          = 10         # number of minutes to wait after failure
 
 #*****************************************************
 # SST settings
 #*****************************************************
+&sst
 sst_delay           = 24                    # number of hours SST field is delayed
 sst_server          = polar.ncep.noaa.gov
 sst_server_dir      = /pub/history/sst/ophi
@@ -400,12 +480,22 @@ sst_vtable          = Vtable.SST
 #********************************************************
 &visualisation
 ncl_out_type   = png                                                                        # png, pdf etc
-ncl_code_dir   = /home/slha/code/wrftools/trunk/ncl 
-ncl_out_dir    = /home/slha/forecasting/domains/baseline_europe/operational/plots/%HZ        # inital time will be substitued in
-web_out_dir    = /home/jepn/work/web/html/NSeaWRF/%HZ                                        # plots will be moved here after all plots done
-ncl_code       = wrf_surface.ncl, wrf_radar.ncl, wrf_time_series.ncl, wrf_precip.ncl, wrf_skewt.ncl,
+ncl_code_dir   = %(wrftools_dir)/ncl 
+ncl_out_dir    = %(model_run_dir)/plots/%HZ        # inital time will be substitued in
+ncl_code       = wrf_surface.ncl, wrf_radar.ncl, wrf_time_series.ncl, wrf_precip.ncl, wrf_t2.ncl,
+ncl_code       = wrf_time_series.ncl, 
+ncl_log        = %(model_run_dir)/ncl.log
 
-
+#**************************************************************
+# Scripts
+# Run additional post-processing scripts.
+# Check the code wrftools.run_scripts to see/change what 
+# environment variables are available to the scripts
+# currently this calls one per nest, but this is easily changed
+#***************************************************************
+&scripts
+run_scripts    = /home/jepn/MakePlots4.csh,/home/jepn/MakePlots5.csh
+tseries_code   = %(wrftools_dir)/ncl/extract_time_series.ncl, 
 
 
 #********************************************************
@@ -413,55 +503,56 @@ ncl_code       = wrf_surface.ncl, wrf_radar.ncl, wrf_time_series.ncl, wrf_precip
 # The following directories within the domain/model_run
 # directory will be moved/copied to the backup directory
 #********************************************************
+&archive
 archive_mode      = MOVE        # COPY or MOVE
 backup_dirs       = wrfpost,wrfout,rsl,namelist,tseries  # which subdirs to archive
 
 
+#**************************************************************
+# Prepare. 
+# All files matchig  patterns in pre-clean will be removed
+# Subdirectories create_dirs within %(model_run_dir) will 
+# be created
+# All files matching patterns in wrf_links will be linked 
+# from %(wrf_dir)/run to %(wrf_run_dir)
+# link from and link to should be same length
+#**************************************************************
+pre_clean       = %(ncl_log),%(gm_log),
+create_dirs     = geo_em,met_em,tseries,plots,rsl,postprd,run,wps,namelist, 
+link            = %(wrf_dir)/run/*.exe           --> %(wrf_run_dir),\
+                  %(wrf_dir)/run/RRTM*           --> %(wrf_run_dir),\
+                  %(wrf_dir)/run/*.TBL           --> %(wrf_run_dir),\
+                  %(wps_dir)/*.exe               --> %(wps_run_dir),\
+                  %(wps_dir)/link_grib.csh       --> %(wps_run_dir),\
+                  %(wps_dir)/metgrid/METGRID.TBL -->%(wps_run_dir)
+
 #************************************************
 # Cleanup settings. The following file patterns
-# from the domain/model_run directory will get 
-# removed, if the cleanup flag is True
+# will get removed using rm -f if the cleanup flag is True
+# BE VERY CAREFUL SPECIFYING!
+# You could easily wipe a directory
 #************************************************
 &cleanup
-cleanup_dirs    = ${HOME}/WPS/FILE*,
-test_pattern    = %(domain),
-
+post_clean     = %(wps_dir)/FILE*, %(wps_dir)/GFS*, %(wps_dir)/PFILE*, \
+                  %(wps_dir)/geogrid.log*, %(wps_dir)/metgrid.log*,\
+                  %(wrf_dir)/run/rsl.error.*, %(wrf_dir)/run/rsl.out.*,
 
 #************************************************
 # Gribmaster settings
 # Note that most gribmaster settings are defined in the gribmaster/conf directory
 # these are just the command line options
 #************************************************
-&grib
-gm_dir            = /home/slha/gribmaster
+&gribmaster
+gm_dir            = ${HOME}/gribmaster
+gm_log            = %(model_run_dir)/gribmaster.log
 gm_dataset        = gfs004grb2
 gm_transfer       = http
 grb_fmt           = grib2
 gm_delay          = 4 
+gm_sleep          = 0.1         # number of minutes to wait after failure
+gm_max_attempts   = 3           # number of times to try before giving up
 convert_grb       = .False.     # convert grib1 --> grib2
 
-#***********************************************
-# Forecast settings 
-#***********************************************
-&forecast
-max_dom            = 1
-grb_input_fmt      = GFS_Global_0p5deg_%(init_time)s_fh%(fhr)s.grb,'%y%m%d_%H%M','%02d'  
-
-#grb_input_fmt     = ECMWF_%(valid_time)s_fh000.grib, '%Y%m%d_%H'
-#start             = 2006-11-30 12:00:00, 2007-03-18 00:00:00, 2007-08-12 00:00:00,
-#end               = 2006-12-14 12:00:00, 2007-04-01 12:00:00, 2007-08-26 00:00:00,
-#start             = 2006-11-30 12:00:00,
-#end               = 2006-12-14 12:00:00,
-start              = 2012-06-15 12:00:00,
-end                = 2012-06-30 00:00:00,
-fcst_hours        = 72
-history_interval  = 60
-init_interval     = 24
-bdy_interval      = 6
-vtable            = Vtable.GFS
-#vtable           = Vtable.ECMWF
-num_procs         = 24
-cycles            = 00,12   # which cycles to chose from 00,06,12,18
 
 #*****************************************************
 # DFI settings - Not used unless dfi is specified in namelist
@@ -469,6 +560,7 @@ cycles            = 00,12   # which cycles to chose from 00,06,12,18
 # Usually recommended to integrate backwards one hour and
 # forwards for half the time. 
 #*****************************************************
+&dfi
 dfi_bck           = 60
 dfi_fwd           = 2160
 
@@ -481,8 +573,21 @@ met_dir           = /home/slha/METv3.0.1
 obs_file          = /home/slha/domains/obs/adpupa.nc
 
 
+
+
 """
     f = StringIO(namelist_string)
     namelist = from_file(f)
-    print namelist
+    #print namelist
+    #print '\n\n\n'
+    settings = namelist.settings
+    #for k,v in settings.items():
+    #    print '%s: %s' %(str(k).ljust(25), str(v).ljust(15))
+    #print namelist
     
+    test1 = settings['test1']
+    print test1
+
+    
+if __name__ == "__main__":
+    test()        
