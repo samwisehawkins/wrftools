@@ -498,7 +498,7 @@ def summarise(config):
     config['model_run']
     init_time = config['init_time'] 
     model_run_dir   = config['model_run_dir']
-    web_dir   = sub_date(config['web_dir'], init_time)
+    web_dir   = sub_date(config['web_dir'], init_time=init_time)
     
     flist = glob.glob(web_dir+'/*')
     for filename in sorted(flist):
@@ -708,7 +708,7 @@ def get_bdy_filenames(config):
     init_time     = config['init_time']
     bdy_times     = get_bdy_times(config)
     
-    filelist = [sub_date2(grb_fmt, init_time=init_time, valid_time=b) for b in bdy_times]
+    filelist = [sub_date(grb_fmt, init_time=init_time, valid_time=b) for b in bdy_times]
     return filelist
     
 
@@ -775,29 +775,8 @@ def run_gribmaster(config):
         
     raise IOError('gribmaster did not find files after %d attempts' % gm_max_attempts)
 
-    
 
-def sub_date(s, dt):
-    """Substitues a date into a string following standard format codes"""
-    
-    y  = str(dt.year)
-    m  = '%02d' % dt.month
-    d  = '%02d' % dt.day
-    H  = '%02d' % dt.hour
-    M  = '%02d' % dt.minute
-    S  = '%02d' % dt.second
-
-    s1 = s.replace('%Y', y)
-    s2 = s1.replace('%y',y)
-    s3 = s2.replace('%m',m)
-    s4 = s3.replace('%d', d) 
-    s5 = s4.replace('%H', H)
-    s6 = s5.replace('%M', M)
-    s7 = s6.replace('%S', S)
-    return s7
-
-
-def sub_date2(s, init_time=None, valid_time=None):
+def sub_date(s, init_time=None, valid_time=None):
     """Substitues a date into a string following standard format codes.
     Syntax of original string s:
     i  -- initial time
@@ -871,7 +850,7 @@ def get_sst_time(config):
 def get_sst_filename(config):
     base_filename  = config['sst_filename']
     sst_time       = get_sst_time(config)
-    sst_filename   = sub_date(base_filename, sst_time)
+    sst_filename   = sub_date(base_filename, init_time=sst_time)
     return sst_filename
 
 def get_sst(config):
@@ -1133,7 +1112,7 @@ def update_namelist_wps(config):
     
     # hack alert, this should not be being expanded here
     logger.warn('FIX THIS. update_namelist_wps is expanding and creating met_em_dir, this should be done elsewhere') 
-    met_em_dir = sub_date2(config['met_em_dir'], init_time=init_time)
+    met_em_dir = sub_date(config['met_em_dir'], init_time=init_time)
    
     geo_em_dir = '%s/geo_em' % domain_dir
     wps_run_dir = config['wps_run_dir']
@@ -1256,7 +1235,7 @@ def run_metgrid(config):
     wps_run_dir    = config['wps_run_dir']
     log_file       = '%s/metgrid.log' % wps_run_dir
 
-    met_em_dir     = sub_date2(config['met_em_dir'], config['init_time'])
+    met_em_dir     = sub_date(config['met_em_dir'], config['init_time'])
     logger.debug('met_em_dir: %s' % met_em_dir)
     if not os.path.exists(met_em_dir):
         logger.debug('Creating met_em_dir: %s ' % met_em_dir)
