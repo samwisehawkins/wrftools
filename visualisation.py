@@ -4,29 +4,12 @@ import io
 import glob
 
 
-__all__ = ['produce_ncl_plots', 'run_jesper_script', 'transfer_to_web_dir']
+__all__ = ['produce_ncl_plots', 'transfer_to_web_dir']
 
 
 def _fix_ncarg_env():
     os.environ['NCARG_NCARG'] = '%s/lib/ncarg' % os.environ['NCARG_ROOT']
 
-
-def run_jesper_script(config):
-    """Temporary measure for producing visualisations from jesper's
-    csh script. Eventually this can be replaced by produce NCL plots """
-
-
-    logger = wrftools.get_logger()
-    logger.info("running jesper's ncl script")
-    init_time = config['init_time']
-    init_str = init_time.strftime('%Y%m%d%H')
-    _fix_ncarg_env()
-    run_hour = init_time.hour
-    logger.debug('setting environment variable run_hour to %02d' % init_time.hour)
-    os.environ['run_hour'] = '%02d' % run_hour
-    cmd = "/home/jepn/work/web_forecast/MakePlots4.csh %s" % init_str
-    wrftools.run_cmd(cmd, config)
-  
 
 
 def produce_ncl_plots(config):
@@ -67,7 +50,7 @@ def produce_ncl_plots(config):
     dom            = config['dom']
     fcst_file      = '%s/%s/wrfout/wrfout_d%02d_%s:00:00.nc' %(domain_dir, model_run, dom, init_time.strftime("%Y-%m-%d_%H"))
     loc_file       = config['locations_file']
-    ncl_out_dir    = wrftools.sub_date(config['ncl_out_dir'], init_time)
+    ncl_out_dir    = wrftools.sub_date(config['ncl_out_dir'], init_time=init_time)
     ncl_out_type   = config['ncl_out_type']
     nest_id        =  '%02d' % dom
 
@@ -124,8 +107,8 @@ def transfer_to_web_dir(config):
     logger.debug('Transferring plot files to web dir')
     init_time      = config['init_time']    
     full_trace     = config['full_trace']
-    ncl_out_dir    = wrftools.sub_date(config['ncl_out_dir'], init_time)
-    web_out_dir    = wrftools.sub_date(config['web_dir'], init_time)
+    ncl_out_dir    = wrftools.sub_date(config['ncl_out_dir'], init_time=init_time)
+    web_out_dir    = wrftools.sub_date(config['web_dir'], init_time=init_time)
     
     if not os.path.exists(web_out_dir):
         os.makedirs(web_out_dir)
