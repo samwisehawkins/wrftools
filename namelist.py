@@ -14,12 +14,14 @@ class Namelist(object):
     The Namelist.settings provides one single dictionary specifying all of the settings
     while the Namelist.sections provides a list of settings keys within each section.
     E.g. sections['domain'] = ['max_dom', 'i_parent_start', 'j_parent_start', ...]
+    Problem is how to do a reverse lookup, i.e. given a key, find the section
     
     Bit of a hack, there are surely much better ways to do this"""
 
     def __init__(self):
-       self.settings = OrderedDict()
-       self.sections = OrderedDict()
+        self.settings = OrderedDict()
+        self.sections = OrderedDict() # maps sections to members
+        self.slookup  = OrderedDict() # maps members to sections
     
     def val_to_str(self, val):
         if val=='':
@@ -80,48 +82,56 @@ class Namelist(object):
         file.flush()
         file.close()
         
-           
+    def insert(self, key, value, section):
+        if section==None:
+            raise ValueError('must specify a namelist section for new settings')        
+        
+        # new section
+        if section not in self.sections:
+            key_list = [key]
+            self.sections[section] = key_list                
+        
+        # existing section
+        else:
+            key_list = self.sections[section]
+            key_list.append(key)
+            self.sections[section] = key_list
+        
+        self.settings[key] = value
+        self.slookup[key]  = section
+
+
     def update(self, key, value, section=None):
         """ Updates the Namelist object. 
         
         If an entry already exists, it can be updated without giving a section.
-        If the entry does not previously exist, the section must be given when updating. """
+        If the entry does not previously exist, the section must be given. """
 
         if key==None:
             print 'null key given'
             raise ValueError
-        if section != None:
-            #
-            # Section is specified
-            #
-            if section not in self.sections:
-                #
-                # We are adding a new section
-                # Wrap the single setting key into a list
-                #
-                key_list = [key]
-                self.sections[section] = key_list
-            else:
-                #
-                # We are updating an existing section
-                # but adding/modifying a settings key
-                #
-                key_list = self.sections[section]
-                if key not in key_list:
-                    # add settings key to section
-                    key_list.append(key)
-                    # update section list
-                    self.sections[section] = key_list
+        
+        if key not in self.settings.keys():
+            self.insert(key, value, section)
+        
         else:
-            if key not in self.settings.keys():
-                print 'section must be specified when adding a new key'
-                raise ValueError()
-        #
-        # Now actually update the real settings dictionary
-        #
-        self.settings[key] = value
+            self.settings[key] = value
 
 
+    def remove(self, key):
+
+        if key not in self.settings:
+            return
+        
+        section = self.slookup[key]
+        key_list = self.sections[section]
+        key_list.remove(key)
+        
+        if key_list==[]:
+            del(self.sections[section])
+        else:
+            self.sections[section] = key_list
+        del(self.settings[key])    
 
 #*****************************************************************
 # Namelist manipulation
@@ -161,11 +171,12 @@ def from_file(f):
     namelist_file = CommentedFile(f)
     namelist  = Namelist()
     
-    current_section = 'None'
+    #current_section = 'None'
 
     for l in clean_lines(namelist_file):
         
         if sec.match(l):
+            
             current_section = l.lstrip('&').rstrip()
         
         if eq.match(l):
@@ -203,12 +214,9 @@ def from_file(f):
                 vals = ast.literal_eval(val_part)
 
 
-
             #
             # If line contains a comma, parse as a list
             #
-            
-            
             elif ',' in val_part:
                 tokens = val_part.split(',')
                 vals   = []
@@ -218,6 +226,7 @@ def from_file(f):
                         vals.append(parse(t))
             else:
                 vals = parse(val_part)
+
             namelist.update(key_part, vals, section=current_section)
 
     f.close()
@@ -235,9 +244,7 @@ def read_namelist(filename):
     filename -- namelist.input filaname
     
     Returns:
-    Namelist instance representing the settings
-    
-    """
+    Namelist instance representing the settings"""
         
     
     f = open(filename, 'r')
@@ -578,15 +585,16 @@ obs_file          = /home/slha/domains/obs/adpupa.nc
 """
     f = StringIO(namelist_string)
     namelist = from_file(f)
-    #print namelist
-    #print '\n\n\n'
-    settings = namelist.settings
-    #for k,v in settings.items():
-    #    print '%s: %s' %(str(k).ljust(25), str(v).ljust(15))
-    #print namelist
+    #namelist = read_namelist('/home/slha/forecasting/development/namelist.wps')
+    namelist.remove('fg_name')
+    namelist.remove('io_form_metgrid')
+    namelist.remove('opt_output_from_metgrid_path')
+    namelist.remove('opt_metgrid_tbl_path')
+    namelist.remove('constants_name')
     
-    test1 = settings['test1']
-    print test1
+    print namelist
+    print '\n\n\n'
+    
 
     
 if __name__ == "__main__":

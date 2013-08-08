@@ -171,8 +171,68 @@ def create_logger(config):
 def get_logger():
     return logging.getLogger(LOGGER)    
 
+#*****************************************************************
+# Git stuff
+#*****************************************************************
 
+def stash_switch(repo, branch, run_level='RUN'):
+    """ Stashes current changes and then switches to branch.
+    Returns name of original branch"""
+    
+    logger = get_logger()
+    
+    cwd = os.getcwd()
+    os.chdir(repo)
+    
+    # find out name of current branch
+    cmd    = 'git branch | grep "*"' 
+    proc   = subprocess.Popen([cmd], stdout=subprocess.PIPE, shell=True)
+    output = proc.stdout.read().rstrip('\n')
+    orig_branch = output.strip('* ')
+    logger.debug('Current git branch: %s' % orig_branch)
 
+    logger.debug('Stashing changes')
+    cmd = 'git stash'
+    run(cmd, run_level)    
+    
+    logger.debug('Checking out branch %s' % branch)
+    cmd = 'git checkout %s' % branch
+    run(cmd, run_level)    
+    
+    os.chdir(cwd)
+    return orig_branch
+    
+def switch_pop(repo, branch, run_level='RUN'):
+    """ Changes GIT branch of wrftools to specified branch. 
+    Changes are stashed, but original branch is not restored 
+    afterwards, to current branch checked out may be different 
+    after a forecast has been run"""
+    
+    logger = get_logger()
+
+    cwd = os.getcwd()
+    os.chdir(repo)
+
+    # find out name of current branch
+    cmd    = 'git branch | grep "*"' 
+    proc   = subprocess.Popen([cmd], stdout=subprocess.PIPE, shell=True)
+    output = proc.stdout.read().rstrip('\n')
+    orig_branch = output.strip('* ')
+    logger.debug('Current git branch: %s' % current_branch)
+    
+    logger.debug('Checking out Changing GIT branch of code to %s' % branch)
+    cmd = 'git checkout %s' % git_branch
+    run(cmd, run_level)    
+
+    logger.debug('Apply changes from stash')
+    cmd = 'git stash pop'
+    run(cmd, run_level)    
+
+    os.chdir(cwd)
+
+    
+    
+    
 #******************************************************************************
 # Running shell commands
 #******************************************************************************
@@ -205,18 +265,35 @@ def mpirun(cmd, num_procs, hostfile, run_level, cmd_timing=False):
     telapsed = time.time() - t0
     if cmd_timing:
         logger.debug("done in %0.1f seconds" %telapsed)
+
+def run(cmd, run_level='RUN', timing=False):
+    """Executes and logs a shell command. If config['run_level']=='DUMMY', then
+    the command is logged but not executed."""
     
+    logger = get_logger()
+    
+    t0          = time.time()
+    logger.debug(cmd)
+    
+    #
+    # Only execute command if run level is 'RUN', 
+    # otherwise return a non-error 0. 
+    #
+    if run_level=='RUN':
+        ret = subprocess.call(cmd, shell=True)
+    else:
+        ret = 0
+    
+    telapsed = time.time() - t0
+    if timing:
+        logger.debug("done in %0.1f seconds" %telapsed)
+    
+    return ret
+        
 
 def run_cmd(cmd, config):
     """Executes and logs a shell command. If config['run_level']=='DUMMY', then
-    the command is logged but not executed.
-    
-    Dealing with output from external scripts is pretty tricky. Do we want to log them 
-    via the python logger? That would be nice, but prevents us from examining 
-    the output from files such as ungrib.log. Allow redirection to python 
-    logger using redirect=True
-    
-    """
+    the command is logged but not executed."""
     
     logger = get_logger()
     
@@ -1111,7 +1188,7 @@ def update_namelist_wps(config):
     init_time  = config['init_time']
     
     # hack alert, this should not be being expanded here
-    logger.warn('FIX THIS. update_namelist_wps is expanding and creating met_em_dir, this should be done elsewhere') 
+    #logger.warn('update_namelist_wps is expanding and creating met_em_dir, this should be done elsewhere') 
     met_em_dir = sub_date(config['met_em_dir'], init_time=init_time)
    
     geo_em_dir = '%s/geo_em' % domain_dir
@@ -1126,7 +1203,7 @@ def update_namelist_wps(config):
     namelist_dom = '%s/%s/namelist.wps' %(domain_dir, model_run)
     logger.debug('reading namelist.wps <--------- %s' % namelist_dom)
     namelist = read_namelist(wps_run_dir+'/namelist.wps')
-    
+    logger.debug(namelist.slookup.items())
     #
     # Update some options based on the forecast config file
     #
@@ -1138,6 +1215,7 @@ def update_namelist_wps(config):
     namelist.update('interval_seconds', [interval_seconds])
     namelist.update('prefix', bdy_conditions)   
     namelist.update('fg_name', bdy_conditions) 
+    
     #
     # Generate formatted strings for inclusion in the namelist.wps file
     #
@@ -1150,6 +1228,13 @@ def update_namelist_wps(config):
     namelist.update('start_date', [start_str]*max_dom)
     namelist.update('end_date',   [end_str]*max_dom)
 
+    
+    #
+    # Delete constants setting if SST is not specified 
+    #
+    if (not config['sst'] and 'constants_name' in namelist.settings):
+        namelist.remove('constants_name')
+        
     logger.debug('writing modified namelist.wps to file')
     namelist.to_file(namelist_dom)
     logger.debug('*** FINISHED UPDATING namelist.wps ***')
@@ -1518,7 +1603,7 @@ def run_wrf(config):
         run_cmd_queue(executable, config, wrf_run_dir, log_file)
     
     else:
-        mpirun(cmd, config['num_procs'], config['host_file'], config['run_level'], config['cmd_timing'])
+        mpirun(executable, config['num_procs'], config['host_file'], config['run_level'], config['cmd_timing'])
 
     #
     # Check for success
@@ -2371,7 +2456,7 @@ def cleanup(config):
 #        cmd = 'rm -f %s/FILE*' % wps_dir
 #        run_cmd(cmd, config) 
 #        cmd = 'rm -f %s/GFS*' % wps_dir#
-#	run_cmd(cmd,config)
+#    run_cmd(cmd,config)
 #        cmd = 'rm -f %s/PFILE*' % wps_dir
 #       run_cmd(cmd,config)
 #        cmd = 'rm -f %s/geogrid.log.* %s/metgrid.log.*' % (wps_dir, wps_dir)

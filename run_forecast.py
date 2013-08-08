@@ -16,20 +16,37 @@ import logging
 nl      = wrftools.read_namelist(sys.argv[1])
 config  = nl.settings
 
-#
+#************************************************
 # Allow command-line arguments to override those in the namelist file
-# no checking is done here, we just merrily assume the arguments 
+# no checking is done here, we just assume the arguments 
 # are given in the correct order. They should be specified like this
 #
 # --option=value 
-#
+#************************************************
 if len(sys.argv)>2:
     cmd_args = sys.argv[2:]
     wrftools.add_cmd_args(config, cmd_args)
 
-#
+#************************************************
+# Logging
+#************************************************
+logger = wrftools.create_logger(config)
+    
+    
+#************************************************
+# GIT branch control
+# Deprecated. This is no place to sort out 
+# your version control. Use branches checked 
+# out into local subdirs
+#************************************************
+#orig_branch  = wrftools.stash_switch(config['wrftools_dir'], config['git_branch'], config['run_level'])
+#wrftools.switch_pop(config['wrftools_dir'], orig_branch,config['run_level'])
+
+
+	
+#************************************************
 # Get some required settings
-#
+#************************************************
 fcst_hours   = config['fcst_hours']               # forecast length
 base_dir     = config['base_dir']
 domain       = config['domain']
@@ -37,13 +54,6 @@ max_dom      = config['max_dom']                  # number of nested domains
 fail_mode    = config['fail_mode']                # what to do on failure
 
 
-#************************************************
-# Logging
-#************************************************
-logger = wrftools.create_logger(config)
-
-#for key in config.keys():
-#    logger.debug('%s: %s' %(key, config[key]))
 
 #***********************************************
 # Initial checks
@@ -127,7 +137,16 @@ for init_time in init_times:
     if wps:
         try:
             wrftools.prepare_wps(config)
-            wrftools.update_namelist_wps(config)
+        except IOError, e:
+            logger.error('WPS failed for initial time %s' %init_time)
+            wrftools.handle(e, fail_mode, full_trace)
+        try:
+            wrftools.update_namelist_wps(config)            
+        except IOError, e:
+            logger.error('WPS failed for initial time %s' %init_time)
+            wrftools.handle(e, fail_mode, full_trace)
+
+        try:
             if ungrib:
                 wrftools.run_ungrib(config)
             if sst:
