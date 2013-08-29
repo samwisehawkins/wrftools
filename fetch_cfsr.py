@@ -14,7 +14,7 @@ RDA_DATASET      = '%s/dsrqst'              % RDA_DATA_SERVER
 LOCAL_DIR        = '/home/slha/forecasting/data/reanalysis/CSFR'
 COOKIE           = '/home/slha/auth.ucar.edu'
 START            = '2010-01-01 00:00'
-END              = '2011-01-02 00:00'
+END              = '2011-01-01 00:00'
 EMAIL            = 'sam.hawkins@vattenfall.com'
 PASSWORD         = 'slh561944'
 NLAT='70';  
@@ -53,9 +53,12 @@ sst =   {'parameters': r'3%217-0.2-1:0.0.0',
          
 def main():         
 
-    ids, indexs = submit_requests()
+    #ids, indexs = submit_requests([plevs, surface, sst])
+    for id, ind in zip(ids, indexs):
+        print id, ind
    
-    indexs = ['42402', '42403', '42404'] 
+    return
+    indexs = ['42765', '42766', '42767'] 
     ids = ['HAWKINS%s' % i for i in indexs]
     
     filenames = get_filenames(RDA_DATASET, 'HAWKINS42402', '42402', COOKIE)
@@ -76,7 +79,7 @@ def fetch_dataset(server, ids, indexs, cookie):
         get_files(filenames, COOKIE, LOCAL_DIR, 'surface')
     
 
-def submit_requests():            
+def submit_requests(datasets):            
 
     ids = []
     indexs = [] 
@@ -86,7 +89,7 @@ def submit_requests():
     print 'start date: %s' % options['startdate']
     print 'end date: %s'   % options['enddate']
     print 'verifiying requests'
-    for dataset in (plevs, surface, sst):
+    for dataset in datasets:
         dataset.update(options)
         response = submit(RDA_VERIFY, dataset, COOKIE)
         if not 'Success' in response:
