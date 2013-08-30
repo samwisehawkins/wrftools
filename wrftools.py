@@ -31,11 +31,14 @@
 # domain/model_run/tseries/U_80_2006-11-30_00.csv 
 #
 # TODO
-# * change run_unipost to allow sub-hourly output
 # * Change namelist reading code to strip trailing commas and remove trailing quotes -- done
 # * Summarise file transfers in logging output -- done
 #
 # CHANGES
+#
+# 2013-08-30 Modified ungrib to support multiple  grib files
+#            in one run
+#
 # 2013-07-11 Added job scheduling/queing functionality
 #
 # 2013-06-19 Updated code to allow WRF to be run from any directory. Executables 
@@ -170,67 +173,6 @@ def create_logger(config):
 
 def get_logger():
     return logging.getLogger(LOGGER)    
-
-#*****************************************************************
-# Git stuff
-#*****************************************************************
-
-def stash_switch(repo, branch, run_level='RUN'):
-    """ Stashes current changes and then switches to branch.
-    Returns name of original branch"""
-    
-    logger = get_logger()
-    
-    cwd = os.getcwd()
-    os.chdir(repo)
-    
-    # find out name of current branch
-    cmd    = 'git branch | grep "*"' 
-    proc   = subprocess.Popen([cmd], stdout=subprocess.PIPE, shell=True)
-    output = proc.stdout.read().rstrip('\n')
-    orig_branch = output.strip('* ')
-    logger.debug('Current git branch: %s' % orig_branch)
-
-    logger.debug('Stashing changes')
-    cmd = 'git stash'
-    run(cmd, run_level)    
-    
-    logger.debug('Checking out branch %s' % branch)
-    cmd = 'git checkout %s' % branch
-    run(cmd, run_level)    
-    
-    os.chdir(cwd)
-    return orig_branch
-    
-def switch_pop(repo, branch, run_level='RUN'):
-    """ Changes GIT branch of wrftools to specified branch. 
-    Changes are stashed, but original branch is not restored 
-    afterwards, to current branch checked out may be different 
-    after a forecast has been run"""
-    
-    logger = get_logger()
-
-    cwd = os.getcwd()
-    os.chdir(repo)
-
-    # find out name of current branch
-    cmd    = 'git branch | grep "*"' 
-    proc   = subprocess.Popen([cmd], stdout=subprocess.PIPE, shell=True)
-    output = proc.stdout.read().rstrip('\n')
-    orig_branch = output.strip('* ')
-    logger.debug('Current git branch: %s' % current_branch)
-    
-    logger.debug('Checking out Changing GIT branch of code to %s' % branch)
-    cmd = 'git checkout %s' % git_branch
-    run(cmd, run_level)    
-
-    logger.debug('Apply changes from stash')
-    cmd = 'git stash pop'
-    run(cmd, run_level)    
-
-    os.chdir(cwd)
-
-    
     
     
 #******************************************************************************
@@ -245,7 +187,7 @@ def mpirun(cmd, num_procs, hostfile, run_level, cmd_timing=False):
         @num_procs -- int or dict specifying number of processors. If dict, executable name (not full path) used as key
         @hostfile  -- path to machine file
         @run_level -- string: 'RUN' command will get run, anything else command is logged but not run
-        @cmd_timing -- boolean flag,if True, execution timing information logged"""
+        @cmd_timing -- boolean flag,if True, timing information logged"""
     
     logger = get_logger()
     exe = os.path.split(cmd)[1]
@@ -762,15 +704,12 @@ def get_bdy_times(config):
     
     return bdy_times
 
-def get_bdy_filenames(config):
+def get_bdy_filenames(grb_fmt, bdy_times):
     """ Creates a list of boundary conditions filenames
     based on the information in config. In general this will 
     be called once per forecast, so there is only one 
     init_time.
-    
-    TODO: remove hard coding of filenames. Should be specified 
-    entirely from config file.
-    
+   
     Arguments:
     config -- dictionary containing various configuration options
     
@@ -778,37 +717,10 @@ def get_bdy_filenames(config):
 
     logger       = get_logger()
     logger.debug('*** GENERATING BOUNDARY CONDITION FILENAMES ***')
-
-    grb_fmt       = config['grb_input_fmt']
-    bdy_interval  = config['bdy_interval']
-    
-    init_time     = config['init_time']
-    bdy_times     = get_bdy_times(config)
-    
-    filelist = [sub_date(grb_fmt, init_time=init_time, valid_time=b) for b in bdy_times]
+   
+    filelist = [sub_date(grb_fmt, init_time=bdy_times[0], valid_time=b) for b in bdy_times]
     return filelist
     
-
-def bdy_filename(init_time, bdy_time, fmt):
-
-    master_fmt = fmt[0]
-    date_fmt   = fmt[1]
-    init_str = init_time.strftime(date_fmt)
-    valid_str = bdy_time.strftime(date_fmt)
-    opt      = {'init_time' : init_str,
-                'valid_time' : valid_str}
-    
-
-    delta   = bdy_time - init_time
-    fhr     = delta.days*24 + delta.seconds/3600
-
-    if len(fmt)>2:
-        fhr_fmt   = fmt[2]
-        fhr_str   = fhr_fmt % fhr
-        opt['fhr']=  fhr_str
-
-    filename = master_fmt % opt
-    return filename                     
 
 
 def run_gribmaster(config):
@@ -902,8 +814,8 @@ def sub_date(s, init_time=None, valid_time=None):
         s = s.replace('%vm',mv)
         s = s.replace('%vd', dv) 
         s = s.replace('%vH', Hv)
-        s = s.replace('%M', Mv)
-        s = s.replace('%S', Sv)
+        s = s.replace('%vM', Mv)
+        s = s.replace('%vS', Sv)
 
     if init_time and valid_time:
         delta = valid_time - init_time
@@ -1074,7 +986,39 @@ def ungrib_sst(config):
     # link in original (unmodified) namelist.wps
     cmd = 'ln -sf %s %s' %(namelist_dom, namelist_wps)    
     run_cmd(cmd, config)
-   
+
+
+def link_namelist_wps(config):
+    """Links namelist_wps into wps_run_dir"""    
+    
+    logger = get_logger()
+    #
+    # link namelist.wps file from domain dir to 
+    # wps dir. Fist check it exists
+    #
+    namelist_wps = config['namelist_wps']
+    namelist_run = '%s/namelist.wps' % config['wps_run_dir']
+    
+    #
+    # Check if namelist exists in model_run_dir directory
+    #    
+    if not os.path.exists(namelist_wps):
+        raise IOError('could not find namelist.wps file: %s' % namelist_wps)
+        
+    if os.path.exists(namelist_run):
+        logger.debug('removing existing namelist.wps file: %s' % namelist_run)
+        os.remove(namelist_run)
+    
+    #
+    # Execute this command even in a dummy run, so that namelist file is linked
+    # correctly and can be updated by other commands
+    #
+    cmd = 'ln -sf %s %s ' %(namelist_wps, namelist_run)
+    logger.debug(cmd)
+    subprocess.call(cmd, shell=True)
+        
+    
+
     
 def prepare_wps(config):
     """ Runs all the pre-processing steps necessary for running WPS.
@@ -1094,59 +1038,34 @@ def prepare_wps(config):
     model_run_dir = config['model_run_dir']    # model run directory 
     met_em_dir    = config['met_em_dir']
     init_time     = config['init_time']
+
+    
+    grb_input_fmt = config['grb_input_fmt']
     vtable        = config['vtable']
+    bdy_times     = get_bdy_times(config)
 
-    #
-    # link namelist.wps file from domain dir to 
-    # wps dir. Fist check it exists
-    #
-    namelist_dom = '%s/namelist.wps' % model_run_dir
-    namelist_wps = '%s/namelist.wps' % wps_run_dir
-
-    #
-    # Check if namelist exists in model_run_dir directory
-    #    
-    if not os.path.exists(namelist_dom):
-        raise IOError('could not find namelist.wps file: %s' % namelist_dom)
+    if type(grb_input_fmt)==type({}):
+        logger.debug(grb_input_fmt)
+        fmts = grb_input_fmt.values()
         
-    if os.path.exists(namelist_wps):
-        logger.debug('removing existing namelist.wps file: %s' % namelist_wps)
-        os.remove(namelist_wps)
+    else:
+        fmts = [grb_input_fmt]
     
-    #
-    #
-    # Execute this command even in a dummy run, so that namelist file is linked
-    # correctly and can be updated by other commands
-    #
-    cmd = 'ln -sf %s %s ' %(namelist_dom, namelist_wps)
-    logger.debug(cmd)
-    subprocess.call(cmd, shell=True)
-        
     
-    #
-    # Link the correct Vtable into the WPS run directory
-    #
-    vtab_path = wps_dir+'/ungrib/Variable_Tables/'+vtable
-    vtab_wps  = wps_run_dir+'/Vtable'
-    if os.path.exists(vtab_wps):
-        os.remove(vtab_wps)
-    cmd = 'ln -sf %s %s' %(vtab_path, vtab_wps)
-    logger.debug(cmd)
-    subprocess.call(cmd, shell=True)    
-    
-    #
-    # Generate filelist based on the initial time, and the forecast hour
-    #        
-    filelist = get_bdy_filenames(config)
+    for fmt in fmts:
+        #
+        # Generate filelist based on the initial time, and the forecast hour
+        #        
+        filelist = get_bdy_filenames(fmt, bdy_times)
 
-    #
-    # Check the boundary files exist
-    #
-    logger.debug('checking boundary condition files exists')    
-    for f in filelist:
-        if not os.path.exists(f):
-            raise IOError('cannot find file: %s' %f)
-    
+        #
+        # Check the boundary files exist
+        #
+        logger.debug('checking boundary condition files exists')    
+        for f in filelist:
+            if not os.path.exists(f):
+                raise IOError('cannot find file: %s' %f)
+        
     logger.debug('all boundary conditions files exist')
     
     #
@@ -1204,6 +1123,7 @@ def update_namelist_wps(config):
     logger.debug('reading namelist.wps <--------- %s' % namelist_dom)
     namelist = read_namelist(wps_run_dir+'/namelist.wps')
     logger.debug(namelist.slookup.items())
+
     #
     # Update some options based on the forecast config file
     #
@@ -1228,12 +1148,13 @@ def update_namelist_wps(config):
     namelist.update('start_date', [start_str]*max_dom)
     namelist.update('end_date',   [end_str]*max_dom)
 
-    
+    if not 'constants_name' in namelist.settings:
+        namelist.remove('constants_name')
     #
     # Delete constants setting if SST is not specified 
     #
-    if (not config['sst'] and 'constants_name' in namelist.settings):
-        namelist.remove('constants_name')
+    #if (not config['sst'] and 'constants_name' in namelist.settings):
+    #    namelist.remove('constants_name')
         
     logger.debug('writing modified namelist.wps to file')
     namelist.to_file(namelist_dom)
@@ -1250,10 +1171,47 @@ def run_ungrib(config):
     """
     logger        = get_logger()
     queue         = config['queue']
+    wps_dir       = config['wps_dir']
     wps_run_dir   = config['wps_run_dir']
+    namelist_wps  = config['namelist_wps']
     log_file      = '%s/ungrib.log' % wps_run_dir
+    vtable        = config['vtable']
     logger.info("*** RUNNING UNGRIB ***")
 
+    
+    namelist = read_namelist(namelist_wps)
+
+    
+    #
+    # If vtable is a dictionary, it is of th form
+    # {prefix1: vtable1, prefix2:vtable2}
+    # So we run ungrib a number of times, using a different prefix each time
+    # 
+    
+    if type(vtable)==type({}):
+        for key in vtable:
+            vtabname = vtable[key]
+            prefix = key
+            namelist.update('prefix', key)
+            namelist.to_file(namelist_wps)
+            link_namelist_wps(config)
+            vtab_path = wps_dir+'/ungrib/Variable_Tables/'+vtabname
+            vtab_wps  = wps_run_dir+'/Vtable'
+            if os.path.exists(vtab_wps):
+                os.remove(vtab_wps)
+            cmd = 'ln -sf %s %s' %(vtab_path, vtab_wps)
+            logger.debug(cmd)
+            subprocess.call(cmd, shell=True)    
+    
+    else:
+        vtab_path = wps_dir+'/ungrib/Variable_Tables/'+vtable
+        vtab_wps  = wps_run_dir+'/Vtable'
+        if os.path.exists(vtab_wps):
+            os.remove(vtab_wps)
+        cmd = 'ln -sf %s %s' %(vtab_path, vtab_wps)
+        logger.debug(cmd)
+        subprocess.call(cmd, shell=True)    
+        
     cmd     =  '%s/ungrib.exe' % wps_run_dir
     
     if queue:
