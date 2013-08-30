@@ -1,7 +1,8 @@
 load "$NCARG_ROOT/lib/ncarg/nclscripts/contrib/ut_string.ncl"
 load "$NCARG_ROOT/lib/ncarg/nclscripts/csm/gsn_code.ncl" 
 load "$NCARG_ROOT/lib/ncarg/nclscripts/csm/contributed.ncl"
-load "$NCARG_ROOT/lib/ncarg/nclscripts/wrf/WRFUserARW.ncl"
+;load "$NCARG_ROOT/lib/ncarg/nclscripts/wrf/WRFUserARW.ncl"
+load "$WRFTOOLS/ncl/WRFUserARW.ncl"
 load "$NCARG_ROOT/lib/ncarg/nclscripts/wrf/WRF_contributed.ncl"
 
 
@@ -28,9 +29,9 @@ begin
   lon       = stringtofloat(str_get_field(data, lon_ind+1, ","))
   name      = str_get_field(data, name_ind+1, ",")
   
-  ; NCL has bug where lists get reversed
+  
   out    = [/loc_id, name, lat, lon/]
-  ;out    = [/lon, lat, name, loc_id/]
+
   
   return(out)
 
@@ -63,7 +64,7 @@ begin
 	dims = dimsizes(lat)
 	nlocs = dims(0)
 	delete(dims)
-	
+    
 	if (interp_option.eq.0)
 	    
 		;******************************************************
@@ -71,8 +72,10 @@ begin
 		ij   = wrf_user_ll_to_ij(nc_file,lon, lat, True)
 		loc  = ij-1          ; To convert to NCL subscripts
 		;******************************************************
-		if (ndims .eq. 4)
-		    var_out = new((/nlocs, ntimes,nhgts/),"float")
+		; if var(time, level, y, x)
+        if (ndims .eq. 4)
+		    var_out = new((/nlocs,ntimes,nhgts/),"float")
+            
 		    do n=0,nlocs-1
 			    var_out(n,:,:) = var(:,:,loc(1,n),loc(0,n))
 			end do
@@ -133,7 +136,6 @@ begin
     lv = 2400000            ; latent heat of evaporation 
  
     print("wrf_user_interp_vars")
-	print(hgts)
     ;******************************************************
     ; File handle
     ; nc_file gives us a single file
@@ -157,8 +159,6 @@ begin
     ; Unpack input args so they are literals, not Variables
     time       = time_in(0)
     variables  = getvaratts(vars)
-    print(variables)
-    print(time)
     ;******************************************************
 
 	
@@ -172,7 +172,6 @@ begin
     ; Get some global attributes from file
     ;******************************************************
     nest_id = nc_file@GRID_ID
-	
 
     ;******************************************************
     ; Latitudes, longitudes, times, dimension sizes
@@ -186,14 +185,24 @@ begin
     nlocs = dims(0)
     delete(dims)
   
+    if (opts@latlon .eq. 0)  
+        xlat  = nc_file->XLAT(0,:,:) ; latitudes don't change over time
+        xlong = nc_file->XLONG(0,:,:)
+    end if
+ 
+    if (opts@latlon .eq. 1)  
+        xlat  = nc_file->XLAT(:,:) ; latitudes don't change over time
+        xlong = nc_file->XLONG(:,:)
+    end if
 
-  
-    xlat  = nc_file->XLAT(0,:,:) ; latitudes don't change over time
-    xlong = nc_file->XLONG(0,:,:)
-    times = nc_file->Times
-    ud_times = wrf_times_c(times, 0)
-	
-	init_time = chartostring(times(0,0:12))
+    dims = dimsizes(xlat)
+    south_north = dims(0)
+    west_east   = dims(1)
+    delete(dims)
+    
+    times     = nc_file->Times
+    ud_times  = wrf_times_c(times, 0)
+    init_time = chartostring(times(0,0:12))
 
 	; time of -1 gets all timesteps, otherwise we are feching one timestep
     dims = dimsizes(times)
@@ -204,11 +213,7 @@ begin
     delete(dims)
 	
     
-    dims = dimsizes(xlat)
-    south_north = dims(0)
-    west_east   = dims(1)
-  
-  
+   
     ;******************************************************
     ; Get ij locations
     ij   = wrf_user_ll_to_ij(nc_file,lon, lat, True)
@@ -224,21 +229,30 @@ begin
     ;******************************************************
  
 	; always need terrain height, zeta level above sea level, zeta above ground level
-	hgt_ter       = wrf_user_getvar(file_handle, "ter", 0)      ; assume terrain doesn't change with time
-    hgt_amsl      = wrf_user_getvar(file_handle, "z", time)     ; height above sea level of model levels
-                                                                ; this will be 4D, since height varies (slightly) hgt_amsl(time, level, y,x)
+    if opts@reduced
+        hgt_ter       = file_handle->HGT(:,:)                       ; assume terrain doesn't change with time
+        hgt_amsl      = wrf_user_getvar(file_handle, "z", time)     ; height above sea level of model levels
+                                                                    ; this will be 4D, since height varies (slightly) hgt_amsl(time, level, y,x)
+    else
+        hgt_ter       = wrf_user_getvar(file_handle, "ter", 0)      ; assume terrain doesn't change with time
+        hgt_amsl      = wrf_user_getvar(file_handle, "z", time)     ; height above sea level of model levels
+                                                                    ; this will be 4D, since height varies (slightly) hgt_amsl(time, level, y,x)
+     end if
 
+    
+    
+                                                                
 	hgt_new = conform(hgt_amsl, hgt_ter, (/2,3/))               ; ensure they terrain height is right dimensionality
     hgt_agl = hgt_amsl - hgt_new                                ; get the height of model levels above ground level
 	
 	hgt_agl_locs = wrf_user_hinterp(nc_file, hgt_agl, lat, lon, xlat, xlong, opts@interp_option)
 	delete(hgt_new)
-
+    
  
     if( any( (/vars@u, vars@v, vars@rib, vars@speed, vars@direction/) ) ) then 
 	
         ;************************************
-        ; uvmet - rotated de-staggered wind
+        ; uvmet - rotated unstaggered wind
         ;************************************
         uvmet = wrf_user_getvar(file_handle, "uvmet", time_in)
         u = uvmet(0,:,:,:,:)
@@ -263,21 +277,39 @@ begin
         u_agl_locs = wrf_user_hinterp(nc_file, u_agl, lat, lon, xlat, xlong, opts@interp_option)
         v_agl_locs = wrf_user_hinterp(nc_file, v_agl, lat, lon, xlat, xlong, opts@interp_option)
 		
-		u_agl_locs!1         = "time"
-		u_agl_locs&time      = ud_times
+		u_agl_locs!1         = "Time"
+		u_agl_locs&Time      = ud_times
 		u_agl_locs@init_time = init_time
 		u_agl_locs@nest_id   = nest_id
-		u_agl_locs@var_name  = "U"
-		; May as well do wind speed and direction here, cheap.
+		u_agl_locs@varname  = "U"
+
+		v_agl_locs!1         = "Time"
+		v_agl_locs&Time      = ud_times
+		v_agl_locs@init_time = init_time
+		v_agl_locs@nest_id   = nest_id
+		v_agl_locs@varname  = "V"
+
+
+		; Wind speed and direction
 		
-		r2d     = 45.0/atan(1.0)                                       ;wd_e
-		
+		r2d     = 45.0/atan(1.0)
+     
 	    ws_agl_locs  = sqrt(u_agl_locs*u_agl_locs + v_agl_locs*v_agl_locs)
-	    ws_agl_locs@varname     = "SPEED"
+        ws_agl_locs!0="location"
+        ws_agl_locs!1="Time"
+        ws_agl_locs!2="height"
+        ws_agl_locs&height = hgts
+   
+        ws_agl_locs@varname     = "SPEED"
 		ws_agl_locs@description = "Wind speed"
 		ws_agl_locs@units       = "m/s"
 
 		wd_agl_locs  = atan2(u_agl_locs, v_agl_locs) * r2d + 180.
+	    wd_agl_locs!0="location"
+        wd_agl_locs!1="Time"
+        wd_agl_locs!2="height"
+        wd_agl_locs&height = hgts
+
 	    wd_agl_locs@varname     = "DIRECTION"
 		wd_agl_locs@description = "Wind direction"
 		wd_agl_locs@units       = "degrees from North"
@@ -290,27 +322,39 @@ begin
 	end if
 
 	
-	; Temperature variables. If any of these are present,compute the whole lot
+	; 3D Temperature variables. If any of these are present,compute the whole lot
 	
 	if (any((/vars@t, vars@tv, vars@theta, vars@thetav, vars@rib/))) then
         
 		;temperature in kelvin
 		tk          = wrf_user_getvar(file_handle, "tk", time)
-		tk_agl      = wrf_user_intrp3d(tk, hgt_agl, "h", hgts,0, False) 
+		tk_agl      = wrf_user_intrp3d(tk, hgt_agl, "h", hgts,0, False)
+        
+        tk_agl!1      = "height"
+		tk_agl&height = hgts
+        
         tk_agl_locs = wrf_user_hinterp(nc_file, tk_agl, lat, lon, xlat, xlong, opts@interp_option)
 		tk_agl_locs@varname = "T"
-		delete(tk)
+		printVarSummary(tk_agl_locs)
+        tc_agl_locs = tk_agl_locs -273.15
+        tc_agl_locs@units = "C"
+        tc_agl_locs!0 = "location"
+        tc_agl_locs!1 = "Time"
+        tc_agl_locs!2 = "height"
+        copy_VarMeta(tk_agl_locs, tc_agl_locs)
+        delete(tk)
 		delete(tk_agl)
 		
 		; water vapour mixing ratio
         qv          = wrf_user_getvar(file_handle, "QVAPOR", time)
 		qv_agl      = wrf_user_intrp3d(qv, hgt_agl, "h", hgts,0, False) 
         qv_agl_locs = wrf_user_hinterp(nc_file, qv_agl, lat, lon, xlat, xlong, opts@interp_option)
-		qv_agl_locs@varname     = "QV"
+		qv_agl_locs@varname     = "QVAPOR"
 		delete(qv)
 		delete(qv_agl)
+		printVarSummary(qv_agl_locs)
 		
-		;virtual temperature
+        ;virtual temperature
 		tv_agl_locs = tk_agl_locs*(1+(0.61*qv_agl_locs))
 		tv_agl_locs@varname = "TV"
 		
@@ -319,17 +363,25 @@ begin
 	    theta          = wrf_user_getvar(file_handle, "theta", time)
 		theta_agl      = wrf_user_intrp3d(theta, hgt_agl, "h", hgts,0, False) 
         theta_agl_locs = wrf_user_hinterp(nc_file, theta_agl, lat, lon, xlat, xlong, opts@interp_option)
+        
+        theta_agl_locs!2          = "height"        	
+        theta_agl_locs&height      = hgts
 		theta_agl_locs@varname     = "THETA"
 		theta_agl_locs@description = "Potetial temperature"
         delete(theta)
 		delete(theta_agl)
 		
 		; virtual potential temperature
-	    theta_v_agl_locs = theta_agl_locs*(1+(0.61*qv_agl_locs))
-		theta_agl_locs@varname     = "THETAV"
-		theta_agl_locs@description = "Virtual potetial temperature"
-        	
-	
+	    thetav_agl_locs = theta_agl_locs*(1+(0.61*qv_agl_locs))
+		printVarSummary(thetav_agl_locs)
+        
+        thetav_agl_locs@varname     = "THETAV"
+		thetav_agl_locs@description = "Virtual potetial temperature"
+        thetav_agl_locs!0          = "location"
+        thetav_agl_locs!1          = "Time"
+        thetav_agl_locs!2          = "height"        	
+        thetav_agl_locs&height      = hgts
+    
 	end if
 	
 	
@@ -340,6 +392,8 @@ begin
 	; upper and lower indices
 	; I think maybe I will compute it 
 	; between each level and the lowest?
+    ; Probably we should set options opt@rib_lower=10, opt@rib_upper=30
+    ;
 	; Jespers code:
 	;	delta_teta_v =teta_v_profile(i,h_idx_upper,:,:)-teta_v_profile(i,h_idx_lower,:,:)
 	;	delta_u      = uu_profile(i,h_idx_upper,:,:)-uu_profile(i,h_idx_lower,:,:)
@@ -353,10 +407,10 @@ begin
 	;		wspd_R_b^2
 	;	end if
 	;	end if
-
-	
 	;**********************************************
-	if isatt(vars, "rib") then
+	
+
+	if vars@rib
 	
         ; create empt array		
 		rib_agl_locs = new((/nlocs, ntimes, nhgts/), "float")
@@ -366,7 +420,7 @@ begin
 	    
 		; compute bulk richardson as difference between level k and lowest level
 		do k=1,nhgts-1,1
-    		dtheta_v = theta_v_agl_locs(:,:,k) - theta_v_agl_locs(:,:,0)
+    		dtheta_v = thetav_agl_locs(:,:,k) - thetav_agl_locs(:,:,0)
 			dspeed   = ws_agl_locs(:,:,k) - ws_agl_locs(:,:,0)
             
 			; AMS method. Take virtual temperature from top layer
@@ -375,7 +429,7 @@ begin
 			
 			; Zilankavitch. Average virtual temperature over profile.
 			else
-			    beta = g/dim_avg_n(theta_v_agl_locs(:,:,0:k), 2)
+			    beta = g/dim_avg_n(thetav_agl_locs(:,:,0:k), 2)
 			end if
 			
 			rib_agl_locs(:,:,k)   = beta * dtheta_v * hgt_agl_locs(:,:,k) / dspeed^2
@@ -385,73 +439,178 @@ begin
 			delete(beta)
 
 		end do
-		
+		rib_agl_locs@varname = "RIB"
+        rib_agl_locs!0       = "location"
+        rib_agl_locs!1       = "Time"
+        rib_agl_locs!2       = "height"
+        rib_agl_locs&height  = hgts
 	end if
 	
-	if isatt(vars, "pblh") then
+    
+    if vars@rain
+        rainc  = wrf_user_getvar(file_handle, "RAINC", time) 
+        rainnc = wrf_user_getvar(file_handle, "RAINNC", time) 
+        rain   = rainc+rainnc
+        rain_sfc_locs = wrf_user_hinterp(nc_file, rain, lat, lon, xlat, xlong, opts@interp_option)
+    
+    ; Convert to rain per hour
+        do n=1,ntimes-2
+            k = ntimes-n
+            rain_sfc_locs(:, k) = rain_sfc_locs(:,k)-rain_sfc_locs(:,k-1)
+        end do
+        
+        rain_sfc_locs@varname = "RAIN"
+        rain_sfc_locs@height = 0
+    
+    end if
+    
+	if vars@pblh
 		pblh          = wrf_user_getvar(file_handle, "PBLH", time)
-		printVarSummary(pblh)
         pblh_sfc_locs = wrf_user_hinterp(nc_file, pblh, lat, lon, xlat, xlong, opts@interp_option)
+        pblh_sfc_locs@varname = "PBLH"
+        pblh_sfc_locs@height = 0
 		ListPush(out_vars, pblh_sfc_locs)
 		delete(pblh)
 	end if
 
-	if isatt(vars, "t2") then
+	if vars@t2 then
 		t2          = wrf_user_getvar(file_handle, "T2", time)
         t2_sfc_locs = wrf_user_hinterp(nc_file, t2, lat, lon, xlat, xlong, opts@interp_option)
-		ListPush(out_vars, t2_sfc_locs)
+		t2_sfc_locs@varname = "T2"
+        t2_sfc_locs@height  = 2
+        ListPush(out_vars, t2_sfc_locs)
         delete(t2)
 	end if
 
 	
-	if isatt(vars, "ust") then
+	if vars@ust then
 		ust          = wrf_user_getvar(file_handle, "UST", time)
         ust_sfc_locs = wrf_user_hinterp(nc_file, ust, lat, lon, xlat, xlong, opts@interp_option)
+        ust_sfc_locs@varname = "UST"
+        ust_sfc_locs@height = 0
         ListPush(out_vars, ust_sfc_locs)
 		delete(ust)
 	end if
 
-	if isatt(vars, "hfx") then
+	if vars@hfx then
 		hfx          = wrf_user_getvar(file_handle, "HFX", time)
         hfx_sfc_locs = wrf_user_hinterp(nc_file, hfx, lat, lon, xlat, xlong, opts@interp_option)
+        hfx_sfc_locs@varname = "HFX"
+        hfx_sfc_locs@height = 0
         ListPush(out_vars, hfx_sfc_locs)
 		delete(hfx)
 	end if
 
-	if isatt(vars, "psfc") then
+	if vars@psfc then
 		psfc          = wrf_user_getvar(file_handle, "PSFC", time)
         psfc_sfc_locs = wrf_user_hinterp(nc_file, psfc, lat, lon, xlat, xlong, opts@interp_option)
+        psfc_sfc_locs@varname = "PSFC"
+        psfc_sfc_locs@height = 0
         ListPush(out_vars, psfc_sfc_locs)        
 		delete(psfc)
 	end if
 
-	if isatt(vars, "sst") then
+	if vars@sst then
 		sst          = wrf_user_getvar(file_handle, "SST", time)
         sst_sfc_locs = wrf_user_hinterp(nc_file, sst, lat, lon, xlat, xlong, opts@interp_option)
+        sst_sfc_locs@varname = "SST"
+        sst_sfc_locs@height = 0
         ListPush(out_vars, sst_sfc_locs)        
 		delete(sst)
 	end if
-	
+
+    if vars@tsk then
+		tsk          = wrf_user_getvar(file_handle, "TSK", time)
+        tsk_sfc_locs = wrf_user_hinterp(nc_file, tsk, lat, lon, xlat, xlong, opts@interp_option)
+        tsk_sfc_locs@varname = "TSK"
+        tsk_sfc_locs@height = 0
+        ListPush(out_vars, tsk_sfc_locs)        
+		delete(tsk)
+	end if
+    
+    if vars@ust then
+		ust          = wrf_user_getvar(file_handle, "UST", time)
+        ust_sfc_locs = wrf_user_hinterp(nc_file, ust, lat, lon, xlat, xlong, opts@interp_option)
+        ust_sfc_locs@varname = "TSK"
+        ust_sfc_locs@height = 0
+        ListPush(out_vars, ust_sfc_locs)        
+		delete(ust)
+	end if
+
+    if vars@hfx then
+		hfx          = wrf_user_getvar(file_handle, "HFX", time)
+        hfx_sfc_locs = wrf_user_hinterp(nc_file, hfx, lat, lon, xlat, xlong, opts@interp_option)
+        hfx_sfc_locs@varname = "HFX"
+        hfx_sfc_locs@height = 0
+        ListPush(out_vars, hfx_sfc_locs)        
+		delete(hfx)
+	end if
+
+    
+    
+    
+    
+    
+    
+	if vars@swdown then
+		swdown  = wrf_user_getvar(file_handle, "SWDOWN", time)
+        swdown_sfc_locs = wrf_user_hinterp(nc_file, swdown, lat, lon, xlat, xlong, opts@interp_option)
+		swdown_sfc_locs@varname = "SWDOWN"
+        swdown_sfc_locs@height  = 0
+        ListPush(out_vars, swdown_sfc_locs)
+        delete(swdown)
+	end if
+
+	if any((/vars@cldfraavg, vars@cldframax/)) then
+		cldfra             = wrf_user_getvar(file_handle, "CLDFRA", time)
+        cldfra_sfc_locs    = wrf_user_hinterp(nc_file, cldfra, lat, lon, xlat, xlong, opts@interp_option)
+		cldfraavg_sfc_locs = dim_avg_n_Wrap(cldfra_sfc_locs, 1)
+        cldframax_sfc_locs = dim_max_n(cldfra_sfc_locs, 1)
+        cldfraavg_sfc_locs@height = 0
+        cldframax_sfc_locs@height = 0
+        if vars@cldfraavg
+            ListPush(out_vars, cldfraavg_sfc_locs)
+        end if
+        if vars@cldframax
+            ListPush(out_vars, cldframax_sfc_locs)
+        end if
+        delete(cldfra)
+    end if
+
+
 	
     ;******************************************************
 	; Push 3D output variables to list
     ;******************************************************
 	
-	if isatt(vars, "u") then ListPush(out_vars, u_agl_locs)
+	if vars@u then ListPush(out_vars, u_agl_locs)
     end if
-    if isatt(vars, "v") then ListPush(out_vars, v_agl_locs)
+    if vars@v then ListPush(out_vars, v_agl_locs)
     end if
-	if isatt(vars, "direction") then ListPush(out_vars, wd_agl_locs)
+	if vars@direction then ListPush(out_vars, wd_agl_locs)
     end if
-    if isatt(vars, "speed") then ListPush(out_vars, ws_agl_locs)
+    if vars@speed then ListPush(out_vars, ws_agl_locs)
     end if
-	if isatt(vars, "tk") then ListPush(out_vars, tk_agl_locs)
+	if vars@t then ListPush(out_vars, tc_agl_locs)
     end if
-	if isatt(vars, "theta") then ListPush(out_vars, theta_agl_locs)
+	if vars@theta then ListPush(out_vars, theta_agl_locs)
     end if
-	if isatt(vars, "rib") then ListPush(out_vars, rib_agl_locs)
+	if vars@thetav then ListPush(out_vars, thetav_agl_locs)
+    end if
+    if vars@rib then ListPush(out_vars, rib_agl_locs)
 	end if
 	
+
+    ;******************************************************
+	; Fix time coordinate
+    ;******************************************************
+
+	nvars = ListCount(out_vars)
+	do i=0,nvars-1
+        printVarSummary(out_vars[i])
+        out_vars[i]&Time   = ud_times
+    end do
+    
  	return(out_vars)
 	
 end
@@ -485,23 +644,45 @@ procedure write_series(series[*]:numeric,fname:string)
 begin
     dims    = dimsizes(series)
     ntimes  = dims(0) 
-    time    = series&time
     delete(dims)
+    if (iscoord(series, "time"))
+        time =     series&time
+    else
+        time =     series&Time
+    end if
+    
     header = (/"domain","model_run","model","nest_id","location_id","latitude","longitude","variable","init_time","valid_time","height","value"/)
-    prefix  = series@domain + "," + series@model_run + "," + series@model + "," + series@nest_id + "," + series@location +  "," + series@lat + "," + series@lon + "," +series@var_name
-    ;print(prefix)
+    prefix  = series@domain + "," + series@model_run + "," + series@model + "," + series@nest_id + "," + series@location +  "," + series@lat + "," + series@lon + "," +series@varname
     
     
     timestrs = ut_string(time, "%Y-%N-%D %H:%M:%S") ; convert times to strings
     output   = new(ntimes+1, "string")
     output(0) = str_join(header, ",")
-    do i=0,ntimes-1
-        output(i+1)  =  prefix + "," + timestrs(0) + "," \
+
+    if isnumeric(series@height)
+        do i=0,ntimes-1
+            output(i+1)  =  prefix + "," + timestrs(0) + "," \
                                                  + timestrs(i) + ","\
                                                  + sprintf("%0.1f", series@height) + ","\
                                                  + sprintf("%0.2f", series(i))
                                                  
-    end do
+        end do
+    end if
+    if isstring(series@height)
+        do i=0,ntimes-1
+            output(i+1)  =  prefix + "," + timestrs(0) + "," \
+                                                 + timestrs(i) + ","\
+                                                 + series@height + ","\
+                                                 + sprintf("%0.2f", series(i))
+                                                 
+        end do
+    end if
+
+
+
+
+
+
     asciiwrite(fname, output)
 
 end
@@ -555,7 +736,7 @@ begin
 			
 				fname   = outdir + "/" +\
                      locations(n) + us +\
-                     series@var_name + us + "d" +\
+                     series@varname + us + "d" +\
                      series@nest_id + us +\
                      shgt+ us +\
                      series@init_time +".txt"
