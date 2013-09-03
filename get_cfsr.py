@@ -7,10 +7,10 @@ import sys
 #
 # User options
 #
-MODE             = 'submit' # request or fetch
+MODE             = 'request' # request or fetch
 USER             = 'HAWKINS'
 DUMMY            = True
-REQUEST_IDS      = {42957:'pressure', 42958:'surface', 42960:'sst'}
+REQUEST_IDS      = {43066:'pressure', 43067:'surface', 43068:'sst'}
 DSID             = '094.0'
 RDA_LOGIN_SERVER = 'https://rda.ucar.edu/cgi-bin/login'
 RDA_DATA_SERVER  = 'http://rda.ucar.edu'
