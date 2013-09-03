@@ -7,9 +7,10 @@ import sys
 #
 # User options
 #
-MODE             = 'submit' # request or fetch
+MODE             = 'fetch' # request or fetch
 USER             = 'HAWKINS'
-DUMMY            = True
+DUMMY            = False
+MAX_NUM          = 5 # limit on number of files to fetch for debugging
 REQUEST_IDS      = {42957:'pressure', 42958:'surface', 42960:'sst'}
 DSID             = '094.0'
 RDA_LOGIN_SERVER = 'https://rda.ucar.edu/cgi-bin/login'
@@ -17,7 +18,7 @@ RDA_DATA_SERVER  = 'http://rda.ucar.edu'
 RDA_VERIFY       = '%s/php/dsrqst-test.php' % RDA_DATA_SERVER
 RDA_REQUEST      = '%s/php/dsrqst.php'      % RDA_DATA_SERVER
 RDA_DATASET      = '%s/dsrqst'              % RDA_DATA_SERVER
-LOCAL_DIR        = '/gpfs/apps/mesomodel/shawkins/grib/CFSR'
+LOCAL_DIR        = '/home/slha/forecasting/data/reanalysis/CFSR'
 COOKIE           = '/home/slha/auth.ucar.edu'
 START            = '2012-01-01 00:00'
 END              = '2013-01-01 00:00'
@@ -59,27 +60,40 @@ sst =   {'parameters': r'3%217-0.2-1:0.0.0',
          
 def main():         
 
+    print '\n\n****************************'
+    print 'authenticating at: %s' % RDA_LOGIN_SERVER
+    response = authenticate(RDA_LOGIN_SERVER, EMAIL, PASSWORD, COOKIE)
+    print response
+    
     if MODE=='submit':
-        ids, indexs = submit_requests([plevs, surface, sst], dummy=DUMMY)
-        for id, ind in zip(ids, indexs):
-            print id, ind
+        try:
+            ids, indexs = submit_requests([plevs,  sst], dummy=DUMMY)
+            print 'Success, following job requests submitted to server'
+            for id, ind in zip(ids, indexs):
+                print 'Job ID: %s, Index: %s' % (id, ind)
+
+        except RequestError, e:
+            print 'Failure:'
+            print e
+        print '*****************************************'
         return
     
-    else:
+    elif MODE=='fetch':
+        print '\n\n******************************************'
+        print 'Fetching requests from server: %s' % RDA_DATA_SERVER
         for ind in REQUEST_IDS:
+            print 'processing request: %s' % ind
             prefix = REQUEST_IDS[ind]
             filenames = get_filenames(RDA_DATASET, USER, ind, COOKIE)
-            print prefix
+            print 'Fetching the following %d files' % len(filenames)
             for f in filenames:
                 print f
-            get_files(filenames, COOKIE, LOCAL_DIR, prefix)
-    
-    #filenames = get_filenames(RDA_DATASET, 'HAWKINS42766', '42766', COOKIE)
-    #get_files(filenames, COOKIE, LOCAL_DIR, 'pressure')
+            if not DUMMY:
+                get_files(filenames, COOKIE, LOCAL_DIR, prefix,max_num=MAX_NUM)
+        print '*************************************************'
+    else:
+        print 'Use MODE=submit or MODE=request'
 
-    #filenames = get_filenames(RDA_DATASET, 'HAWKINS42767', '42767', COOKIE)
-    #get_files(filenames, COOKIE, LOCAL_DIR, 'sst')
-    
 
 
     
@@ -88,7 +102,7 @@ def submit_requests(datasets, dummy=False):
 
     ids = []
     indexs = [] 
-    print '\n\n****************************'
+    
     print 'submitting requests for CSFR data for WRF on pressure, surface, and sst'
     print 'user: %s' % EMAIL
     print 'start date: %s' % options['startdate']
@@ -169,8 +183,12 @@ def get_filenames(server, user, ind, cookie):
     return fnames
 
     
-def get_files(filenames, cookie, local_path, local_prefix):
+def get_files(filenames, cookie, local_path, local_prefix,max_num=None):
     """ Fetches the datafiles themselves and renames them to something sensible"""
+
+    if max_num!=None:
+        filenames = filenames[0:max_num]
+
     for f in filenames:
         base_name = f.split('/')[-1]
         tokens = base_name.split('.')
