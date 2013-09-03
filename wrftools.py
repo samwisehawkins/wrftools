@@ -1098,43 +1098,37 @@ def update_namelist_wps(config):
     logger     = get_logger()
     logger.debug('*** UPDATING namelist.wps ***')
 
-    domain_dir = config['domain_dir']
-    model_run  = config['model_run']
-    wps_dir    = config['wps_dir']
-    wps_run_dir= config['wps_run_dir']
+    #domain_dir = config['domain_dir']
+    #model_run  = config['model_run']
+    #wps_dir    = config['wps_dir']
+    wps_run_dir= config['wps_run_dir']          # required for opt_geogrid_tbl_path
+    #bdy_conditions = config['bdy_conditions'] 
+    
+    namelist_wps = config['namelist_wps']
+    shutil.copyfile(namelist_wps, namelist_wps+'.backup')
+    
     bdy_times  = get_bdy_times(config)
+    
     max_dom    = config['max_dom']
     init_time  = config['init_time']
-    
-    # hack alert, this should not be being expanded here
-    #logger.warn('update_namelist_wps is expanding and creating met_em_dir, this should be done elsewhere') 
+
     met_em_dir = sub_date(config['met_em_dir'], init_time=init_time)
-   
-    geo_em_dir = '%s/geo_em' % domain_dir
-    wps_run_dir = config['wps_run_dir']
+    geo_em_dir = config['geo_em_dir']
+
     bdy_interval = config['bdy_interval']
     interval_seconds = bdy_interval * 60 * 60
-    bdy_conditions = config['bdy_conditions'] 
 
-    #
-    # Read the namelist from model run directory
-    #
-    namelist_dom = '%s/%s/namelist.wps' %(domain_dir, model_run)
-    logger.debug('reading namelist.wps <--------- %s' % namelist_dom)
-    namelist = read_namelist(wps_run_dir+'/namelist.wps')
-    logger.debug(namelist.slookup.items())
+    logger.debug('reading namelist.wps <--------- %s' % namelist_wps)
+    namelist = read_namelist(namelist_wps)
 
     #
     # Update some options based on the forecast config file
     #
     namelist.update('max_dom', max_dom)
-    namelist.update('opt_output_from_metgrid_path', met_em_dir, section='metgrid')
     namelist.update('opt_output_from_geogrid_path', geo_em_dir, section='share')
     namelist.update('opt_geogrid_tbl_path', wps_run_dir, section='geogrid')
     namelist.update('opt_metgrid_tbl_path', wps_run_dir, section='metgrid')
     namelist.update('interval_seconds', [interval_seconds])
-    namelist.update('prefix', bdy_conditions)   
-    namelist.update('fg_name', bdy_conditions) 
     
     #
     # Generate formatted strings for inclusion in the namelist.wps file
@@ -1148,22 +1142,18 @@ def update_namelist_wps(config):
     namelist.update('start_date', [start_str]*max_dom)
     namelist.update('end_date',   [end_str]*max_dom)
 
-    if not 'constants_name' in namelist.settings:
-        namelist.remove('constants_name')
-    #
-    # Delete constants setting if SST is not specified 
-    #
-    #if (not config['sst'] and 'constants_name' in namelist.settings):
-    #    namelist.remove('constants_name')
         
     logger.debug('writing modified namelist.wps to file')
-    namelist.to_file(namelist_dom)
+    namelist.to_file(namelist_wps)
     logger.debug('*** FINISHED UPDATING namelist.wps ***')
 
 
 
 def run_ungrib(config):
     """ Runs ungrib.exe and checks output was sucessfull
+    If vtable and gbr_input_fmt are NOT dictionaries, 
+    then dictionarius will be constructed from them using 
+    the key bdy_conditions from the metadata
     
     Arguments:
     config -- dictionary specifying configuration options
@@ -1174,57 +1164,87 @@ def run_ungrib(config):
     wps_dir       = config['wps_dir']
     wps_run_dir   = config['wps_run_dir']
     namelist_wps  = config['namelist_wps']
+    model_run_dir = config['model_run_dir']    # model run directory 
+    met_em_dir    = config['met_em_dir']
+    init_time     = config['init_time']
     log_file      = '%s/ungrib.log' % wps_run_dir
     vtable        = config['vtable']
+    grb_input_fmt = config['grb_input_fmt']
+    bdy_conditions = config['bdy_conditions']
+    
     logger.info("*** RUNNING UNGRIB ***")
-
     
     namelist = read_namelist(namelist_wps)
+    
+    bdy_times     = get_bdy_times(config)
+    
 
-    
+    if type(grb_input_fmt)!=type({}):
+        grb_input_fmt = {bdy_conditions:grb_input_fmt}
+
+    if type(vtable)!=type({}):
+        vtable = {bdy_conditions:vtable}
+
+
     #
-    # If vtable is a dictionary, it is of th form
-    # {prefix1: vtable1, prefix2:vtable2}
-    # So we run ungrib a number of times, using a different prefix each time
-    # 
+    # Check that boundary conditions exist
+    #     
+    for key in vtable.keys():
+        
+        fmt = grb_input_fmt[key]
+        #
+        # Generate filelist based on the initial time, and the forecast hour
+        #        
+        filelist = get_bdy_filenames(fmt, bdy_times)
+
+        #
+        # Check the boundary files exist
+        #
+        logger.debug('checking boundary condition files exists')    
+        for f in filelist:
+            if not os.path.exists(f):
+                raise IOError('cannot find file: %s' %f)
+        
     
-    if type(vtable)==type({}):
-        for key in vtable:
-            vtabname = vtable[key]
-            prefix = key
-            namelist.update('prefix', key)
-            namelist.to_file(namelist_wps)
-            link_namelist_wps(config)
-            vtab_path = wps_dir+'/ungrib/Variable_Tables/'+vtabname
-            vtab_wps  = wps_run_dir+'/Vtable'
-            if os.path.exists(vtab_wps):
-                os.remove(vtab_wps)
-            cmd = 'ln -sf %s %s' %(vtab_path, vtab_wps)
-            logger.debug(cmd)
-            subprocess.call(cmd, shell=True)    
     
-    else:
-        vtab_path = wps_dir+'/ungrib/Variable_Tables/'+vtable
+    logger.debug('all boundary conditions files exist')
+    
+    for key in vtable.keys():
+        fmt = grb_input_fmt[key]
+        filelist = get_bdy_filenames(fmt, bdy_times)
+        logger.debug('running link_grib.csh script to link grib files to GRIBFILE.AAA etc')
+        os.chdir(wps_run_dir)
+        args = ' '.join(filelist)
+        cmd = '%s/link_grib.csh %s' %(wps_run_dir,args)
+        run_cmd(cmd, config)
+  
+        vtabname = vtable[key]
+        prefix = key
+        namelist.update('prefix', key)
+        namelist.to_file(namelist_wps)
+        link_namelist_wps(config)
+        vtab_path = wps_dir+'/ungrib/Variable_Tables/'+vtabname
         vtab_wps  = wps_run_dir+'/Vtable'
+
         if os.path.exists(vtab_wps):
             os.remove(vtab_wps)
         cmd = 'ln -sf %s %s' %(vtab_path, vtab_wps)
         logger.debug(cmd)
         subprocess.call(cmd, shell=True)    
+
+        cmd     =  '%s/ungrib.exe' % wps_run_dir
         
-    cmd     =  '%s/ungrib.exe' % wps_run_dir
-    
-    if queue:
-        run_cmd_queue(cmd, config, wps_run_dir, log_file)
-    
-    else:
-        mpirun(cmd, config['num_procs'], config['host_file'], config['run_level'], config['cmd_timing'])
+        if queue:
+            run_cmd_queue(cmd, config, wps_run_dir, log_file)
+        
+        else:
+            mpirun(cmd, config['num_procs'], config['host_file'], config['run_level'], config['cmd_timing'])
 
 
-    cmd = 'grep "Successful completion" %s/ungrib.log' % wps_run_dir # check for success
-    ret = run_cmd(cmd,config)
-    if ret!=0:
-        raise IOError('ungrib.exe did not complete')
+        cmd = 'grep "Successful completion" %s/ungrib.log' % wps_run_dir # check for success
+        ret = run_cmd(cmd,config)
+        if ret!=0:
+            raise IOError('ungrib.exe did not complete')
     
     logger.info('*** SUCESS UNGRIB ***')
 
@@ -1277,14 +1297,39 @@ def run_metgrid(config):
     queue          = config['queue']
     wps_run_dir    = config['wps_run_dir']
     log_file       = '%s/metgrid.log' % wps_run_dir
+    bdy_conditions = config['bdy_conditions']
+    namelist_wps   = config['namelist_wps']
+    namelist       = read_namelist(namelist_wps)
+    
+    met_em_dir     = sub_date(config['met_em_dir'], config['init_time'])        
+    
+    #
+    # vtable may be a dictionary to support running ungrib multiple
+    # times. In which case, we need to put multiple prefixes into
+    # the namelist.wps file
+    #
+    
+    vtable = config['vtable']
+    
+    if type(vtable)==type({}):
+        prefixes = vtable.keys()
+    else:
+        prefixes = [bdy_conditions]    
 
-    met_em_dir     = sub_date(config['met_em_dir'], config['init_time'])
+        
+    namelist.update('fg_name', prefixes)
+    namelist.update('opt_output_from_metgrid_path', met_em_dir, section='metgrid')
+    if not 'constants_name' in config.keys():
+        namelist.remove('constants_name')
+        
+    namelist.to_file(namelist_wps)
+    
     logger.debug('met_em_dir: %s' % met_em_dir)
     if not os.path.exists(met_em_dir):
         logger.debug('Creating met_em_dir: %s ' % met_em_dir)
         os.makedirs(met_em_dir)
 
-
+    os.chdir(wps_run_dir)
     cmd      =  "%s/metgrid.exe" % wps_run_dir
     
     if queue:
@@ -2008,7 +2053,7 @@ def timing(config):
     logger.info('*** Computing timing information ***')
     wrf_run_dir    = config['wrf_run_dir']
     rsl_file       = '%s/rsl.error.0000' % wrf_run_dir
-    namelist_input = '%s/namelist.input' % wrf_run_dir
+    namelist_input = config['namelist_input']
     namelist       = read_namelist(namelist_input).settings
     timestep       = namelist['time_step'][0]
     f              = open(rsl_file, 'r')
@@ -2025,7 +2070,7 @@ def timing(config):
     logger.info('\t %0.3f elapsed seconds' % total)
     logger.info('\t %0.3f seconds per timestep' % time_per_step )
     logger.info('\t %0.3f times real time' %x_real)
-
+    logger.info('*** END TIMING INFORMATION ***')
 
 def run_scripts(config):
     """Simply runs whatever scripts are specified in the config file. 
@@ -2381,53 +2426,12 @@ def cleanup(config):
     """Cleans up various files """
     logger = get_logger()
 
-    cleanup_dir = config['post_clean']
+    init_time = config['init_time']
+    post_clean = config['post_clean']
+    cleanup_dir = [sub_date(s, init_time=init_time) for s in post_clean]
+    
     for d in cleanup_dir:
         cmd = 'rm -f %s' % d
         run_cmd(cmd, config)
 
-
-#
-#
-#    domain_dir    = config['domain_dir']
-#    model_run     = config['model_run']
-#    init_time     = config['init_time']
-#    remove_wrfout = config['remove_wrfout']
-#    remove_met_em = config['remove_met_em']
-#    remove_wps    = config['remove_wps']
-#    
-#    init_str      = init_time.strftime('%Y-%m-%d_%H')
-#    met_em_dir    = '%s/met_em/%s' % (domain_dir, init_str)   
-#    wps_dir       = config['wps_dir']
-#    tmp_dir       = config['tmp_dir']
-#       
-#    if remove_met_em:
-#        logger.debug("removing met_em directory")
-#        cmd = 'rm -r -f %s ' % met_em_dir
-#        run_cmd(cmd, config)
-#    
-#    #
-#    # Remove old WPS files. FILE is hard-coded.
-#    #
-#    if remove_wps:
-#        #cmd = 'find %s -type f -name "FILE*" -mtime +3 -exec rm -f {} \;' % wps_dir
-#        cmd = 'rm -f %s/FILE*' % wps_dir
-#        run_cmd(cmd, config) 
-#        cmd = 'rm -f %s/GFS*' % wps_dir#
-#    run_cmd(cmd,config)
-#        cmd = 'rm -f %s/PFILE*' % wps_dir
-#       run_cmd(cmd,config)
-#        cmd = 'rm -f %s/geogrid.log.* %s/metgrid.log.*' % (wps_dir, wps_dir)
-#        run_cmd(cmd, config) 
-#                
-#    #
-    # Remove wrfout netcdf files if told to
-    #
-#    if remove_wrfout:
-#        wrfout = '%s/%s/wrfout_*_%s*' % (domain_dir, model_run, init_str)
-#        logger.debug('removing wrfout netcdf files')
-#        cmd = 'rm -f %s' %wrfout
-#        run_cmd(cmd, config)
-#        
     logger.info('*** FINISHED CLEANUP ***')
-#    return 0
