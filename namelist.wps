@@ -16,7 +16,7 @@
  j_parent_start            = 1,        25,       53,
  e_we                      = 150,      109,      100,
  e_sn                      = 100,      124,      100,
- geog_data_res             = 'modis_30s+10m','modis_30s+2m','modis_30s+30s',
+ geog_data_res             = '10m',    '2m',     '30s',
  dx                        = 27000,
  dy                        = 27000,
  map_proj                  = 'lambert',
@@ -31,7 +31,7 @@
 
 &ungrib
  out_format                = 'WPS',
- prefix                    = 'PLEVS',
+ prefix                    = 'SST',
 /
 
 &metgrid
