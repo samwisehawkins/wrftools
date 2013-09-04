@@ -99,9 +99,8 @@ from queue import fill_template, qsub, qstat
 
 LOGGER         = 'wrf_forecast'
 
-in_format       = "%Y-%m-%d %H:%M:%S" 
-out_format      = "%Y-%m-%d_%H:%M:%S"
-ps_format       = "%Y%m%d_%H%M%S"          # date format for point stat
+#in_format       = "%Y-%m-%d %H:%M:%S" 
+#ps_format       = "%Y%m%d_%H%M%S"          # date format for point stat
 
 
 
@@ -1326,7 +1325,7 @@ def run_metgrid(config):
     
     logger.debug('met_em_dir: %s' % met_em_dir)
     if not os.path.exists(met_em_dir):
-        logger.debug('Creating met_em_dir: %s ' % met_em_dir)
+        logger.debug('creating met_em_dir: %s ' % met_em_dir)
         os.makedirs(met_em_dir)
 
     os.chdir(wps_run_dir)
@@ -1357,6 +1356,7 @@ def prepare_wrf(config):
     logger = get_logger()    
     logger.debug('*** PREPARING FILES FOR WRF ***')
     
+    met_em_format      = "%Y-%m-%d_%H:%M:%S"
     domain_dir   = config['domain_dir']
     
     wrf_run_dir  = config['wrf_run_dir']
@@ -1367,10 +1367,12 @@ def prepare_wrf(config):
     fcst_hours   = config['fcst_hours']
     bdy_interval = config['bdy_interval']
     bdy_times    = get_bdy_times(config)
-    met_em_dir   = '%s/met_em/%s' % (domain_dir, init_time.strftime('%Y-%m-%d_%H'))    
-    met_em_files = ['%s/met_em.d%02d.%s.nc' % (met_em_dir,d, t.strftime(out_format)) for d in domains for t in bdy_times] 
+    met_em_dir   = sub_date(config['met_em_dir'], init_time=init_time)
+    met_em_files = ['%s/met_em.d%02d.%s.nc' % (met_em_dir,d, t.strftime(met_em_format)) for d in domains for t in bdy_times] 
     namelist_run    = '%s/namelist.input' % wrf_run_dir
-    namelist_dom    = '%s/namelist.input' % model_run_dir
+    namelist_input = config['namelist_input']
+    
+    
     logger.debug('linking met_em files:')
     
     #
@@ -1396,12 +1398,11 @@ def prepare_wrf(config):
     logger.debug('linking namelist.input to wrf_run_dir')
     cmd = 'rm -f %s' % namelist_run
     run_cmd(cmd, config)
-    cmd = 'ln -sf %s %s' %(namelist_dom, namelist_run)
+    cmd = 'ln -sf %s %s' %(namelist_input, namelist_run)
     run_cmd(cmd, config)
 
-
     logger.debug('*** FINISHED PREPARING FILES FOR WRF ***')
-    return 0
+
 
 
 
@@ -1416,22 +1417,24 @@ def update_namelist_input(config):
     logger = get_logger()        
     logger.debug('*** UPDATING namelist.input ***')
     
-    domain_dir   = config['domain_dir']
-    wrf_dir      = config['wrf_dir']
-    model        = config['model']
-    model_run    = config['model_run']
-    domain       = config['domain']
-    
-    namelist_domain = '%s/%s/namelist.input'  %(domain_dir, model_run)
-    namelist_wps    = '%s/%s/namelist.wps'  %(domain_dir, model_run)
-    
+    domain_dir    = config['domain_dir']
+    wrf_dir       = config['wrf_dir']
+    model         = config['model']
+    model_run     = config['model_run']
+    model_run_dir = config['model_run_dir']
+    domain        = config['domain']
+        
+    namelist_run  = '%s/namelist.input'  % model_run_dir
+    namelist_input = config['namelist_input']
+    namelist_wps   = config['namelist_wps']
+    shutil.copyfile(namelist_input, namelist_input+'.backup')
     
     # read settings from domain-based namelist
-    namelist        = read_namelist(namelist_domain)   
+    namelist        = read_namelist(namelist_input)   
 
     # read settings from domain-based namelist.wps
     namelist_wps   = read_namelist(namelist_wps)   
-    wps_settings    = namelist_wps.settings
+    wps_settings   = namelist_wps.settings
 
 
     #
@@ -1520,23 +1523,12 @@ def update_namelist_input(config):
     namelist.update('dfi_fwdstop_hour',   dfi_fwdstop.hour,   'dfi_control')
     namelist.update('dfi_fwdstop_minute', dfi_fwdstop.minute, 'dfi_control')
     namelist.update('dfi_fwdstop_second', dfi_fwdstop.second, 'dfi_control')
-
-
-    #
-    # Backup namelist.input.
-    # Then change start and end dates to
-    # match the year and month given to this script
-    #
-    logger.debug('copying namelist.input to namelist.input.backup')
-    cmd = 'cp %s %s.backup' %(namelist_domain, namelist_domain)
-    run_cmd(cmd, config)
-    
+   
     logger.debug('writing new settings to file')
-    namelist.to_file(namelist_domain)
+    namelist.to_file(namelist_input)
     
     #logger.debug(namelist)
     logger.debug('*** FINISHED UPDATING namelist.input ***')  
-    return 0    
 
     
 def run_real(config):
