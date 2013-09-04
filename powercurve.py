@@ -22,8 +22,8 @@
 #-------------------------------------------------------------------------------
 #!/usr/bin/env python
 
-import numpy as np
-from scipy import interpolate
+#import numpy as np
+#from scipy import interpolate
 
 class PowerCurve(object):
     """Represents a power curve, provides power(speed, direction) method to convert
