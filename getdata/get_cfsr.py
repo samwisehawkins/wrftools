@@ -10,8 +10,8 @@ import sys
 MODE             = 'fetch' # request or fetch
 USER             = 'HAWKINS'
 DUMMY            = False
-MAX_NUM          = 5 # limit on number of files to fetch for debugging
-REQUEST_IDS      = {42957:'pressure', 42958:'surface', 42960:'sst'}
+MAX_NUM          = 10 # limit on number of files to fetch for debugging
+REQUEST_IDS      = {43066:'pressure', 43067:'surface', 43068:'sst'}
 DSID             = '094.0'
 RDA_LOGIN_SERVER = 'https://rda.ucar.edu/cgi-bin/login'
 RDA_DATA_SERVER  = 'http://rda.ucar.edu'
@@ -186,14 +186,17 @@ def get_filenames(server, user, ind, cookie):
 def get_files(filenames, cookie, local_path, local_prefix,max_num=None):
     """ Fetches the datafiles themselves and renames them to something sensible"""
 
+    filenames = sorted(filenames)
     if max_num!=None:
         filenames = filenames[0:max_num]
-
+    print '\n'
     for f in filenames:
         base_name = f.split('/')[-1]
         tokens = base_name.split('.')
+        
         tokens[3] = local_prefix
-        new_name = local_path+'/'+'.'.join(tokens)
+        new_name = '%s/CFSR.%s.%s.grb2' %(local_path,local_prefix,tokens[0])
+        new_name = '%s/%s' %(local_path, base_name)
         print f + '------>' + new_name
         cmd = 'curl -b %s -o %s %s' % (cookie, new_name, f)
         subprocess.call(cmd, shell=True)
