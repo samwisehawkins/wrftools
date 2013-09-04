@@ -196,7 +196,8 @@ def mpirun(cmd, num_procs, hostfile, run_level, cmd_timing=False):
     else:
         nprocs = num_procs
         
-    cmd = 'mpirun -n %d -hostfile %s %s' % (nprocs, hostfile, cmd)
+    #cmd = 'mpirun -n %d -hostfile %s %s' % (nprocs, hostfile, cmd)
+    cmd = 'mpirun -n %d %s' % (nprocs,  cmd)
     logger.debug(cmd)
     
     t0          = time.time()
