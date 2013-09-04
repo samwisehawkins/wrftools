@@ -7,11 +7,12 @@ import sys
 #
 # User options
 #
-MODE             = 'fetch' # request or fetch
+MODE             = 'fetch' # submit or fetch
 USER             = 'HAWKINS'
 DUMMY            = False
 MAX_NUM          = 10 # limit on number of files to fetch for debugging
-REQUEST_IDS      = {43066:'pressure', 43067:'surface', 43068:'sst'}
+REQUEST_IDS      = {43340:'pressure', 43341:'surface', 43342:'sst'}
+REQUEST_IDS      = {43341:'surface'}
 DSID             = '094.0'
 RDA_LOGIN_SERVER = 'https://rda.ucar.edu/cgi-bin/login'
 RDA_DATA_SERVER  = 'http://rda.ucar.edu'
@@ -38,26 +39,46 @@ options = { 'dsid':DSID,
             'wlon':    WLON,
             'elon':    ELON}
 
-plevs = {'parameters': r'3%217-0.2-1:0.0.0,3%217-0.2-1:0.1.1,3%217-0.2-1:0.2.2,3%217-0.2-1:0.2.3,3%217-0.2-1:0.3.1,3%217-0.2-1:0.3.5',         
+pressure_093 = {'parameters': r'3%217-0.2-1:0.0.0,3%217-0.2-1:0.1.1,3%217-0.2-1:0.2.2,3%217-0.2-1:0.2.3,3%217-0.2-1:0.3.1,3%217-0.2-1:0.3.5',         
          'level':'76,77,78,79,80,81,82,83,84,85,86,87,88,89,90,91,92,93,94,95,96,97,98,99,100,101,221,361,362,363,557,562,563,574,577,581,913,914,219',
          'grid_definition': '57',
          'product':'3',
          'grid_definition':'57',
          'ststep':'yes'}
 
-surface = {'parameters': r'3%217-0.2-1:2.0.192,3%217-0.2-1:0.3.5,3%217-0.2-1:0.2.2,3%217-0.2-1:0.2.3,3%217-0.2-1:0.1.0,3%217-0.2-1:0.1.13,3%217-0.2-1:2.0.0,3%217-0.2-1:10.2.0,3%217-0.2-1:0.3.0,3%217-0.2-1:0.0.0',
+surface_093 = {'parameters': r'3%217-0.2-1:2.0.192,3%217-0.2-1:0.3.5,3%217-0.2-1:0.2.2,3%217-0.2-1:0.2.3,3%217-0.2-1:0.1.0,3%217-0.2-1:0.1.13,3%217-0.2-1:2.0.0,3%217-0.2-1:10.2.0,3%217-0.2-1:0.3.0,3%217-0.2-1:0.0.0',
          'level':'521,522,523,524,107,223,221',
          'product':3,
          'grid_definition':62,
          'ststep':'yes'}
 
-sst =   {'parameters': r'3%217-0.2-1:0.0.0',
+sst_093 =   {'parameters': r'3%217-0.2-1:0.0.0',
          'level':'107',
          'product':'3',
          'grid_definition':'62',
          'ststep':'yes'}         
 
-         
+       
+pressure_094 = {'parameters': r'3%217-0.2-1:0.0.0,3%217-0.2-1:0.1.1,3%217-0.2-1:0.2.2,3%217-0.2-1:0.2.3,3%217-0.2-1:0.3.1,3%217-0.2-1:0.3.5',
+               'level' :'76,77,78,79,80,81,82,83,84,85,86,87,88,89,90,91,92,93,94,95,96,97,98,99,100,101,221,361,362,363,557,562,563,574,577,581,913,914,219',
+               'product': '3',
+               'grid_definition': '57',
+               'ststep': 'yes'}
+ 
+
+surface_094 = {'parameters': r'3%217-0.2-1:0.0.0,3%217-0.2-1:0.1.0,3%217-0.2-1:0.1.13,3%217-0.2-1:0.2.2,3%217-0.2-1:0.2.3,3%217-0.2-1:0.3.0,3%217-0.2-1:0.3.5,3%217-0.2-1:10.2.0,3%217-0.2-1:2.0.0,3%217-0.2-1:2.0.192',
+                'level': '107,221,521,522,523,524,223',
+                'product':'3',
+                'grid_definition': '68',
+                'ststep': 'yes'}
+ 
+sst_094 = {'parameters': '3%217-0.2-1:0.0.0',
+           'level':'107',
+           'product':'3',
+           'grid_definition':'68',
+           'ststep':'yes'}
+ 
+      
 def main():         
 
     print '\n\n****************************'
@@ -67,11 +88,19 @@ def main():
     
     if MODE=='submit':
         try:
-            ids, indexs = submit_requests([plevs,  sst], dummy=DUMMY)
+            if DSID=='093.0':
+                datasets = [pressure_093, surface_093,  sst_093]
+
+            elif DSID=='094.0':
+                datasets = [pressure_094, surface_094,  sst_094]
+            
+            ids, indexs = submit_requests(datasets, dummy=DUMMY)
+            
+            print '\n\n\n****************************************'
             print 'Success, following job requests submitted to server'
             for id, ind in zip(ids, indexs):
                 print 'Job ID: %s, Index: %s' % (id, ind)
-
+                
         except RequestError, e:
             print 'Failure:'
             print e
@@ -120,7 +149,7 @@ def submit_requests(datasets, dummy=False):
         return
     
     print 'submitting requests to data server'
-    for dataset in (plevs, surface, sst):        
+    for dataset in datasets:        
         response = submit(RDA_REQUEST, dataset, COOKIE)
         id = get_id(response)
         index = get_index(response)
@@ -142,10 +171,10 @@ def post_string(descr):
     
     output = "dsid=ds%(dsid)s&rtype=S&rinfo=dsnum=%(dsid)s;\
 startdate=%(startdate)s;enddate=%(enddate)s;parameters=%(parameters)s;\
-level=%(level)s;product=%(product)s;grid_definition=%(grid_definition)s;ststep=%(ststep)s;\
-nlat=%(nlat)s;slat=%(slat)s;wlon=%(wlon)s;elon=%(elon)s" % descr
+level=%(level)s;product=%(product)s;grid_definition=%(grid_definition)s;ststep=%(ststep)s;" % descr
     return output
-
+    #nlat=%(nlat)s;slat=%(slat)s;wlon=%(wlon)s;elon=%(elon)s
+    
 def get_id(response):
     """ Parses a dataset ID from the server response"""
 
@@ -170,7 +199,7 @@ def get_filenames(server, user, ind, cookie):
     request_id = user+str(ind)
     url = '%s/%s/curl.%s.csh' % (server, request_id, ind)
     out = 'curl.%s.csh' % ind
-    cmd = 'curl -b %s %s' %(cookie, url)
+    cmd = 'curl -s -b %s %s' %(cookie, url)
     print cmd
     proc   = subprocess.Popen([cmd], stdout=subprocess.PIPE, shell=True)
     response = proc.stdout.read().rstrip('\n')
@@ -180,13 +209,13 @@ def get_filenames(server, user, ind, cookie):
     # The filename is token[4]
     #
     fnames = [l.split()[4] for l in response.split('\n') if request_id in l]
-    return fnames
+    return sorted(fnames)
 
     
 def get_files(filenames, cookie, local_path, local_prefix,max_num=None):
     """ Fetches the datafiles themselves and renames them to something sensible"""
 
-    filenames = sorted(filenames)
+
     if max_num!=None:
         filenames = filenames[0:max_num]
     print '\n'
@@ -198,13 +227,13 @@ def get_files(filenames, cookie, local_path, local_prefix,max_num=None):
         new_name = '%s/CFSR.%s.%s.grb2' %(local_path,local_prefix,tokens[0])
         new_name = '%s/%s' %(local_path, base_name)
         print f + '------>' + new_name
-        cmd = 'curl -b %s -o %s %s' % (cookie, new_name, f)
+        cmd = 'curl -s -b %s -o %s %s' % (cookie, new_name, f)
         subprocess.call(cmd, shell=True)
     
 def authenticate(server, email, password, cookie):
     """Authenticates and saves cookie to local cookie file"""
     
-    cmd = 'curl -o /dev/null -k -s -c %s -d "email=%s&passwd=%s&action=login" %s '%(cookie, email, password, server)
+    cmd = 'curl -s -o /dev/null -k -s -c %s -d "email=%s&passwd=%s&action=login" %s '%(cookie, email, password, server)
     print cmd
     proc = subprocess.Popen([cmd], stdout=subprocess.PIPE, shell=True)
     output = proc.stdout.read().rstrip('\n')
@@ -213,7 +242,7 @@ def authenticate(server, email, password, cookie):
 
 def submit(url, dataset, cookie):
     post_data = post_string(dataset)
-    cmd = 'curl -b %s -d "%s" %s' % (cookie, post_data, url)
+    cmd = 'curl -s -b %s -d "%s" %s' % (cookie, post_data, url)
     print cmd
     proc = subprocess.Popen([cmd], stdout=subprocess.PIPE, shell=True)
     output = proc.stdout.read().rstrip('\n')
