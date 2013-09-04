@@ -73,7 +73,8 @@
  ifsnow                    = 1,
  icloud                    = 1,
  surface_input_source      = 1,
- num_soil_layers           = 4,
+ num_soil_layers           = 5,
+ num_land_cat              = 24,
  sf_urban_physics          = 0,        0,        0,        0,        0,
 /
 

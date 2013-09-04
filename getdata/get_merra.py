@@ -14,8 +14,8 @@ min_lat = 40
 max_lat = 75
 
 
-start = datetime.datetime(2010, 1, 1, 0)
-end   = datetime.datetime(2010, 1, 2, 0)
+start = datetime.datetime(2011, 1, 1, 0)
+end   = datetime.datetime(2011, 1, 2, 0)
 rrule = rrule.rrule(rrule.DAILY, dtstart=start, until=end)
 
 server     = 'http://goldsmr2.sci.gsfc.nasa.gov/opendap/MERRA/MAT1NXSLV.5.2.0'
@@ -66,5 +66,6 @@ for d in rrule:
     outname = '%s/%s.%s.nc' %(local_dir, collection, date_str)
     cmd = 'ncks %s %s %s/%d/%02d/%s.%s.hdf %s' %(var_spec, dim_spec,server, d.year,d.month, collection, date_str, outname)
     subprocess.call(cmd, shell=True)
-    
+    cmd = 'nccopy -d 9 %s %s' % (outname, outname)
+    subprocess.call(cmd, shell=True)    
 print '*****************************************\n\n'
