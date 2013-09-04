@@ -135,29 +135,42 @@ for init_time in init_times:
     # WPS
     #
     if wps:
-        try:
-            wrftools.prepare_wps(config)
-        except IOError, e:
-            logger.error('WPS failed for initial time %s' %init_time)
-            wrftools.handle(e, fail_mode, full_trace)
+        #try:
+        #    wrftools.prepare_wps(config)
+        #except IOError, e:
+        #    logger.error('WPS failed for initial time %s' %init_time)
+        #    wrftools.handle(e, fail_mode, full_trace)
         try:
             wrftools.update_namelist_wps(config)            
         except IOError, e:
-            logger.error('WPS failed for initial time %s' %init_time)
             wrftools.handle(e, fail_mode, full_trace)
 
-        try:
-            if ungrib:
+
+        if ungrib:
+            try:        
                 wrftools.run_ungrib(config)
-            if sst:
+            except Exception, e:
+                wrftools.handle(e, fail_mode, full_trace)
+        
+        if sst:
+            try:
                 wrftools.ungrib_sst(config)
-            if geogrid:
+            except Exception, e:
+                wrftools.handle(e, fail_mode, full_trace)
+
+        if geogrid:
+            try:
                 wrftools.run_geogrid(config)
-            if metgrid:
+            except Exception, e:
+                wrftools.handle(e, fail_mode, full_trace)
+        
+        if metgrid:
+            try:
                 wrftools.run_metgrid(config)
-        except IOError, e:
-            logger.error('WPS failed for initial time %s' %init_time)
-            wrftools.handle(e, fail_mode, full_trace)
+            except Exception, e:
+                wrftools.handle(e, fail_mode, full_trace)
+        
+
     #
     # WRF
     #           
