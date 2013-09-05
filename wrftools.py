@@ -184,7 +184,7 @@ def mpirun(cmd, num_procs, hostfile, run_level, cmd_timing=False):
     Arguments:
         @cmd       -- path of the executable
         @num_procs -- int or dict specifying number of processors. If dict, executable name (not full path) used as key
-        @hostfile  -- path to machine file
+        @hostfile  -- path to machine file, use 'None' to not use a host file
         @run_level -- string: 'RUN' command will get run, anything else command is logged but not run
         @cmd_timing -- boolean flag,if True, timing information logged"""
     
@@ -195,9 +195,13 @@ def mpirun(cmd, num_procs, hostfile, run_level, cmd_timing=False):
         nprocs = num_procs[exe]
     else:
         nprocs = num_procs
-        
-    #cmd = 'mpirun -n %d -hostfile %s %s' % (nprocs, hostfile, cmd)
-    cmd = 'mpirun -n %d %s' % (nprocs,  cmd)
+
+    if hostfile=='None':
+        cmd = 'mpirun -n %d %s' % (nprocs,  cmd)
+
+    else:
+        cmd = 'mpirun -n %d -hostfile %s %s' % (nprocs, hostfile, cmd)
+
     logger.debug(cmd)
     
     t0          = time.time()
