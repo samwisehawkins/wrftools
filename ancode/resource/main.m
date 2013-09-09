@@ -6,7 +6,7 @@ addpath(genpath([Namelist{1}.root_dir '/code/functions_matlab']))
 
 
 [ Namelist ]=set_Namelist_forecast_Ray_wind_farm( );
-
+% testing testing 
 %Cockpitt controls 
     %get_data_flag=1
     produce_power_forecast_time_serie_flag=1
