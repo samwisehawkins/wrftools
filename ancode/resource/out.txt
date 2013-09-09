@@ -1,0 +1,13 @@
+ Copyright (C) 1995-2012 - All Rights Reserved
+ University Corporation for Atmospheric Research
+ NCAR Command Language Version 6.1.0-beta
+ The use of this software is governed by a License Agreement.
+ See http://www.ncl.ucar.edu/ for more details.
+fatal:syntax error: line 234 in file build_datastructure_AnEN.ncl before or near : 
+hours=obs:
+---------^
+
+fatal:Syntax Error in block, block not executed
+fatal:error at line 289 in file build_datastructure_AnEN.ncl
+
+
