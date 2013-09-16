@@ -16,13 +16,16 @@ begin
 ;******************************************************
 ; Environment variables used by this script
 ;******************************************************
-  in_file   = getenv("NCL_IN_FILE")    ; this can be a pattern, and will be expanded by systemfunc(ls)
+  in_file   = getenv("NCL_IN_FILE")                    ; this can be a pattern, and will be expanded by systemfunc(ls)
   out_dir   = getenv("NCL_OUT_DIR")
-  nest_id   = getenv("NEST_ID")    
+  ;nest_id   = getenv("NEST_ID")    
   loc_file  = getenv("LOCATIONS_FILE")
-  domain    = getenv("DOMAIN")        ; these will get used as metatdata
-  model_run = getenv("MODEL_RUN")     ; these will get used as metatdata
-  grid_id   = stringtointeger(getenv("GRID_ID"))       ; this may get read from global attribute
+  domain    = getenv("DOMAIN")                         ; these will get used as metatdata
+  model_run = getenv("MODEL_RUN")                      ; these will get used as metatdata
+  grid_id   = stringtointeger(getenv("NEST_ID"))       ; this may get read from global attribute
+  ; To test this script you can do
+  ; NCL_IN_FILE=/  
+
   ;******************************************************
 
     
@@ -30,7 +33,8 @@ begin
 ;******************************************************
 ; Constants / hard coded options
 ;******************************************************
-  extract_heights    = (/50.,60.,70.,80.,90.,100./)
+  out_file = out_dir +"/test.nc"
+  extract_heights    = (/10.,40.,50.,60.,70.,80.,90.,100./)
   dims    = dimsizes(extract_heights)
   nhgts   = dims(0)
   delete(dims)
@@ -58,10 +62,11 @@ begin
     ;**************************************************
 
     ;**************************************************
-    ; Reduced WRF output from Riso dataset
-    ; 0 full wrf output
-    ; 1 reduced WRF output
-	opts@reduced = True
+    ; Time units
+	opts@time_units = 0 ;units of "hours since" initial time on the current file (type "double")
+    ;                 1 returns units of "hours since 1901-01-01 00:00:00" (type "double")
+    ;                 2 returns units of "yyyymmddhhmnss" (type "double")
+    ;                 3 returns units of "yyyymmddhh" (type "integer")
     ;**************************************************
 
     
@@ -69,8 +74,8 @@ begin
     ; Bulk richardson options
     ; Rib_opt=1        ; AMS versions 
 	opts@rib_opt=2     ; Zilintikivich et al
-    opts@rib_l = 10    ; lower height
-    opts@rib_u = 40    ; upper height
+    opts@rib_h_lower = 40.0    ; lower height must be of the interpolation heights
+    opts@rib_h_upper = 80.0    ; upper height
     ;**************************************************
 
 ;******************************************************  
@@ -168,8 +173,11 @@ print("NCL Extracting time series from file(s): "+in_file)
     delete(dims)	
 
     print("Read " + nlocs+ " locations from file: " + loc_file)
-    output = wrf_user_interp_vars(f, extract_heights, lat, lon,-1, vars, opts)
-
+    fout = wrf_user_interp_vars_tofile(f, extract_heights,loc_id, lat, lon,-1,out_file, vars, opts)
+    print(fout)
+    exit
+    ;file_handle, height[*]:numeric, location[*]:string, lat[*]:numeric, lon[*]:numeric,time_in:integer, file_out, vars, opts)
+    
     nvars = ListCount(output)
 	do i=0,nvars-1
         print(output[i]@varname)

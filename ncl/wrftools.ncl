@@ -1,8 +1,8 @@
 load "$NCARG_ROOT/lib/ncarg/nclscripts/contrib/ut_string.ncl"
 load "$NCARG_ROOT/lib/ncarg/nclscripts/csm/gsn_code.ncl" 
 load "$NCARG_ROOT/lib/ncarg/nclscripts/csm/contributed.ncl"
-;load "$NCARG_ROOT/lib/ncarg/nclscripts/wrf/WRFUserARW.ncl"
-load "$WRFTOOLS/ncl/WRFUserARW.ncl"
+load "$NCARG_ROOT/lib/ncarg/nclscripts/wrf/WRFUserARW.ncl"
+;load "$WRFTOOLS/ncl/WRFUserARW.ncl"
 load "$NCARG_ROOT/lib/ncarg/nclscripts/wrf/WRF_contributed.ncl"
 
 
@@ -58,11 +58,12 @@ begin
 	delete(ddims)
 	
 	ntimes = dims(0)
-	nhgts  = dims(1)
+	nheight  = dims(1)
 	delete(dims)
     
 	dims = dimsizes(lat)
 	nlocs = dims(0)
+    
 	delete(dims)
     
 	if (interp_option.eq.0)
@@ -74,7 +75,7 @@ begin
 		;******************************************************
 		; if var(time, level, y, x)
         if (ndims .eq. 4)
-		    var_out = new((/nlocs,ntimes,nhgts/),"float")
+		    var_out = new((/nlocs,ntimes,nheight/),"float")
             
 		    do n=0,nlocs-1
 			    var_out(n,:,:) = var(:,:,loc(1,n),loc(0,n))
@@ -92,7 +93,7 @@ begin
     var_out!0 = "location"
     
 	; variable is no longer staggered if we have iterpolated to points
-	;delete_VarAtts(var_out, (/"stagger", "coordinates"/))
+	delete_VarAtts(var_out, (/"stagger", "coordinates"/))
 	return(var_out)
 end
 
@@ -106,24 +107,32 @@ end
 ;
 ; Arguments:
 ; file_handle: wrfout files to extract from
-; hgts: array of heights to extract to
+; height: array of heights to extract to
 ; lat: array of latitudes to interpolate to
 ; lon: array of longitudes to interpoate to
-; hgt: heights above model surface to iterpolate to
+; loc_ids: array of location_id strings to be used as coordinate variables
 ; time_in: which timestep to get, -1 gets all timesteps
-; vars: object with attributes set which specify which variables to fetch. See below.
+; file_out: name of (netcdf) file to write to
+; vars: boolean object with attributes specifying which variables to fetch. See below.
 ; opt: various options, currently
+;      opt@time_units: 0 returns units of "hours since" initial time on the current file (type "double")
+;                      1 returns units of "hours since 1901-01-01 00:00:00" (type "double")
+;                      2 returns units of "yyyymmddhhmnss" (type "double")
+;                      3 returns units of "yyyymmddhh" (type "integer")
 ;      opt@h_interp: horizontal interpolation option
 ;      opt@rb_type: bulk richardson computation type
+;      opt@rb_lower: lower height for Bulk Richardson
+;      opt@rb_upper: upper height for Bulk Richardson
 ;
-; TODO: TKE, RAIN, CLOUDFRAC
+; The output of 3D vars will be var(time, location, height)
+; 2D vars will be var(loaction, height)
 ;*******************************************************************************
 
-undef("wrf_user_interp_vars")
-function wrf_user_interp_vars(file_handle, hgts[*]:numeric, lat[*]:numeric, lon[*]:numeric,time_in:integer, vars, opts)
+undef("wrf_user_interp_vars_tofile")
+function wrf_user_interp_vars_tofile(file_handle, height[*]:numeric, location[*]:string, lat[*]:numeric, lon[*]:numeric,time_in:integer, file_out, vars, opts)
 local variable, time, var, u, v, u_in, v_in, pii, radians_per_degree, \
 dims, nd, xlat, xlong, rank, \
-R, g, cp, lv
+R, g, cp, lv, t
 
 begin
     ;******************************************************
@@ -135,10 +144,14 @@ begin
     cp = 1003.5             ; specific heat capacity of air
     lv = 2400000            ; latent heat of evaporation 
  
-    print("wrf_user_interp_vars")
+    print("\n\n*******************************************")
+    print("wrf_user_interp_vars_tofile")
+    print(file_out)
+    
+    
     ;******************************************************
-    ; File handle
-    ; nc_file gives us a single file
+    ; File handle. Allows multiple files to be used
+    ; nc_file gives refers to single file
     ; file_handle[:] gives us all files
     ;******************************************************
 
@@ -157,7 +170,7 @@ begin
 
     ;******************************************************
     ; Unpack input args so they are literals, not Variables
-    time       = time_in(0)
+    t          = time_in(0)
     variables  = getvaratts(vars)
     ;******************************************************
 
@@ -174,45 +187,160 @@ begin
     nest_id = nc_file@GRID_ID
 
     ;******************************************************
-    ; Latitudes, longitudes, times, dimension sizes
+    ; Create dimensions
+    ; Latitudes, longitudes, times, locations
     ; Dimension sizes
     ;******************************************************
-    dims    = dimsizes(hgts)
-    nhgts   = dims(0)
+    
+    location_str_length = 4 ; hard coded length of loc IDs
+    
+    dims    = dimsizes(height)
+    nheight   = dims(0)
     delete(dims)
 
-    dims  = dimsizes(lat)
-    nlocs = dims(0)
+    dims  = dimsizes(location)
+    nlocation = dims(0)
     delete(dims)
   
-    if (opts@latlon .eq. 0)  
+    ;*******************************************************
+    ; Work out if lat and lon are time-invariant
+    ;*******************************************************
+    dims = getfilevardims(nc_file,"XLAT")        
+    ndims = dimsizes(dims)
+    
+    if (ndims .eq. 3)
         xlat  = nc_file->XLAT(0,:,:) ; latitudes don't change over time
         xlong = nc_file->XLONG(0,:,:)
-    end if
- 
-    if (opts@latlon .eq. 1)  
+    end if 
+  
+    if (ndims .eq. 2)
         xlat  = nc_file->XLAT(:,:) ; latitudes don't change over time
         xlong = nc_file->XLONG(:,:)
     end if
+    delete(dims)
+    delete(ndims)
 
     dims = dimsizes(xlat)
     south_north = dims(0)
     west_east   = dims(1)
     delete(dims)
     
+    ;*******************************************************
+    ; Convert time units
     times     = nc_file->Times
-    ud_times  = wrf_times_c(times, 0)
+    time  = wrf_times_c(times, opts@time_units) 
     init_time = chartostring(times(0,0:12))
 
-	; time of -1 gets all timesteps, otherwise we are feching one timestep
+	; t of -1 gets all timesteps, otherwise we are feching one timestep
     dims = dimsizes(times)
-    if (time .eq. -1) then 
-        ntimes=dims(0)
-    else ntimes=1
+    if (t    .eq. -1) then 
+        ntime=dims(0)
+    else ntime=1
     end if
     delete(dims)
 	
     
+    
+    ;******************************************************    
+    ; Now we have all the dimensions needed
+    ; nheight : number of vertical levels for 3D vars
+    ; nlocation : number of locations we are interpolating to
+    ; ntime: number of timetseps to extract 
+    ;******************************************************    
+    
+    
+
+    ;******************************************************    
+    ; Create the output file
+    ;******************************************************    
+	system("/bin/rm -f " + file_out)                  ; remove if exists
+	;setfileoption("nc", "usenewhlfs", True)
+    setfileoption("nc", "Format", "NetCDF4Classic")   ; set to NetCDF4
+    fout  = addfile (file_out, "c")                   ; open output file
+    
+
+    ;******************************************************    
+    ; explicitly declare file definition mode. Improve efficiency.
+    ;******************************************************    
+    setfileoption(fout,"DefineMode",True)
+
+    ;******************************************************    
+    ; create global attributes of the file
+    ;******************************************************    
+    fileattdef(fout, nc_file ) 
+    fAtt               = True            ; assign file attributes
+	fAtt@title         = "WRF time series interpolated to locations"  
+	fAtt@Conventions   = "None"   
+	fAtt@creation_date = systemfunc ("date")        
+	fileattdef( fout, fAtt )            ; copy file attributes    
+
+    ;******************************************************    
+    ; predefine the coordinate variables and their dimensionality
+    ; Note: to get an UNLIMITED record dimension, we set the dimensionality
+    ; to -1 (or the actual size) and set the dimension name to True.
+    ;******************************************************    
+    dimNames = (/"time", "location", "height", "loc_str_length"/)  
+	dimSizes = (/ -1   ,  nlocation,  nheight, location_str_length/) 
+	dimUnlim = (/ True , False, False, False/)   
+	filedimdef(fout,dimNames,dimSizes,dimUnlim)
+
+    ;******************************************************    
+    ; predefine the the dimensionality of the variables to be written out
+    ;******************************************************    
+    ; Here we are using NCL functions to facilitate defining 
+    ; each variable's dimension name(s) and type. 
+    ; The following could be replaced with explicit, user defined dimension 
+    ; names different from those associated with the variable in memory. 
+    ; Say, PS(time,lat,lon) in the NCL script. They could be redefined for the file via: 
+    ; filevardef(fout, "PS"   ,typeof(PS) ,(/"TIME","latitude","longitude"/)) 
+    ;******************************************************    
+
+    filevardef(fout, "time" ,  typeof(time),(/"time"/)) 
+    filevarattdef(fout,"time" ,time)                    ; copy time attributes
+        
+    filevardef(fout, "height", typeof(height),(/"height"/))                           
+    height@units = "metres"
+    height@description="metres above the ground or water surface"
+    filevarattdef(fout,"height" ,height)                    ; copy height attributes
+    
+    loc_char = stringtochar(location)
+    loc_char@description = "site location identified by ID" 
+    filevardef(fout, "location",typeof(loc_char),(/"location", "loc_str_length"/))                           
+    
+    filevardef(fout, "lat" ,  typeof(lat),(/"location"/)) 
+    lat@units       = "degrees north"
+    lat@description = "latitude" 
+    filevarattdef(fout, "lat", lat)                   
+    
+    
+    filevardef(fout, "lon" ,  typeof(lon),(/"location"/)) 
+    lon@units       = "degrees east"
+    lon@description = "longitude" 
+    filevarattdef(fout,"lon", lon) 
+
+
+    
+    ;******************************************************    
+    ; Copy attributes associated with each variable to the file
+    ;******************************************************    
+    
+
+    ;******************************************************    
+    ; output only the data values since the dimensionality and such have
+    ; been predefined. The "(/", "/)" syntax tells NCL to only output the
+    ; data values to the predefined locations on the file.
+    ;******************************************************    
+    fout->time     = (/time/)     
+    fout->location = (/loc_char/)
+    fout->height   = (/height/) 
+    fout->lat      = (/lat/)
+    fout->lon      = (/lon/)
+    
+    
+    ;******************************************************    
+    ; FILE DEFINITION FINISHED
+    ; NOW GET THE DATA!
+    ;******************************************************    
    
     ;******************************************************
     ; Get ij locations
@@ -222,31 +350,43 @@ begin
   
   
     ;******************************************************
-    ; Get basic variables we will need to derive
-    ; additional diagnostics
-    ; At some point implement a check here so we only fetch 
-    ; what we need.
+    ; Get basic variables we will *always* need
     ;******************************************************
+    dims = getfilevardims(nc_file,"HGT")        
+    ndims = dimsizes(dims)
  
-	; always need terrain height, zeta level above sea level, zeta above ground level
-    if opts@reduced
-        hgt_ter       = file_handle->HGT(:,:)                       ; assume terrain doesn't change with time
-        hgt_amsl      = wrf_user_getvar(file_handle, "z", time)     ; height above sea level of model levels
-                                                                    ; this will be 4D, since height varies (slightly) hgt_amsl(time, level, y,x)
-    else
-        hgt_ter       = wrf_user_getvar(file_handle, "ter", 0)      ; assume terrain doesn't change with time
-        hgt_amsl      = wrf_user_getvar(file_handle, "z", time)     ; height above sea level of model levels
-                                                                    ; this will be 4D, since height varies (slightly) hgt_amsl(time, level, y,x)
-     end if
 
+    ;******************************************************
+    ; Height of model levels
+    ;******************************************************    
+    hgt_amsl      = wrf_user_getvar(file_handle, "z", t)     ; height above sea level of model levels
+                                                             ; this will be 4D, since height varies (slightly) hgt_amsl(time, level, y,x)
+ 
+ 
+    ;******************************************************
+    ; Does terrain height vary with time?
+    ;******************************************************    
+    if (ndims .eq. 3)
+        hgt_ter_i       = file_handle->HGT(:,:,:)                    ; get terrain height at all timesteps
+        hgt_ter = conform(hgt_amsl, hgt_ter_i, (/0,2,3/))            ; add a level dimension 
+    end if                                                           ; for easy subtraction with level heights                   
     
-    
-                                                                
-	hgt_new = conform(hgt_amsl, hgt_ter, (/2,3/))               ; ensure they terrain height is right dimensionality
-    hgt_agl = hgt_amsl - hgt_new                                ; get the height of model levels above ground level
+    if (ndims .eq. 2)
+        hgt_ter_i     = file_handle->HGT(:,:)                       ; height already invariant
+        hgt_ter = conform(hgt_amsl, hgt_ter_i, (/2,3/))             ; so add time and level dimension 
+        delete(hgt_ter_i)
+    end if         
 	
+
+    hgt_agl = hgt_amsl - hgt_ter                                    ; get the height of model levels above ground level
+
+
+    ;******************************************************
+    ; Interolate the height of model levels to the locations
+    ;******************************************************    
 	hgt_agl_locs = wrf_user_hinterp(nc_file, hgt_agl, lat, lon, xlat, xlong, opts@interp_option)
-	delete(hgt_new)
+	
+
     
  
     if( any( (/vars@u, vars@v, vars@rib, vars@speed, vars@direction/) ) ) then 
@@ -258,18 +398,23 @@ begin
         u = uvmet(0,:,:,:,:)
 	    v = uvmet(1,:,:,:,:)
         
-		;************************************
+        u@description = "eastward component of wind velocity"
+        v@description = "northward component of wind velocity"
+		
+        ;************************************
         ; Interpolate vertically
         ;************************************
-		u_agl   = wrf_user_intrp3d(u, hgt_agl, "h", hgts,0, False) 
-        v_agl   = wrf_user_intrp3d(v, hgt_agl, "h", hgts,0, False) 
+		u_agl   = wrf_user_intrp3d(u, hgt_agl, "h", height,0, False) 
+        v_agl   = wrf_user_intrp3d(v, hgt_agl, "h", height,0, False) 
 		
 		
 		; rename height dimesion and assign coordinate
-		u_agl!1      = "height"
-		u_agl&height = hgts
-		v_agl!1      = "height"
-		v_agl&height = hgts
+        u_agl!0      = "time"
+        u_agl!1      = "height"
+		u_agl&height = height
+		v_agl!0      = "time"
+        v_agl!1      = "height"
+		v_agl&height = height
 		
 		;************************************
         ; Interpolate horizontally
@@ -277,111 +422,156 @@ begin
         u_agl_locs = wrf_user_hinterp(nc_file, u_agl, lat, lon, xlat, xlong, opts@interp_option)
         v_agl_locs = wrf_user_hinterp(nc_file, v_agl, lat, lon, xlat, xlong, opts@interp_option)
 		
-		u_agl_locs!1         = "Time"
-		u_agl_locs&Time      = ud_times
-		u_agl_locs@init_time = init_time
-		u_agl_locs@nest_id   = nest_id
-		u_agl_locs@varname  = "U"
+                
+        ; Put the variables into the file directly!
+        if vars@u
+            filevardef(fout, "U",typeof(u),(/"time", "location", "height"/))                           
+            fout->U     = u_agl_locs(time|:, location|:, height|:) ; needs dimensions re-ordered
+        end if
+        
 
-		v_agl_locs!1         = "Time"
-		v_agl_locs&Time      = ud_times
-		v_agl_locs@init_time = init_time
-		v_agl_locs@nest_id   = nest_id
-		v_agl_locs@varname  = "V"
-
-
+        ; 
+        if vars@v
+            filevardef(fout, "V",typeof(v),(/"time", "location", "height"/))                           
+            fout->V     = v_agl_locs(time|:, location|:, height|:) ; needs dimensions re-ordered
+        end if
+        
 		; Wind speed and direction
 		
 		r2d     = 45.0/atan(1.0)
      
 	    ws_agl_locs  = sqrt(u_agl_locs*u_agl_locs + v_agl_locs*v_agl_locs)
         ws_agl_locs!0="location"
-        ws_agl_locs!1="Time"
+        ws_agl_locs!1="time"
         ws_agl_locs!2="height"
-        ws_agl_locs&height = hgts
-   
-        ws_agl_locs@varname     = "SPEED"
-		ws_agl_locs@description = "Wind speed"
+        ws_agl_locs&height = height
+        ws_agl_locs&time = time
+
+		ws_agl_locs@description = "wind speed"
 		ws_agl_locs@units       = "m/s"
 
+        if vars@speed
+            filevardef(fout, "SPEED",typeof(ws_agl_locs),(/"time", "location", "height"/))                           
+            fout->SPEED     = ws_agl_locs(time|:, location|:, height|:) ; needs dimensions re-ordered
+        end if
+
+        
+        
 		wd_agl_locs  = atan2(u_agl_locs, v_agl_locs) * r2d + 180.
 	    wd_agl_locs!0="location"
-        wd_agl_locs!1="Time"
+        wd_agl_locs!1="time"
         wd_agl_locs!2="height"
-        wd_agl_locs&height = hgts
 
-	    wd_agl_locs@varname     = "DIRECTION"
 		wd_agl_locs@description = "Wind direction"
 		wd_agl_locs@units       = "degrees from North"
-		
+
+        if vars@direction
+            filevardef(fout, "DIRECTION",typeof(wd_agl_locs),(/"time", "location", "height"/))                           
+            fout->DIRECTION = (/wd_agl_locs(time|:, location|:, height|:)/) ; needs dimensions re-ordered
+        end if
+
+		        
 		delete(u_agl)
 		delete(v_agl)
 		delete(u)
 		delete(v)
 		
 	end if
-
 	
 	; 3D Temperature variables. If any of these are present,compute the whole lot
-	
-	if (any((/vars@t, vars@tv, vars@theta, vars@thetav, vars@rib/))) then
+    if (any((/vars@t, vars@tv, vars@theta, vars@thetav, vars@rib/))) then
         
 		;temperature in kelvin
-		tk          = wrf_user_getvar(file_handle, "tk", time)
-		tk_agl      = wrf_user_intrp3d(tk, hgt_agl, "h", hgts,0, False)
+		tk          = wrf_user_getvar(file_handle, "tk", t)
+		tk_agl      = wrf_user_intrp3d(tk, hgt_agl, "h", height,0, False)
         
         tk_agl!1      = "height"
-		tk_agl&height = hgts
-        
+		tk_agl&height = height
         tk_agl_locs = wrf_user_hinterp(nc_file, tk_agl, lat, lon, xlat, xlong, opts@interp_option)
-		tk_agl_locs@varname = "T"
-		printVarSummary(tk_agl_locs)
-        tc_agl_locs = tk_agl_locs -273.15
-        tc_agl_locs@units = "C"
-        tc_agl_locs!0 = "location"
-        tc_agl_locs!1 = "Time"
-        tc_agl_locs!2 = "height"
-        copy_VarMeta(tk_agl_locs, tc_agl_locs)
+		
         delete(tk)
 		delete(tk_agl)
 		
+        ; temperature in degrees C
+        tc_agl_locs = tk_agl_locs -273.15
+        tc_agl_locs@units = "C"
+        tc_agl_locs@description = "Temperature in degrees C"
+        tc_agl_locs!0 = "location"
+        tc_agl_locs!1 = "time"
+        tc_agl_locs!2 = "height"
+        
+        ;copy_VarMeta(tk_agl_locs, tc_agl_locs)
+        
+        if vars@t
+            filevardef(fout, "T",typeof(tc_agl_locs),(/"time", "location", "height"/))                           
+            fout->T     = tc_agl_locs(time|:, location|:, height|:) ; needs dimensions re-ordered
+        end if
+
+        
 		; water vapour mixing ratio
-        qv          = wrf_user_getvar(file_handle, "QVAPOR", time)
-		qv_agl      = wrf_user_intrp3d(qv, hgt_agl, "h", hgts,0, False) 
+        qv          = wrf_user_getvar(file_handle, "QVAPOR", t)
+		qv_agl      = wrf_user_intrp3d(qv, hgt_agl, "h", height,0, False) 
         qv_agl_locs = wrf_user_hinterp(nc_file, qv_agl, lat, lon, xlat, xlong, opts@interp_option)
-		qv_agl_locs@varname     = "QVAPOR"
 		delete(qv)
 		delete(qv_agl)
-		printVarSummary(qv_agl_locs)
+
+        if (isatt(vars,"qv")) .and. (vars@qv)
+            filevardef(fout, "QVAPOR",typeof(qv_agl_locs),(/"time", "location", "height"/))                           
+            fout->QVAPOR     = qv_agl_locs(time|:, location|:, height|:) ; needs dimensions re-ordered
+        end if
+
 		
         ;virtual temperature
 		tv_agl_locs = tk_agl_locs*(1+(0.61*qv_agl_locs))
 		tv_agl_locs@varname = "TV"
+        tv_agl_locs@units   = "degrees kelvin"
+        tv_agl_locs@description = "Virutal temperature"
+        tv_agl_locs!0 = "location"
+        tv_agl_locs!1 = "time"
+        tv_agl_locs!2 = "height"
+        
+        if vars@tv
+            filevardef(fout, "TVIRT",typeof(tv_agl_locs),(/"time", "location", "height"/))                           
+            fout->TVIRT     = tv_agl_locs(time|:, location|:, height|:) ; needs dimensions re-ordered
+        end if
 		
 		
 		; potential temperature
-	    theta          = wrf_user_getvar(file_handle, "theta", time)
-		theta_agl      = wrf_user_intrp3d(theta, hgt_agl, "h", hgts,0, False) 
+	    theta          = wrf_user_getvar(file_handle, "theta", t)
+		theta_agl      = wrf_user_intrp3d(theta, hgt_agl, "h", height,0, False) 
         theta_agl_locs = wrf_user_hinterp(nc_file, theta_agl, lat, lon, xlat, xlong, opts@interp_option)
         
-        theta_agl_locs!2          = "height"        	
-        theta_agl_locs&height      = hgts
-		theta_agl_locs@varname     = "THETA"
+        theta_agl_locs!0         = "location"
+        theta_agl_locs!1         = "time"
+        theta_agl_locs!2         = "height"        	
+        theta_agl_locs&time      = time
+        theta_agl_locs&height    = height
 		theta_agl_locs@description = "Potetial temperature"
+        
+        if vars@theta
+            filevardef(fout, "THETA",typeof(theta_agl_locs),(/"time", "location", "height"/))                           
+            fout->THETA     = theta_agl_locs(time|:, location|:, height|:) ; needs dimensions re-ordered
+        end if
         delete(theta)
 		delete(theta_agl)
+        
 		
 		; virtual potential temperature
 	    thetav_agl_locs = theta_agl_locs*(1+(0.61*qv_agl_locs))
-		printVarSummary(thetav_agl_locs)
         
         thetav_agl_locs@varname     = "THETAV"
 		thetav_agl_locs@description = "Virtual potetial temperature"
         thetav_agl_locs!0          = "location"
-        thetav_agl_locs!1          = "Time"
+        thetav_agl_locs!1          = "time"
         thetav_agl_locs!2          = "height"        	
-        thetav_agl_locs&height      = hgts
-    
+        thetav_agl_locs&time       = time
+        thetav_agl_locs&height     = height
+
+        if vars@thetav
+            filevardef(fout, "THETAV",typeof(thetav_agl_locs),(/"time", "location", "height"/))                           
+            fout->THETAV     = thetav_agl_locs(time|:, location|:, height|:) ; needs dimensions re-ordered
+        end if
+        
 	end if
 	
 	
@@ -390,9 +580,8 @@ begin
 	;
 	; Jesper's method was compute Rib between two set
 	; upper and lower indices
-	; I think maybe I will compute it 
-	; between each level and the lowest?
-    ; Probably we should set options opt@rib_lower=10, opt@rib_upper=30
+	; I will compute it between two specified heights
+    ; set by opt@rib_lower and  opt@rib_upper
     ;
 	; Jespers code:
 	;	delta_teta_v =teta_v_profile(i,h_idx_upper,:,:)-teta_v_profile(i,h_idx_lower,:,:)
@@ -411,41 +600,61 @@ begin
 	
 
 	if vars@rib
-	
-        ; create empt array		
-		rib_agl_locs = new((/nlocs, ntimes, nhgts/), "float")
+	    ; create empty array		
+		;rib_agl_locs = new((/nlocs, ntimes/), "float")
+        ;rib_agl_locs@longname = "Bulk Richardson number"
+
 		
-		; set level 0 of Rib to zero (Rib between lowest model level and itself)
-		rib_agl_locs(:,:,0) = 0
-	    
-		; compute bulk richardson as difference between level k and lowest level
-		do k=1,nhgts-1,1
-    		dtheta_v = thetav_agl_locs(:,:,k) - thetav_agl_locs(:,:,0)
-			dspeed   = ws_agl_locs(:,:,k) - ws_agl_locs(:,:,0)
+        ; compute bulk richardson as difference between level k and lowest level
+        rib_upper = opts@rib_h_upper
+        rib_lower = opts@rib_h_lower
+        
+        ;rib_agl_locs@upper_height = rib_upper(0)
+        ;rib_agl_locs@lower_height = rib_lower(0)
+        
+        print(rib_upper)
+        print(rib_lower)
+        
+        printVarSummary(thetav_agl_locs)
+        dtheta_v = thetav_agl_locs(:,:,{rib_upper} ) - thetav_agl_locs(:,:,{rib_lower})
+        dspeed   = ws_agl_locs(:,:,{rib_upper}) - ws_agl_locs(:,:,{rib_lower})
             
-			; AMS method. Take virtual temperature from top layer
-			if (opts@rib_opt .eq. 1)
-			    beta     = g/tv_agl_locs(:,:,k)
+        ; AMS method. Take virtual temperature from top layer
+        if (opts@rib_opt .eq. 1)
+            beta     = g/tv_agl_locs(:,:,{rib_upper})
+        
+        ; Zilankavitch. Average virtual temperature over profile.
+        else
+            beta = g/dim_avg_n(thetav_agl_locs(:,:,{rib_lower:rib_upper}), 2)
+        end if
 			
-			; Zilankavitch. Average virtual temperature over profile.
-			else
-			    beta = g/dim_avg_n(thetav_agl_locs(:,:,0:k), 2)
-			end if
-			
-			rib_agl_locs(:,:,k)   = beta * dtheta_v * hgt_agl_locs(:,:,k) / dspeed^2
+        printVarSummary(dtheta_v)
+        printVarSummary(dspeed)
+        printVarSummary(beta)
+        printVarSummary(hgt_agl_locs)
+        
+        rib_agl_locs   = beta * dtheta_v * (rib_upper - rib_lower) / dspeed^2
 
-			delete(dtheta_v)
-			delete(dspeed)
-			delete(beta)
+        delete(dtheta_v)
+        delete(dspeed)
+        delete(beta)
 
-		end do
-		rib_agl_locs@varname = "RIB"
+		rib_agl_locs@varname     = "RIB"
+		rib_agl_locs@description = "Bulk richardson number between height_upper and height_lower using option" + sprinti("%0.1i", opts@rib_opt)
+		rib_agl_locs@height_upper = rib_upper
+        rib_agl_locs@height_lower = rib_lower
         rib_agl_locs!0       = "location"
-        rib_agl_locs!1       = "Time"
-        rib_agl_locs!2       = "height"
-        rib_agl_locs&height  = hgts
-	end if
+        rib_agl_locs!1       = "time"
 	
+        filevardef(fout, "RIB",typeof(rib_agl_locs),(/"time", "location"/))                           
+        fout->RIB     = rib_agl_locs(time|:, location|:) ; needs dimensions re-ordered
+
+
+    end if
+	return fout
+
+
+
     
     if vars@rain
         rainc  = wrf_user_getvar(file_handle, "RAINC", time) 
@@ -712,7 +921,7 @@ begin
 	; 3D variable
 	if (ndims .eq. 3)
     	time      = vars&time
-	    hgts      = vars&height
+	    height      = vars&height
 	    locations = vars&location
 		loc_names = vars@loc_names
 		lat       = vars@lat
@@ -720,12 +929,12 @@ begin
 		
 	    nlocs   = dims(0)
 	    ntimes  = dims(1)
-        nhgts   = dims(2)
+        nheight   = dims(2)
         
 		do n=0,nlocs<1,1
-		    do k=0, nhgts-1,1
+		    do k=0, nheight-1,1
 			    series = vars(n,:,k)
-				ihgt = floattoint(hgts(k))
+				ihgt = floattoint(height(k))
                 shgt = sprinti("%0.3i", ihgt)
 				
 				series@loc_id = locations(n)
