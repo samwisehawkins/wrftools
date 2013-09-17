@@ -1,0 +1,20 @@
+function [ time_serie_nwp_forecast ] = get_std_on_nwp_variables( time_serie_nwp_forecast )
+%GET_STD_ON_NWP_VARIABLES Summary of this function goes here
+% computes the climetolical standard diviation on all phycical varoables to
+% be used to normalize anlogs findings
+% analogs
+%   Detailed explanation goes here
+% special attention is brought on wind diretipn being a circular variable 
+[m n]=size(time_serie_nwp_forecast)
+
+    for i=3:n-1
+        if strcmp(time_serie_nwp_forecast{2,i},'wdir 10m')
+            time_serie_nwp_forecast{4,i}=strcat('STD_',time_serie_nwp_forecast{2,i})
+            time_serie_nwp_forecast{3,i}=(time_serie_nwp_forecast{1,i});
+        else
+            time_serie_nwp_forecast{4,i}=strcat('STD_',time_serie_nwp_forecast{2,i})
+            time_serie_nwp_forecast{3,i}=std(time_serie_nwp_forecast{1,i});
+        end
+    end
+end
+

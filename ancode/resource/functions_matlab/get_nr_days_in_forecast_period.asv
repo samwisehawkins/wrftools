@@ -1,0 +1,7 @@
+function [ nr ] = get_nr_days_in_forecast_period( Namelist )
+%GET_NR_DAYS_IN_FORECAST_PERIOD Summary of this function goes here
+%   Detailed explanation goes here
+daysact(StartDate, EndDate)
+
+end
+

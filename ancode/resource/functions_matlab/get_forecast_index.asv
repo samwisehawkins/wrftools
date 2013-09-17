@@ -1,0 +1,22 @@
+function [succes forecast_time_idx] =get_forecast_index(Namelist,time_serie_nwp_forecast)
+% Summary of this function goes here
+%   Detailed explanation goes here
+now=datenum(Namelist{5}.Analog.now,Namelist{1}.datstr_turbine_input_format);
+% take all forecast with initial date = now
+num_init_times=datenum(time_serie_nwp_forecast{1,1},Namelist{1,1}.datstr_general_format);
+forecast_time_all_idx=find(abs(now-num_init_times)<1.1574e-005);%Indenfor et sekund af initial tid
+        
+    if isempty(forecast_time_all_idx)
+        forecast_time_all_idx=0;
+        succes=0;
+        forecast_time_idx=Namelist{1}.missing_value;
+    else
+        for i=1:length(Namelist{5}.Analog.lead_times)
+            lead_idx(i)=find(Namelist{5}.Analog.lead_times(i)==str2num(time_serie_nwp_forecast{1,14}(forecast_time_all_idx,:)));
+        end
+        forecast_time_idx=forecast_time_all_idx( lead_idx);
+        succes=1;
+    end
+%time_serie_nwp_forecast{1,2}(forecast_time_idx,:)
+end
+
