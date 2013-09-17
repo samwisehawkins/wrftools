@@ -79,6 +79,8 @@ wps                 = config['wps']
 ungrib              = config['ungrib']
 geogrid             = config['geogrid']
 metgrid             = config['metgrid']
+ndown               = config['ndown']
+real                = config['real']
 wrf                 = config['wrf']
 upp                 = config['upp']
 time_series         = config['time_series']
@@ -118,6 +120,9 @@ for init_time in init_times:
     #
     config['init_time'] = init_time
     logger.info('Running forecast from initial time: %s' %init_time) 
+
+    
+
     #
     # Gribmaster
     #
@@ -169,24 +174,41 @@ for init_time in init_times:
                 wrftools.run_metgrid(config)
             except Exception, e:
                 wrftools.handle(e, fail_mode, full_trace)
-        
 
     #
-    # WRF
-    #           
-    if wrf:
+    # ndown
+    #
+    if ndown:
         try:
-            wrftools.prepare_wrf(config)
+            if real:
+                wrftools.run_real(config)
+            wrftools.prepare_ndown(config)
+            wrftools.run_ndown(config)
         except Exception, e:
             wrftools.handle(e, fail_mode, full_trace)
+
+    
+    
+    #
+    # WRF standard preparation
+    #           
+    if wrf and not ndown:
         try:
+            wrftools.prepare_wrf(config)
             wrftools.update_namelist_input(config)
         except Exception, e:
             wrftools.handle(e, fail_mode, full_trace)
-        try:
-            wrftools.run_real(config)
-        except Exception, e:
-            wrftools.handle(e, fail_mode, full_trace)
+        
+        if real:
+            try:
+                wrftools.run_real(config)
+            except Exception, e:
+                wrftools.handle(e, fail_mode, full_trace)
+    
+    #
+    # WRF runs
+    #
+    if wrf:
         try:
             wrftools.run_wrf(config)
         except Exception, e:

@@ -1,79 +1,71 @@
-#*************************************************************************************
-# Module wrftools
-#
-# Provides a selection of functions for pre-processing and
-# running a WRF forecast.  
-# 
-# Author: Sam Hawkins sam.hawkins@vattenfall.com
-#
-# Assumed domains directory structure:
-# domain_dir     --> all config files, namelist.wps etc.
-#       /geo_em  --> outout from geogrid     
-#       /met_em  --> output from metgrid
-#       /model_run --> namelist.input file and other settings specific to that run
-#           /wrfout  --> netcdf output from WRF
-#           /wrfpost     --> grib output from UPP
-#           /tseries
-#           /postprd               --> directory for doing post-processing        
-#           /stats/init_time/dom   --> mpr output from point_stat 
-#           /plots/init_time       --> graphical output from NCL
-#
-#
-# A locations file controls which variables get written to out to time series
-# This should have the format:
-# # comments
-# name,   lat,  lon, height, vars
-# THANET,  58.0, 1.5, 80:90,  U:V:SPEED
-#
-# where height and vars can be lists with elements separated by :
-#
-# Time series output files will be named according to:
-# domain/model_run/tseries/U_80_2006-11-30_00.csv 
-#
-# TODO
-# * Change namelist reading code to strip trailing commas and remove trailing quotes -- done
-# * Summarise file transfers in logging output -- done
-#
-# CHANGES
-#
-# 2013-08-30 Modified ungrib to support multiple  grib files
-#            in one run
-#
-# 2013-07-11 Added job scheduling/queing functionality
-#
-# 2013-06-19 Updated code to allow WRF to be run from any directory. Executables 
-#            and other required files will be linked in.
-#
-# 2013-02-04 Rationalised the movement to and from /longbackup, now uses rsync for
-#             flexibility
-#
-# 2012-12-10 Implemented a more aggressive cleanup to remove WPS leftover files
-#
-#
-# 2012-09-13 Updated structure to support operational forecasting, using flag 
-#            operational=.true. get_cases still needs tidying up
-#
-# 2012-09-05 Uses PyNIO as interpolation, as cnvgrib was failing, meaning time-series
-#            could not be extracted.
-#
-# 2012-07-27 Added functionality for writing out time series, reading time series
-#            reading power curves, and converting wind speeds into powers
-#
-# 2012-07-19 Changed shell calls to use run_cmd in order to have enable dummy runs
-#            where commands are not executed.
-#
-# 2012-05-*  Updated point stat to make much more use of metadata in the output
-#            in order to facillitate better breakdown of stats when read into database
-#
-# 2012-03-30 Updated run_point_stat to write a more descriptive tag into the 
-#            'MODEL' field for use in statistical analysis
-#
-# 2012-03-05 Updated functions to operate on one domain only, reading value
-#            from config[dom], and putting looping structure outside.
-#
-#
-#
-#*************************************************************************************
+""" 
+Module wrftools
+=====
+
+Provides a selection of functions for pre-processing and
+running a WRF forecast.  
+
+Author: Sam Hawkins sam.hawkins@vattenfall.com
+
+Assumed domains directory structure:
+
+    /model_run_dir --> namelist.input file and other settings specific to that run
+        /wrfout      --> netcdf output from WRF
+        /wrfpost     --> grib output from UPP
+        /tseries     --> time series extracted at points
+        /plots       --> graphical output from NCL
+
+
+A locations file controls which variables get written to out to time series
+This should have the format:
+# comments
+location_id,name,lat,lon
+LOC1, Location One,58.0,1.5
+LOC2, Location Two,56.0,-2.5
+
+Time series output files will be named according to:
+domain/model_run/tseries/U_80_2006-11-30_00.csv 
+
+TODO
+* Change time series ncl code to write netcdf files
+* Change namelist reading code to strip trailing commas and remove trailing quotes -- done
+* Summarise file transfers in logging output -- done
+
+CHANGES
+
+2013-08-30 Modified ungrib to support multiple  grib files in one run
+
+2013-07-11 Added job scheduling/queing functionality
+
+2013-06-19 Updated code to allow WRF to be run from any directory. Executables 
+           and other required files will be linked in.
+
+2013-02-04 Rationalised the movement to and from /longbackup, now uses rsync for
+            flexibility
+
+2012-12-10 Implemented a more aggressive cleanup to remove WPS leftover files
+
+
+2012-09-13 Updated structure to support operational forecasting, using flag 
+           operational=.true. get_cases still needs tidying up
+
+2012-09-05 Uses PyNIO as interpolation, as cnvgrib was failing, meaning time-series
+           could not be extracted.
+
+2012-07-27 Added functionality for writing out time series, reading time series
+           reading power curves, and converting wind speeds into powers
+
+2012-07-19 Changed shell calls to use run_cmd in order to have enable dummy runs
+           where commands are not executed.
+
+2012-05-*  Updated point stat to make much more use of metadata in the output
+           in order to facillitate better breakdown of stats when read into database
+
+2012-03-30 Updated run_point_stat to write a more descriptive tag into the 
+           'MODEL' field for use in statistical analysis
+
+2012-03-05 Updated functions to operate on one domain only, reading value
+           from config[dom], and putting looping structure outside. """
 
 import os
 import subprocess
@@ -327,6 +319,10 @@ def run_cmd_queue(cmd,config, run_from_dir, log_file):
         tb = traceback.format_exc()
         raise ConfigError(tb)    
     
+    if qname=='None':
+        mpirun(cmd, config['num_procs'], config['host_file'], config['run_level'], config['cmd_timing']) 
+        return
+    
     attempts = mjt / pint
     
     logger.debug('Submitting %s to %d slots on %s, polling every %s minutes for %d attempts' %(exe, nprocs, qname, pint, attempts ))
@@ -535,10 +531,70 @@ def summarise(config):
 # Date/time functions
 #*****************************************************************
 
+def sub_date(s, init_time=None, valid_time=None):
+    """Substitues a date into a string following standard format codes.
+    Syntax of original string s:
+    i  -- initial time
+    v  -- valid time
+    %y -- 2-digit year
+    %Y -- 4-digit year
+    %m -- 2 digit month
+    %d -- 2-digit day
+    %H -- 2 digit hour
+    %M -- 2-digit minute
+    %S -- 2-digit second 
+    
+    Returns: string with codes expanded"""
+    
+    if init_time:
+    
+        yi  = str(init_time.year)[2:]
+        Yi  = str(init_time.year)
+        mi  = '%02d' % init_time.month
+        di  = '%02d' % init_time.day
+        Hi  = '%02d' % init_time.hour
+        Mi  = '%02d' % init_time.minute
+        Si  = '%02d' % init_time.second
+
+        #s = s.replace('%iY', Yi).replace('%iy',yi).replace('%im',mi).replace('%id', di).replace('%iH', Hi).replace('%iM', Mi).replace('%iS', Si)
+
+        s = s.replace('%iY', Yi)
+        s = s.replace('%iy', yi)
+        s = s.replace('%im', mi)
+        s = s.replace('%id', di) 
+        s = s.replace('%iH', Hi)
+        s = s.replace('%iM', Mi)
+        s = s.replace('%iS', Si)
+
+    if valid_time:
+        yv  = str(init_time.year)[2:]
+        Yv  = str(init_time.year)
+        mv  = '%02d' % valid_time.month
+        dv  = '%02d' % valid_time.day
+        Hv  = '%02d' % valid_time.hour
+        Mv  = '%02d' % valid_time.minute
+        Sv  = '%02d' % valid_time.second
+        
+        s = s.replace('%vY', Yv)
+        s = s.replace('%vy',yv)
+        s = s.replace('%vm',mv)
+        s = s.replace('%vd', dv) 
+        s = s.replace('%vH', Hv)
+        s = s.replace('%vM', Mv)
+        s = s.replace('%vS', Sv)
+
+    if init_time and valid_time:
+        delta = valid_time - init_time
+        fhr   = delta.days * 24 + int(delta.seconds / (60*60))
+        fH    = '%02d' % fhr
+        s = s.replace('%fH', fH)
+    
+    return s
+
 
 
 #*****************************************************************
-# Forecast functions
+# Datetime/filename generation functions
 #*****************************************************************
 
 def get_fcst_times(config):
@@ -560,7 +616,7 @@ def get_fcst_times(config):
     history_interval = config['history_interval']
     hour             = datetime.timedelta(0, 60*60)
     minute           = datetime.timedelta(0, 60) 
-    end_time = init_time + fcst_hours*hour
+    end_time         = init_time + fcst_hours*hour
     
     
     logger.debug('init_time: %s'  %init_time)
@@ -702,9 +758,9 @@ def get_bdy_times(config):
     freq         = rrule.HOURLY
     rec          = rrule.rrule(freq, dtstart=init_time,until=end_time+hour, interval=bdy_interval)
     bdy_times    = list(rec)
-    logger.debug("got the following boundary condition times:")
-    for t in bdy_times:
-        logger.debug("%s" %t)
+    #logger.debug("got the following boundary condition times:")
+    #for t in bdy_times:
+    #    logger.debug("%s" %t)
     
     return bdy_times
 
@@ -726,6 +782,12 @@ def get_bdy_filenames(grb_fmt, bdy_times):
     return filelist
     
 
+    
+#*****************************************************************
+# Comopnent run functions
+#*****************************************************************
+    
+    
 
 def run_gribmaster(config):
     """Runs the gribmaster programme to download the most recent boundary conditions """
@@ -769,65 +831,6 @@ def run_gribmaster(config):
     raise IOError('gribmaster did not find files after %d attempts' % gm_max_attempts)
 
 
-def sub_date(s, init_time=None, valid_time=None):
-    """Substitues a date into a string following standard format codes.
-    Syntax of original string s:
-    i  -- initial time
-    v  -- valid time
-    %y -- 2-digit year
-    %Y -- 4-digit year
-    %m -- 2 digit month
-    %d -- 2-digit day
-    %H -- 2 digit hour
-    %M -- 2-digit minute
-    %S -- 2-digit second 
-    
-    Returns: string with codes expanded"""
-    
-    if init_time:
-    
-        yi  = str(init_time.year)[2:]
-        Yi  = str(init_time.year)
-        mi  = '%02d' % init_time.month
-        di  = '%02d' % init_time.day
-        Hi  = '%02d' % init_time.hour
-        Mi  = '%02d' % init_time.minute
-        Si  = '%02d' % init_time.second
-
-        #s = s.replace('%iY', Yi).replace('%iy',yi).replace('%im',mi).replace('%id', di).replace('%iH', Hi).replace('%iM', Mi).replace('%iS', Si)
-
-        s = s.replace('%iY', Yi)
-        s = s.replace('%iy', yi)
-        s = s.replace('%im', mi)
-        s = s.replace('%id', di) 
-        s = s.replace('%iH', Hi)
-        s = s.replace('%iM', Mi)
-        s = s.replace('%iS', Si)
-
-    if valid_time:
-        yv  = str(init_time.year)[2:]
-        Yv  = str(init_time.year)
-        mv  = '%02d' % valid_time.month
-        dv  = '%02d' % valid_time.day
-        Hv  = '%02d' % valid_time.hour
-        Mv  = '%02d' % valid_time.minute
-        Sv  = '%02d' % valid_time.second
-        
-        s = s.replace('%vY', Yv)
-        s = s.replace('%vy',yv)
-        s = s.replace('%vm',mv)
-        s = s.replace('%vd', dv) 
-        s = s.replace('%vH', Hv)
-        s = s.replace('%vM', Mv)
-        s = s.replace('%vS', Sv)
-
-    if init_time and valid_time:
-        delta = valid_time - init_time
-        fhr   = delta.days * 24 + int(delta.seconds / (60*60))
-        fH    = '%02d' % fhr
-        s = s.replace('%fH', fH)
-    
-    return s
 
 
 def get_sst_time(config):
@@ -978,7 +981,7 @@ def ungrib_sst(config):
         mpirun(cmd, config['num_procs'], config['host_file'], config['run_level'], config['cmd_timing']) 
 
 
-    cmd = 'grep "Successful completion" ./ungrib.log' # check for success
+    cmd = 'grep "Successful completion" ./ungrib.log*' # check for success
     ret = run_cmd(cmd, config)
     if ret!=0:
         raise IOError('Ungrib failed for SST')
@@ -1153,6 +1156,92 @@ def update_namelist_wps(config):
 
 
 
+def prepare_ndown(config):
+    """Runs a one-way nested simulation using ndown.exe
+    We assume the coarse resolution run has been done, 
+    and we have wrfout_d01.date files.
+    
+    We only need to run metgrid for the initial forecast time.
+    
+    Therefore we have to run ungrib, geogrid, metgrid
+    Assume the geo_em files exist for both domains.
+    What """
+
+    logger = get_logger()
+    logger.info('*** PREPARING NDOWN ***')
+    namelist_wps   = config['namelist_wps']
+    namelist_input = config['namelist_input']
+    max_dom        = config['max_dom']
+    wrf_run_dir    = config['wrf_run_dir']
+    
+    
+    if max_dom!=2:
+        raise ConfigError("max_dom must equal 2 when doing ndown runs")
+    
+    bdy_times = get_bdy_times(config)
+    ndown_fmt = config['ndown_fmt']
+    
+    wrfout_d01_files = [sub_date(ndown_fmt, init_time=bdy_times[0], valid_time=t) for t in bdy_times]
+    for f in wrfout_d01_files:
+        if not os.path.exists(f):
+            raise MissingFile("File: %s missing" % f)
+        cmd = 'ln -sf %s %s' % (f, wrf_run_dir)
+        run_cmd(cmd, config)
+    
+    
+    # Check for wrfinput_d02
+    wrfinput_d02 = '%s/wrfinput_d02' % wrf_run_dir
+    if not os.path.exists(wrfinput_d02):
+        raise MissingFile("wrfinput_d02 is missing")
+    
+    os.rename('%s/wrfinput_d02' % wrf_run_dir, '%s/wrfndi_d02' % wrf_run_dir)
+    
+    
+    namelist         = read_namelist(namelist_input)
+    
+    # History interval is in minutes
+    history_interval = namelist.settings['history_interval']
+    interval_seconds = history_interval[0] * 60
+    namelist.update('interval_seconds', interval_seconds)
+    namelist.insert('io_form_auxinput2', 2, 'time_control')
+    namelist.to_file(namelist_input)
+    
+    logger.info('*** DONE PREPARE NDOWN ***')
+    
+def run_ndown(config):
+    logger = get_logger()
+    logger.info('*** RUNNING NDOWN ***')
+    
+    wrf_run_dir = config['wrf_run_dir']
+    queue       = config['queue']
+    log_file    = '%s/ndown.log' % wrf_run_dir
+    
+    cmd = '%s/ndown.exe' % wrf_run_dir
+    
+    nprocs = config['num_procs']
+    poll_interval = config['poll_interval']
+    logger.debug(poll_interval)
+    logger.debug(nprocs)
+    logger.debug(nprocs['ndown.exe'])
+    
+    if queue:
+        run_cmd_queue(cmd, config, wrf_run_dir, log_file)
+        
+    else:
+        mpirun(cmd, nprocs, config['host_file'], config['run_level'], config['cmd_timing'])
+
+
+    cmd = 'grep "Successful completion" %s' % log_file # check for success
+    ret = run_cmd(cmd,config)
+    if ret!=0:
+        raise IOError('ndown.exe did not complete')
+    
+    logger.info('*** SUCESS NDOWN ***')
+
+    
+    
+    
+    
 def run_ungrib(config):
     """ Runs ungrib.exe and checks output was sucessfull
     If vtable and gbr_input_fmt are NOT dictionaries, 
@@ -1245,7 +1334,7 @@ def run_ungrib(config):
             mpirun(cmd, config['num_procs'], config['host_file'], config['run_level'], config['cmd_timing'])
 
 
-        cmd = 'grep "Successful completion" %s/ungrib.log' % wps_run_dir # check for success
+        cmd = 'grep "Successful completion" %s/ungrib.log*' % wps_run_dir # check for success
         ret = run_cmd(cmd,config)
         if ret!=0:
             raise IOError('ungrib.exe did not complete')
@@ -1281,7 +1370,7 @@ def run_geogrid(config):
         mpirun(cmd, config['num_procs'], config['host_file'], config['run_level'], config['cmd_timing'])
 
     
-    cmd = 'grep "Successful completion" %s/geogrid.log.*' %(wps_run_dir)
+    cmd = 'grep "Successful completion" %s/geogrid.log*' %(wps_run_dir)
     ret = run_cmd(cmd, config)
     if ret!=0:
         raise IOError('geogrid.exe did not complete')
@@ -1343,7 +1432,7 @@ def run_metgrid(config):
         mpirun(cmd, config['num_procs'], config['host_file'], config['run_level'], config['cmd_timing'])
 
 
-    cmd = 'grep "Successful completion" %s/metgrid.log.*' % wps_run_dir
+    cmd = 'grep "Successful completion" %s/metgrid.log*' % wps_run_dir
     ret = run_cmd(cmd, config)
     if ret!=0:
         raise IOError('metgrid.exe did not complete')

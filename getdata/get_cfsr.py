@@ -1,43 +1,46 @@
+"""get_cfsr.py submit request or fetch previous request for CFSR data
 
-""" Requests subsets of CFSR data, fetches to local storage and renames"""
+Usage: 
+    get_cfsr.py auth --email=<email> --passwd=<passwd> --cookie=<cookie> [--verbose]
+    get_cfsr.py submit --start=<YYYY-mm-dd_HH:MM> --end=<YYYY-mm-dd_HH:MM> --dsid=<dsid> --cookie=<cookie> [--dry-run] [--verbose]
+    get_cfsr.py fetch <request>... --cookie=<cookie> [--out=<dir>] [--max-num=<max>] [--dry-run] [--verbose]
+    get_cfsr.py (-h | --help)
+    
+Options:
+    --email=<email>   email registered for UCAR RDA account
+    --passwd=<passwd> password for UCAR RDA account
+    --user=<user>     name used for data directory on RDA server (usually surname)
+    --cookie=<cookie> location to read/write authentication cookie
+    --dsid=<dsid>     UCAR dataset id e.g. 093.0 or 094.0
+    --dry-run         verify but don't submit request
+    --out=<dir>       local directory to fetch to [default: ./]
+    --max-num=<max>   limit number of files fetched to max
+    --verbose         print subprocess calls to the shell
+    -h |--help        show this message
+    
+    
+Notes:
+    ds093.0 is the original CFSR dataset, and covers from 1979 to March 2011.
+    ds094.0 covers from 2011-01-01 up to the present
+    
+Example:
+    The three steps involved in getting CFSR data are:
+        python get_cfsr.py auth --email=jo.blogs@blogmail.com --passwd=NSA01 --cookie=./auth.ucar.edu
+        python get_cfsr.py submit --start="2010-01-01 00:00" --end="2010-01-02 00:00" --dsid=093.0 --cookie=./auth.ucar.edu 
+        python get_cfsr.py fetch BLOGS44950 BLOGS44951 --cookie=./auth.ucar.edu """
+
+import docopt
 import os
 import subprocess
 import sys
+import re
 
-#
-# User options
-#
-MODE             = 'fetch' # submit or fetch
-USER             = 'HAWKINS'
-DUMMY            = False
-MAX_NUM          = 10 # limit on number of files to fetch for debugging
-REQUEST_IDS      = {43340:'pressure', 43341:'surface', 43342:'sst'}
-REQUEST_IDS      = {43341:'surface'}
-DSID             = '094.0'
 RDA_LOGIN_SERVER = 'https://rda.ucar.edu/cgi-bin/login'
 RDA_DATA_SERVER  = 'http://rda.ucar.edu'
 RDA_VERIFY       = '%s/php/dsrqst-test.php' % RDA_DATA_SERVER
 RDA_REQUEST      = '%s/php/dsrqst.php'      % RDA_DATA_SERVER
 RDA_DATASET      = '%s/dsrqst'              % RDA_DATA_SERVER
-LOCAL_DIR        = '/home/slha/forecasting/data/reanalysis/CFSR'
-COOKIE           = '/home/slha/auth.ucar.edu'
-START            = '2012-01-01 00:00'
-END              = '2013-01-01 00:00'
-EMAIL            = 'sam.hawkins@vattenfall.com'
-PASSWORD         = 'slh561944'
-NLAT='71';  
-SLAT='41'; 
-WLON='-030'; 
-ELON='030'; 
 
-
-options = { 'dsid':DSID,
-            'startdate':START,
-            'enddate': END,
-            'nlat':    NLAT,  
-            'slat':    SLAT, 
-            'wlon':    WLON,
-            'elon':    ELON}
 
 pressure_093 = {'parameters': r'3%217-0.2-1:0.0.0,3%217-0.2-1:0.1.1,3%217-0.2-1:0.2.2,3%217-0.2-1:0.2.3,3%217-0.2-1:0.3.1,3%217-0.2-1:0.3.5',         
          'level':'76,77,78,79,80,81,82,83,84,85,86,87,88,89,90,91,92,93,94,95,96,97,98,99,100,101,221,361,362,363,557,562,563,574,577,581,913,914,219',
@@ -80,90 +83,106 @@ sst_094 = {'parameters': '3%217-0.2-1:0.0.0',
  
       
 def main():         
+    args = docopt.docopt(__doc__, sys.argv[1:])
 
-    print '\n\n****************************'
-    print 'authenticating at: %s' % RDA_LOGIN_SERVER
-    response = authenticate(RDA_LOGIN_SERVER, EMAIL, PASSWORD, COOKIE)
-    print response
     
-    if MODE=='submit':
-        try:
-            if DSID=='093.0':
-                datasets = [pressure_093, surface_093,  sst_093]
+    if args['auth']:
+        response = authenticate(RDA_LOGIN_SERVER, args['--email'], args['--passwd'],args['--cookie'])
+    
+    if args['submit']:
+        print '\n\n\n****************************************'
+        dsid   = args['--dsid']
+        cookie = args['--cookie']
+        
+        options = { 'dsid': dsid,
+            'startdate'   : args['--start'],
+            'enddate'     : args['--end']}
 
-            elif DSID=='094.0':
-                datasets = [pressure_094, surface_094,  sst_094]
-            
-            ids, indexs = submit_requests(datasets, dummy=DUMMY)
-            
-            print '\n\n\n****************************************'
-            print 'Success, following job requests submitted to server'
-            for id, ind in zip(ids, indexs):
-                print 'Job ID: %s, Index: %s' % (id, ind)
+        if dsid=='093.0':
+            datasets = [pressure_093, surface_093]
+        elif dsid=='094.0':
+            datasets = [pressure_094, surface_094]
+
+        try:            
+            verify_requests(datasets, options, cookie)
+            if not args['--dry-run']:
+                ids, indexs = submit_requests(datasets, options, cookie)
+                print 'the following dataset requests were sucessfully submitted to server'
+                for id, ind in zip(ids, indexs):
+                    print 'ID %s' % ind
                 
+                print 'once these requests are available, fetch with the command'
+                print '    get_cfsr.py fetch %s --cookie=%s [--out=<dir>]' %(' '.join(indexs), cookie)
+                    
         except RequestError, e:
-            print 'Failure:'
+            print 'Request failure:'
             print e
         print '*****************************************'
-        return
     
-    elif MODE=='fetch':
+    if args['fetch']:
         print '\n\n******************************************'
         print 'Fetching requests from server: %s' % RDA_DATA_SERVER
-        for ind in REQUEST_IDS:
-            print 'processing request: %s' % ind
-            prefix = REQUEST_IDS[ind]
-            filenames = get_filenames(RDA_DATASET, USER, ind, COOKIE)
-            print 'Fetching the following %d files' % len(filenames)
-            for f in filenames:
-                print f
-            if not DUMMY:
-                get_files(filenames, COOKIE, LOCAL_DIR, prefix,max_num=MAX_NUM)
+        
+        
+        for request_id in args['<request>']:
+            # Find first occurance of digit in request
+            print 'processing request: %s' % request_id
+            digit = re.search("\d", request_id)
+
+            user = request_id[0:digit.start()]
+            rid   = request_id[digit.start():]    
+
+            filenames = get_filenames(RDA_DATASET, user, rid, args['--cookie'])
+            if args['--verbose']:
+                print 'fetching the following %d files' % len(filenames)
+                for f in filenames:
+                    print f
+            
+            if not args['--dry-run']:
+                get_files(filenames, args['--cookie'], args['--out'],max_num=args['--max-num'])
+        
+        print 'finished fetching files'
+        print 'to rename to remove date-suffix, use rename.py'
         print '*************************************************'
-    else:
-        print 'Use MODE=submit or MODE=request'
 
 
 
+       
+def verify_requests(datasets, options, cookie):         
     
-
-def submit_requests(datasets, dummy=False):         
-
-    ids = []
-    indexs = [] 
-    
-    print 'submitting requests for CSFR data for WRF on pressure, surface, and sst'
-    print 'user: %s' % EMAIL
+    print 'verifying requests for CSFR data for WRF on pressure and surface levels'
     print 'start date: %s' % options['startdate']
     print 'end date: %s'   % options['enddate']
     print 'verifiying requests'
     for dataset in datasets:
         dataset.update(options)
-        response = submit(RDA_VERIFY, dataset, COOKIE)
+        response = submit(RDA_VERIFY, dataset, cookie)
         if not 'Success' in response:
             raise RequestError(response)
         print 'request verified'
-    print 'All requests verified'
+
+        
     
-    if dummy:
-        return
+
+def submit_requests(datasets, options, cookie, verbose=False):         
+
+    ids = []
+    indexs = [] 
     
-    print 'submitting requests to data server'
-    for dataset in datasets:        
-        response = submit(RDA_REQUEST, dataset, COOKIE)
+    print 'submitting requests for CSFR data for WRF on pressure, surface, and sst'
+    print 'start date: %s' % options['startdate']
+    print 'end date: %s'   % options['enddate']
+    
+    for dataset in datasets:
+        dataset.update(options)
+        response = submit(RDA_REQUEST, dataset, cookie)
         id = get_id(response)
         index = get_index(response)
         ids.append(id)
         indexs.append(index)
         
-    print 'submitted the followinf requests:'
-    
-    for (id,index) in zip(ids, indexs):
-        print '\t%s\t%s' % (index, id)
     return ids, indexs
-    print '****************************\n\n'            
-            
-            
+
             
             
 def post_string(descr):
@@ -200,7 +219,6 @@ def get_filenames(server, user, ind, cookie):
     url = '%s/%s/curl.%s.csh' % (server, request_id, ind)
     out = 'curl.%s.csh' % ind
     cmd = 'curl -s -b %s %s' %(cookie, url)
-    print cmd
     proc   = subprocess.Popen([cmd], stdout=subprocess.PIPE, shell=True)
     response = proc.stdout.read().rstrip('\n')
     
@@ -212,38 +230,40 @@ def get_filenames(server, user, ind, cookie):
     return sorted(fnames)
 
     
-def get_files(filenames, cookie, local_path, local_prefix,max_num=None):
+def get_files(filenames, cookie, local_path, max_num=None):
     """ Fetches the datafiles themselves and renames them to something sensible"""
-
 
     if max_num!=None:
         filenames = filenames[0:max_num]
-    print '\n'
+
     for f in filenames:
         base_name = f.split('/')[-1]
         tokens = base_name.split('.')
-        
-        tokens[3] = local_prefix
-        new_name = '%s/CFSR.%s.%s.grb2' %(local_path,local_prefix,tokens[0])
-        new_name = '%s/%s' %(local_path, base_name)
+        new_name = '%s/%s' % (local_path, base_name)
         print f + '------>' + new_name
         cmd = 'curl -s -b %s -o %s %s' % (cookie, new_name, f)
         subprocess.call(cmd, shell=True)
     
-def authenticate(server, email, password, cookie):
+
+def authenticate(server, email, password, cookie, verbose=False):
     """Authenticates and saves cookie to local cookie file"""
     
+    print 'authenticating at: %s' % RDA_LOGIN_SERVER
     cmd = 'curl -s -o /dev/null -k -s -c %s -d "email=%s&passwd=%s&action=login" %s '%(cookie, email, password, server)
-    print cmd
+    if verbose:
+        print cmd
+    
     proc = subprocess.Popen([cmd], stdout=subprocess.PIPE, shell=True)
     output = proc.stdout.read().rstrip('\n')
     return output
     
 
-def submit(url, dataset, cookie):
+def submit(url, dataset, cookie, verbose=False):
     post_data = post_string(dataset)
     cmd = 'curl -s -b %s -d "%s" %s' % (cookie, post_data, url)
-    print cmd
+    if verbose:
+        print cmd
+    
     proc = subprocess.Popen([cmd], stdout=subprocess.PIPE, shell=True)
     output = proc.stdout.read().rstrip('\n')
     return output
@@ -252,6 +272,6 @@ def submit(url, dataset, cookie):
 class RequestError(Exception):
     pass    
     
-
 if __name__ == '__main__':
-    main()    
+    main()
+

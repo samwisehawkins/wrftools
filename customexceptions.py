@@ -15,3 +15,7 @@ class QueueError(Exception):
 class NamelistError(Exception):
     """Represents an error in the namelist settings file """ 
     pass
+    
+class MissingFile(Exception):
+    """Represents a missing file"""
+    pass
