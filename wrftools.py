@@ -27,7 +27,7 @@ Time series output files will be named according to:
 domain/model_run/tseries/U_80_2006-11-30_00.csv 
 
 TODO
-* Change time series ncl code to write netcdf files
+* Change time series ncl code to write netcdf files -- done
 * Change namelist reading code to strip trailing commas and remove trailing quotes -- done
 * Summarise file transfers in logging output -- done
 
@@ -1163,6 +1163,15 @@ def prepare_ndown(config):
     
     We only need to run metgrid for the initial forecast time.
     
+    We have two options, either we force the user to do all the renaming themselves, 
+    or we allow them to utilise the original namelist.input file, and add effectivley
+    add a column onto that. This could be done via a bunch of smaller utility steps.
+    e.g. shift_namelist namelist.input 3 > namelist.input
+    
+    Which would rotate the columns of a namelist.input file so that the n-th column 
+    becomes the first column.
+    
+        
     Therefore we have to run ungrib, geogrid, metgrid
     Assume the geo_em files exist for both domains.
     What """

@@ -47,9 +47,12 @@ class Namelist(object):
                 return valstring
 
 
-        # single values of type string            
+        # single values of type string. Don't put quotes around strings already in quotes
         if type(val)==type(''):
-            return "'%s'" % val
+            if '"' in val:
+                return val
+            else:
+                return "'%s'" % val
         
         # sigle values of type bool
         elif type(val)==type(True):
@@ -583,14 +586,10 @@ obs_file          = /home/slha/domains/obs/adpupa.nc
 
 
 """
-    f = StringIO(namelist_string)
-    namelist = from_file(f)
-    #namelist = read_namelist('/home/slha/forecasting/development/namelist.wps')
-    namelist.remove('fg_name')
-    namelist.remove('io_form_metgrid')
-    namelist.remove('opt_output_from_metgrid_path')
-    namelist.remove('opt_metgrid_tbl_path')
-    namelist.remove('constants_name')
+    #f = StringIO(namelist_string)
+    #namelist = from_file(f)
+    namelist = read_namelist('/home/slha/forecasting/domains/aberdeen/resource/namelist.input')
+    print namelist.settings['gfdda_inname']
     
     print namelist
     print '\n\n\n'

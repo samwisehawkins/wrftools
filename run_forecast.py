@@ -33,17 +33,7 @@ if len(sys.argv)>2:
 logger = wrftools.create_logger(config)
     
     
-#************************************************
-# GIT branch control
-# Deprecated. This is no place to sort out 
-# your version control. Use branches checked 
-# out into local subdirs
-#************************************************
-#orig_branch  = wrftools.stash_switch(config['wrftools_dir'], config['git_branch'], config['run_level'])
-#wrftools.switch_pop(config['wrftools_dir'], orig_branch,config['run_level'])
 
-
-	
 #************************************************
 # Get some required settings
 #************************************************
