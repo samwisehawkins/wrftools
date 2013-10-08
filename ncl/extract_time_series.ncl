@@ -4,6 +4,7 @@
 ;
 ; Credit to Dennis Shea's wrfout_to_cf.ncl for some inspiration
 ;
+; WRF version is hard-coded into this script
 ;
 ; Author Sam Hawkins, Jesper Nissen
 ; sam.hawkins@vattenfall.com
@@ -14,32 +15,29 @@ load "$HOME/code/wrftools/devel/ncl/wrftools.ncl"
 begin
 
 ;******************************************************
-; Environment variables used by this script
+; Command-line variables used by this script
+; These were formerly got from environment vars
 ;******************************************************
-  in_file   = getenv("NCL_IN_FILE")                    ; this can be a pattern, and will be expanded by systemfunc(ls)
-  out_dir   = getenv("NCL_OUT_DIR")
-  ;nest_id   = getenv("NEST_ID")    
-  loc_file  = getenv("LOCATIONS_FILE")
-  domain    = getenv("DOMAIN")                         ; these will get used as metatdata
-  model_run = getenv("MODEL_RUN")                      ; these will get used as metatdata
-  grid_id   = stringtointeger(getenv("NEST_ID"))       ; this may get read from global attribute
-  ; To test this script you can do
-  ; NCL_IN_FILE=/  
+  ;in_file   = getenv("NCL_IN_FILE")
+  ;out_dir   = getenv("NCL_OUT_DIR")
+  ;out_file  = getenv("NCL_OUT_FILE")
+  ;nest_id  = getenv("NEST_ID")    
+  ;loc_file  = getenv("LOCATIONS_FILE")
+  ;domain    = getenv("DOMAIN")                         ; these will get used as metatdata
+  ;model_run = getenv("MODEL_RUN")                      ; these will get used as metatdata
+  ;grid_id   = stringtointeger(getenv("NEST_ID"))       ; this may get read from global attribute
 
-  ;******************************************************
+;******************************************************
 
     
 
 ;******************************************************
 ; Constants / hard coded options
 ;******************************************************
-  out_file = out_dir +"/test.nc"
-  extract_heights    = (/10.,40.,50.,60.,70.,80.,90.,100./)
   dims    = dimsizes(extract_heights)
   nhgts   = dims(0)
   delete(dims)
 ;******************************************************
-
 
 
 ;******************************************************
@@ -71,18 +69,22 @@ begin
 
     
     ;**************************************************
-    ; Bulk richardson options
-    ; Rib_opt=1        ; AMS versions 
+    ; Bulk richardson options. 
+    ; TODO, allow these to be arrays, 
+    ; so we can do multiple heights
+    ; rib_opt=1        ; AMS versions 
 	opts@rib_opt=2     ; Zilintikivich et al
-    opts@rib_h_lower = 40.0    ; lower height must be of the interpolation heights
-    opts@rib_h_upper = 80.0    ; upper height
+    opts@rib_h_lower = 50.0    ; lower height must be of the interpolation heights
+    opts@rib_h_upper = 100.0    ; upper height
     ;**************************************************
 
 ;******************************************************  
 
 
 ;******************************************************
-; Output Variables
+; Output Variables. 
+; TODO, allow these to be defined on the command line
+; using an optional -v flag, similar to NCO operators
 ;******************************************************
     
     ;****************************************************
@@ -98,68 +100,63 @@ begin
     vars@theta             = True      ;potential temperature                    - output as THETA
     vars@thetav            = True      ;virtual potential temperature            - output as THETAV
     vars@tke               = True      ;TKE from PBL scheme                      - output as TKE (not yet implemented)
-	vars@rib               = True      ;Bulk Richardson number                   - output as RIB
+
    
-  ;****************************
-  ; 2D (surface or averaged) variables
-  ;****************************
-  vars@sst               = True      ;sea-surface temperature                  - output as SST
-  vars@tsk               = False     ;skin (surface) temperature               - output as TSK
-  vars@t2                = True      ;temperature at 2m                        - output as T2
-  vars@td2               = True      ;dewpoint temperature at 2m               - output as TD2
-  vars@pblh              = True      ;PBL height                               - output as PBLH
-  vars@psfc              = True      ;pressure at the surface                  - output as PSFC  
-  vars@swdown            = True      ;downward short wave flux at ground surface -- output as SWDOWN
-  vars@cldfraavg         = False      ;cloud fraction column average              -- output as CLDFRAAVG
-  vars@cldframax         = False      ;cloud fraction column maximun              -- output as CLDFRAMAX
-  vars@rain              = True      ;total grid scale precipitation           - output as RAIN
-  vars@slp               = True     ;sea-level pressure- using WRF-NCL        - not yet implemented
-
-  
-  vars@theta2            = False     ;potential temperature at 2m              - not yet implemented
-  vars@ust               = False     ;friction velocity ust at surface         - not yet implemented
-  vars@hfx               = False     ;surface heat flux                        - not yet implemented
-
-  vars@tsfc              = False     ;temperature at the surface               - not yet implemented
-  vars@rv2               = False     ;mixing ratio at 2m                       - not yet implemented
-  vars@q2                = False     ;specific humidity at 2m                  - not yet implemented
-  vars@rh2               = False     ;relative humidity at 2m                  - not yet implemented
-  vars@u10               = False     ;u wind - grid - at 10m                   - not yet implemented
-  vars@v10               = False     ;v wind - grid - at 10m                   - not yet implemented
-  vars@ws_10             = False     ;wind speed - at 10m                      - not yet implemented
-  vars@wd_10             = False     ;wind direction - earth - at 10m          - not yet implemented
-
-  vars@precip_c          = False     ;total cumulus precipitation              - not yet implemented
-  vars@precip_fr         = False     ;fraction of frozen nonconv. precip       - not yet implemented
-  vars@dryairmass        = False     ;total dry air mass in column             - not yet implemented
-  vars@rho               = False     ;density at lowest eta level              - not yet implemented
-  
-
+    ;****************************
+    ; 2D (surface or averaged) variables
+    ;****************************
+	vars@rib               = False     ;Bulk Richardson number                  - output as RIB
+    vars@sst               = True      ;sea-surface temperature                  - output as SST
+    vars@tsk               = False     ;skin (surface) temperature               - output as TSK
+    vars@t2                = True      ;temperature at 2m                        - output as T2
+    vars@td2               = True      ;dewpoint temperature at 2m               - output as TD2
+    vars@pblh              = True      ;PBL height                               - output as PBLH
+    vars@psfc              = True      ;pressure at the surface                  - output as PSFC  
+    vars@swdown            = True      ;downward short wave flux at ground surface -- output as SWDOWN
+    vars@cldfraavg         = False     ;cloud fraction column average              -- output as CLDFRAAVG
+    vars@cldframax         = False     ;cloud fraction column maximun              -- output as CLDFRAMAX
+    vars@rain              = True      ;total grid scale precipitation           - output as RAIN
+    vars@slp               = True      ;sea-level pressure- using WRF-NCL        - not yet implemented
+    vars@theta2            = False     ;potential temperature at 2m              - not yet implemented
+    vars@ust               = False     ;friction velocity ust at surface         - not yet implemented
+    vars@hfx               = False     ;surface heat flux                        - not yet implemented
+    vars@tsfc              = False     ;temperature at the surface               - not yet implemented
+    vars@rv2               = False     ;mixing ratio at 2m                       - not yet implemented
+    vars@q2                = False     ;specific humidity at 2m                  - not yet implemented
+    vars@rh2               = False     ;relative humidity at 2m                  - not yet implemented
+    vars@u10               = False     ;u wind - grid - at 10m                   - not yet implemented
+    vars@v10               = False     ;v wind - grid - at 10m                   - not yet implemented
+    vars@ws_10             = False     ;wind speed - at 10m                      - not yet implemented
+    vars@wd_10             = False     ;wind direction - earth - at 10m          - not yet implemented
+    vars@precip_c          = False     ;total cumulus precipitation              - not yet implemented
+    vars@precip_fr         = False     ;fraction of frozen nonconv. precip       - not yet implemented
+    vars@dryairmass        = False     ;total dry air mass in column             - not yet implemented
+    vars@rho               = False     ;density at lowest eta level              - not yet implemented
 ;******************************************************
 
 
 ;******************************************************
 ; Give some info
 ;******************************************************
-print("NCL Extracting time series from file(s): "+in_file)
+;print("NCL Extracting time series from file(s): "+in_file)
+;******************************************************
+
+
 
 
 ;******************************************************
 ; Add the file(s)
 ; Only used addfiles if there is more than one file
 ;******************************************************
-    files = systemfunc("ls "+in_file)
-    print(files)
-	dims = dimsizes(files)
+	dims = dimsizes(in_file)
     nfiles = dims(0)
     delete(dims)
   
     if (nfiles.eq.1) then 
-        f = addfile(files(0)+".nc","r")
+        f = addfile(in_file(0),"r")
     else 
-        f = addfiles(files+"nc", "r")
+        f = addfiles(in_file, "r")
     end if 
-  
  
     locations = read_locations(loc_file)
     loc_id = locations[0]
@@ -167,15 +164,38 @@ print("NCL Extracting time series from file(s): "+in_file)
 	lat    = locations[2]
 	lon    = locations[3]
 	
-    print(loc_id)
+    ;print(loc_id)
     dims=dimsizes(loc_id)
     nlocs = dims(0)
     delete(dims)	
 
-    print("Read " + nlocs+ " locations from file: " + loc_file)
+    ;print("Read " + nlocs+ " locations from file: " + loc_file)
+    ; What do we call out_file?
+    ;out_file = out_dir +"/tseries_" + init_time +".nc"
+    
     fout = wrf_user_interp_vars_tofile(f, extract_heights,loc_id, lat, lon,-1,out_file, vars, opts)
-    print(fout)
-    exit
+    fout@DOMAIN    = domain
+    fout@MODEL_RUN = model_run
+    fout@MODEL     = "WRFV35"
+    
+print("*** SUCCESS NCL EXTRACT TIME SERIES ***")    
+exit
+
+
+
+
+
+
+
+
+
+;******************************************************
+; DEPRECATED CODE BELOW HERE
+; Kept only in case need to change back
+;******************************************************
+
+
+
     ;file_handle, height[*]:numeric, location[*]:string, lat[*]:numeric, lon[*]:numeric,time_in:integer, file_out, vars, opts)
     
     nvars = ListCount(output)
@@ -291,6 +311,6 @@ print("NCL Extracting time series from file(s): "+in_file)
 	end do
 	
 	
-print("*** SUCCESS NCL EXTRACT TIME SERIES ***")
+
 
 end

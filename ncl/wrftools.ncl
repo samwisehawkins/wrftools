@@ -5,6 +5,30 @@ load "$NCARG_ROOT/lib/ncarg/nclscripts/wrf/WRFUserARW.ncl"
 ;load "$WRFTOOLS/ncl/WRFUserARW.ncl"
 load "$NCARG_ROOT/lib/ncarg/nclscripts/wrf/WRF_contributed.ncl"
 
+;******************************************************
+; Blank pad a string to fixed length
+;******************************************************
+undef("blank_pad")
+function blank_pad (strs, length) ; extend a string to fixed length 
+local n, strs, str
+begin 
+   dims = dimsizes(strs)
+   nstrs = dims(0)
+   do n=0, nstrs-1
+       str = strs(n)
+       nextra = length - strlen (str) -1
+       if (nextra .ge. 1) then 
+          bbb = new (nextra, string) 
+          bbb(:) = " " 
+          strs(n) = (str + str_concat (bbb)) 
+       else 
+          strs(n) = str
+       end if 
+    end do
+   return strs
+   
+end 
+
 
 
 ;******************************************************
@@ -25,6 +49,7 @@ begin
   name_ind  = str_match_ind_ic(header, "name")
 
   loc_id    = str_get_field(data, loc_ind+1, ",")                ; str_get_field numbering starts at 1
+  loc_id_l  = blank_pad(loc_id, 6)
   lat       = stringtofloat(str_get_field(data, lat_ind+1, ",")) ; so add 1 to indices
   lon       = stringtofloat(str_get_field(data, lon_ind+1, ","))
   name      = str_get_field(data, name_ind+1, ",")
@@ -63,8 +88,23 @@ begin
     
 	dims = dimsizes(lat)
 	nlocs = dims(0)
-    
 	delete(dims)
+
+    ; 4D variable(time,height,y, x)
+    if (ndims .eq. 4)
+        dims = dimsizes(var)
+        south_north = dims(2)
+        west_east = dims(3)
+        delete(dims)
+    end if
+    
+    ; 3D variable(time,y, x)
+    if (ndims .eq. 3)
+        dims = dimsizes(var)
+        south_north = dims(1)
+        west_east = dims(2)
+        delete(dims)
+    end if
     
 	if (interp_option.eq.0)
 	    
@@ -76,16 +116,26 @@ begin
 		; if var(time, level, y, x)
         if (ndims .eq. 4)
 		    var_out = new((/nlocs,ntimes,nheight/),"float")
-            
 		    do n=0,nlocs-1
-			    var_out(n,:,:) = var(:,:,loc(1,n),loc(0,n))
-			end do
+                ; if location is out of domain
+                if ( (loc(1,n) .ge. south_north) .or. (loc(0,n) .ge. west_east))
+                    print("Warning, location is outside domain, values will be missing")
+                    var_out(n,:,:) = default_fillvalue("float")
+                else
+                    var_out(n,:,:) = var(:,:,loc(1,n),loc(0,n))
+                end if
+            end do
 	    end if
 		if (ndims .eq. 3)
 			var_out = new((/nlocs, ntimes/),"float")
 		    do n=0,nlocs-1
-			    var_out(n,:) = var(:,loc(1,n),loc(0,n))
-			end do
+                if ( (loc(1,n) .ge. south_north) .or. (loc(0,n) .ge. west_east))
+                    print("Warning, location is outside domain, values will be missing")
+                    var_out(n,:) = default_fillvalue("float")
+                else
+                    var_out(n,:) = var(:,loc(1,n),loc(0,n))
+                end if
+            end do
 	    end if
 	else
         var_out = rcm2points(xlat, xlong,  var, lat, lon, interp_option)
@@ -93,7 +143,12 @@ begin
     var_out!0 = "location"
     
 	; variable is no longer staggered if we have iterpolated to points
-	delete_VarAtts(var_out, (/"stagger", "coordinates"/))
+	if (isatt(var_out, (/"stagger"/)))
+        delete_VarAtts(var_out, "stagger")
+    end if
+    if (isatt(var_out, (/"coordinates"/)))
+        delete_VarAtts(var_out,  "coordinates")
+    end if
 	return(var_out)
 end
 
@@ -144,10 +199,6 @@ begin
     cp = 1003.5             ; specific heat capacity of air
     lv = 2400000            ; latent heat of evaporation 
  
-    print("\n\n*******************************************")
-    print("wrf_user_interp_vars_tofile")
-    print(file_out)
-    
     
     ;******************************************************
     ; File handle. Allows multiple files to be used
@@ -192,9 +243,9 @@ begin
     ; Dimension sizes
     ;******************************************************
     
-    location_str_length = 4 ; hard coded length of loc IDs
+    location_str_length = 6 ; hard coded length of loc IDs
     
-    dims    = dimsizes(height)
+    dims      = dimsizes(height)
     nheight   = dims(0)
     delete(dims)
 
@@ -303,7 +354,10 @@ begin
     height@description="metres above the ground or water surface"
     filevarattdef(fout,"height" ,height)                    ; copy height attributes
     
+    
+     
     loc_char = stringtochar(location)
+    printVarSummary(loc_char)
     loc_char@description = "site location identified by ID" 
     filevardef(fout, "location",typeof(loc_char),(/"location", "loc_str_length"/))                           
     
@@ -601,21 +655,12 @@ begin
 
 	if vars@rib
 	    ; create empty array		
-		;rib_agl_locs = new((/nlocs, ntimes/), "float")
-        ;rib_agl_locs@longname = "Bulk Richardson number"
-
 		
         ; compute bulk richardson as difference between level k and lowest level
         rib_upper = opts@rib_h_upper
         rib_lower = opts@rib_h_lower
-        
-        ;rib_agl_locs@upper_height = rib_upper(0)
-        ;rib_agl_locs@lower_height = rib_lower(0)
-        
-        print(rib_upper)
-        print(rib_lower)
-        
-        printVarSummary(thetav_agl_locs)
+       
+
         dtheta_v = thetav_agl_locs(:,:,{rib_upper} ) - thetav_agl_locs(:,:,{rib_lower})
         dspeed   = ws_agl_locs(:,:,{rib_upper}) - ws_agl_locs(:,:,{rib_lower})
             
@@ -627,14 +672,11 @@ begin
         else
             beta = g/dim_avg_n(thetav_agl_locs(:,:,{rib_lower:rib_upper}), 2)
         end if
-			
-        printVarSummary(dtheta_v)
-        printVarSummary(dspeed)
-        printVarSummary(beta)
-        printVarSummary(hgt_agl_locs)
+        
         
         rib_agl_locs   = beta * dtheta_v * (rib_upper - rib_lower) / dspeed^2
-
+       
+        
         delete(dtheta_v)
         delete(dspeed)
         delete(beta)
@@ -654,6 +696,7 @@ begin
 	return fout
 
 
+    
 
     
     if vars@rain
@@ -816,7 +859,6 @@ begin
 
 	nvars = ListCount(out_vars)
 	do i=0,nvars-1
-        printVarSummary(out_vars[i])
         out_vars[i]&Time   = ud_times
     end do
     
