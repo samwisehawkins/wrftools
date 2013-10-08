@@ -55,6 +55,11 @@ surface_093 = {'parameters': r'3%217-0.2-1:2.0.192,3%217-0.2-1:0.3.5,3%217-0.2-1
          'grid_definition':62,
          'ststep':'yes'}
 
+         
+sflx_093 = {}
+
+
+         
 sst_093 =   {'parameters': r'3%217-0.2-1:0.0.0',
          'level':'107',
          'product':'3',
@@ -197,6 +202,7 @@ level=%(level)s;product=%(product)s;grid_definition=%(grid_definition)s;ststep=%
 def get_id(response):
     """ Parses a dataset ID from the server response"""
 
+    print response
     lines = response.split('\n')
     id_line = [l for l in lines if "ID" in l][0]
     id       =  id_line.split(':')[1].strip()
@@ -219,6 +225,7 @@ def get_filenames(server, user, ind, cookie):
     url = '%s/%s/curl.%s.csh' % (server, request_id, ind)
     out = 'curl.%s.csh' % ind
     cmd = 'curl -s -b %s %s' %(cookie, url)
+    print cmd
     proc   = subprocess.Popen([cmd], stdout=subprocess.PIPE, shell=True)
     response = proc.stdout.read().rstrip('\n')
     
@@ -226,6 +233,7 @@ def get_filenames(server, user, ind, cookie):
     # We only need the lines with the id in
     # The filename is token[4]
     #
+    print response
     fnames = [l.split()[4] for l in response.split('\n') if request_id in l]
     return sorted(fnames)
 
