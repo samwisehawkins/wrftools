@@ -31,7 +31,16 @@ load "$NCARG_ROOT/lib/ncarg/nclscripts/wrf/WRFUserARW.ncl"
   pltres = True
   mpres = True
 
-;******************************************************
+  mpres@mpGeophysicalLineThicknessF = 2.0
+  mpres@mpGeophysicalLineColor = "black"
+  mpres@mpDataBaseVersion      = "Ncarg4_1"          ; higher res data base
+  mpres@mpFillOn               = True
+  mpres@mpFillDrawOrder        = "PreDraw"
+  mpres@mpLandFillColor        = "DarkOliveGreen3"
+  mpres@mpOceanFillColor       = -1
+  mpres@mpInlandWaterFillColor = -1
+
+*****************************************************
 ; Times and dimensions
 ;******************************************************
 ; Which times and how many time steps are in the data set?

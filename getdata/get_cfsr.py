@@ -2,7 +2,7 @@
 
 Usage: 
     get_cfsr.py auth --email=<email> --passwd=<passwd> --cookie=<cookie> [--verbose]
-    get_cfsr.py submit --start=<YYYY-mm-dd_HH:MM> --end=<YYYY-mm-dd_HH:MM> --dsid=<dsid> --cookie=<cookie> [--dry-run] [--verbose]
+    get_cfsr.py submit --start=<YYYY-mm-dd HH:MM> --end=<YYYY-mm-dd HH:MM> --dsid=<dsid> --cookie=<cookie> [--dry-run] [--verbose]
     get_cfsr.py fetch <request>... --cookie=<cookie> [--out=<dir>] [--max-num=<max>] [--dry-run] [--verbose]
     get_cfsr.py (-h | --help)
     
@@ -136,7 +136,7 @@ def main():
 
             user = request_id[0:digit.start()]
             rid   = request_id[digit.start():]    
-
+            print '\n\n\n user: %s, id: %s' %(user, rid)
             filenames = get_filenames(RDA_DATASET, user, rid, args['--cookie'])
             if args['--verbose']:
                 print 'fetching the following %d files' % len(filenames)
@@ -163,6 +163,7 @@ def verify_requests(datasets, options, cookie):
         dataset.update(options)
         response = submit(RDA_VERIFY, dataset, cookie)
         if not 'Success' in response:
+            print response
             raise RequestError(response)
         print 'request verified'
 
@@ -222,6 +223,7 @@ def get_filenames(server, user, ind, cookie):
     and use it to just get a list of remote filenames"""
     
     request_id = user+str(ind)
+    print request_id
     url = '%s/%s/curl.%s.csh' % (server, request_id, ind)
     out = 'curl.%s.csh' % ind
     cmd = 'curl -s -b %s %s' %(cookie, url)

@@ -19,3 +19,7 @@ class NamelistError(Exception):
 class MissingFile(Exception):
     """Represents a missing file"""
     pass
+    
+class InterpolationError(Exception):
+    """Interpolation outside data domain"""
+    pass

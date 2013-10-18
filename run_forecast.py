@@ -74,6 +74,8 @@ real                = config['real']
 wrf                 = config['wrf']
 upp                 = config['upp']
 time_series         = config['time_series']
+compress            = config['compress']
+metadata            = config['metadata']
 json                = config['json']
 power               = config['power']
 ncl                 = config['ncl']
@@ -217,12 +219,26 @@ for init_time in init_times:
     #logger.warn('*** SLEEPING FOR 10 SECONDS TO ALLOW FS TIME TO SORT ITSELF OUT ***')
     #time.sleep(10)
     
+    if compress:
+        try:
+            wrftools.compress(config)
+        except Exception, e:
+            wrftools.handle(e, fail_mode, full_trace)
 
+    
+    if metadata:
+        try:
+            wrftools.add_metadata(nl)
+        except Exception, e:
+            wrftools.handle(e, fail_mode, full_trace)
+        
+    
+    
+    
     #
     # Post processing
     #
     if upp:
-        
         for d in range(1,max_dom+1):
             try:
                 config['dom'] = d
@@ -230,7 +246,7 @@ for init_time in init_times:
             except Exception, e:
                 logger.error('*** FAIL TIME SERIES ***')
                 wrftools.handle(e, fail_mode, full_trace)
-
+                
     if convert_grb:
         for d in range(1,max_dom+1):
             try:
@@ -240,6 +256,10 @@ for init_time in init_times:
                 logger.error('*** FAIL GRIB CONVERSION ***')
                 wrftools.handle(e, fail_mode, full_trace)
 
+
+        
+                
+                
     #
     # Met verification tools
     #

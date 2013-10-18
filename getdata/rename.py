@@ -1,5 +1,7 @@
 import os 
 import sys
+#import docopt
+# Do this eventually
 
 fnames = sys.argv[1:]
 for f in fnames:
@@ -7,6 +9,6 @@ for f in fnames:
     if path=='':
         path='.'
     tokens = name.split('.')
-    new_name = '%s/%s.%s.grb2' %(path,tokens[0], tokens[1])
+    new_name = '%s/%s.%s.grb2' %(path,tokens[0], tokens[3])
     print new_name
     os.rename(f, new_name)

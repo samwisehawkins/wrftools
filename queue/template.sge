@@ -6,6 +6,7 @@
 #$ -S /bin/bash
 #$ -N <jobname>
 #$ -v MPI_HOME
+#$ -v LD_LIBRARY_PATH
 #$ -cwd
 #$ -q <qname>
 #$ -pe openmpi <nprocs>

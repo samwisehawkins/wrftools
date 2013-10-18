@@ -1,10 +1,16 @@
 ;******************************************************
-; Extract time-series from WRF netcdf files write output 
-; to a simple text file. 
+; Extract time-series from WRF gridded netcdf files write output 
+; to netcdf files where location is a dimension.
+;
+; The variables in the resulting NetCDF files will be 
+; of the form 3DVar(location, height, time)
+;             2DVar(location, time)
+;
+; i.e. location is the record dimension. This could be changed 
+; in future if there is a need for that
 ;
 ; Credit to Dennis Shea's wrfout_to_cf.ncl for some inspiration
 ;
-; WRF version is hard-coded into this script
 ;
 ; Author Sam Hawkins, Jesper Nissen
 ; sam.hawkins@vattenfall.com
@@ -15,25 +21,29 @@ load "$HOME/code/wrftools/devel/ncl/wrftools.ncl"
 begin
 
 ;******************************************************
-; Command-line variables used by this script
-; These were formerly got from environment vars
+; Either get input from command-line options (preference)
+; or environment variables
 ;******************************************************
-  ;in_file   = getenv("NCL_IN_FILE")
-  ;out_dir   = getenv("NCL_OUT_DIR")
-  ;out_file  = getenv("NCL_OUT_FILE")
-  ;nest_id  = getenv("NEST_ID")    
-  ;loc_file  = getenv("LOCATIONS_FILE")
-  ;domain    = getenv("DOMAIN")                         ; these will get used as metatdata
+  in_file    = getenv("FCST_FILE")
+  out_dir    = getenv("NCL_OUT_DIR")
+  out_file   = getenv("NCL_OUT_FILE")
+  ;out_file   = out_dir+"/tseries.nc"
+  ;nest_id    = getenv("NEST_ID")    
+  loc_file   = getenv("LOCATIONS_FILE")
+  ;domain    = getenv("DOMAIN")                         ; these should come from wrfout netcdf files!
   ;model_run = getenv("MODEL_RUN")                      ; these will get used as metatdata
   ;grid_id   = stringtointeger(getenv("NEST_ID"))       ; this may get read from global attribute
-
 ;******************************************************
 
     
-
 ;******************************************************
 ; Constants / hard coded options
 ;******************************************************
+  if .not. isdefined("extract_heights") then 
+      extract_heights = (/80.0,100.0/)      
+  end if
+  
+
   dims    = dimsizes(extract_heights)
   nhgts   = dims(0)
   delete(dims)
@@ -53,13 +63,6 @@ begin
     opts@interp_option = 0
 
     ;**************************************************
-    ; Latitude/longitude options
-    ; 0 lat(time, south_north, west_east)
-    ; 1 lat(south_north, west_east)
-	opts@latlon=1 
-    ;**************************************************
-
-    ;**************************************************
     ; Time units
 	opts@time_units = 0 ;units of "hours since" initial time on the current file (type "double")
     ;                 1 returns units of "hours since 1901-01-01 00:00:00" (type "double")
@@ -74,8 +77,10 @@ begin
     ; so we can do multiple heights
     ; rib_opt=1        ; AMS versions 
 	opts@rib_opt=2     ; Zilintikivich et al
-    opts@rib_h_lower = 50.0    ; lower height must be of the interpolation heights
-    opts@rib_h_upper = 100.0    ; upper height
+    ;opts@rib_h_lower = 50.0     ; lower height must be of the interpolation heights
+    ;opts@rib_h_upper = 100.0    ; upper height
+    opts@rib_i_lower = 0         ; lower index
+    opts@rib_i_upper = 1         ; upper index
     ;**************************************************
 
 ;******************************************************  
@@ -105,7 +110,7 @@ begin
     ;****************************
     ; 2D (surface or averaged) variables
     ;****************************
-	vars@rib               = False     ;Bulk Richardson number                  - output as RIB
+	vars@rib               = True      ;Bulk Richardson number                   - output as RIB
     vars@sst               = True      ;sea-surface temperature                  - output as SST
     vars@tsk               = False     ;skin (surface) temperature               - output as TSK
     vars@t2                = True      ;temperature at 2m                        - output as T2
@@ -113,8 +118,8 @@ begin
     vars@pblh              = True      ;PBL height                               - output as PBLH
     vars@psfc              = True      ;pressure at the surface                  - output as PSFC  
     vars@swdown            = True      ;downward short wave flux at ground surface -- output as SWDOWN
-    vars@cldfraavg         = False     ;cloud fraction column average              -- output as CLDFRAAVG
-    vars@cldframax         = False     ;cloud fraction column maximun              -- output as CLDFRAMAX
+    vars@cldfraavg         = True      ;cloud fraction column average              -- output as CLDFRAAVG
+    vars@cldframax         = True      ;cloud fraction column maximun              -- output as CLDFRAMAX
     vars@rain              = True      ;total grid scale precipitation           - output as RAIN
     vars@slp               = True      ;sea-level pressure- using WRF-NCL        - not yet implemented
     vars@theta2            = False     ;potential temperature at 2m              - not yet implemented
@@ -174,9 +179,7 @@ begin
     ;out_file = out_dir +"/tseries_" + init_time +".nc"
     
     fout = wrf_user_interp_vars_tofile(f, extract_heights,loc_id, lat, lon,-1,out_file, vars, opts)
-    fout@DOMAIN    = domain
-    fout@MODEL_RUN = model_run
-    fout@MODEL     = "WRFV35"
+
     
 print("*** SUCCESS NCL EXTRACT TIME SERIES ***")    
 exit

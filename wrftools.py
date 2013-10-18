@@ -91,10 +91,6 @@ from queue import fill_template, qsub, qstat
 
 LOGGER         = 'wrf_forecast'
 
-#in_format       = "%Y-%m-%d %H:%M:%S" 
-#ps_format       = "%Y%m%d_%H%M%S"          # date format for point stat
-
-
 
 #*****************************************************************
 # Constants
@@ -413,6 +409,71 @@ def rsync(source, target, config):
     
     cmd = base_cmd %(source, target)    
     run_cmd(cmd, config)
+    
+    
+def compress(config):
+    """Compresses netcdf files to netcdf4 format. Relies on 
+    the NCO operator nccopy.  Will try and compress all output netcdf files
+    associated with the current initial time, based on the standard WRF naming 
+    convention.  If a simulation produces multiple wrfout files for an
+    initial time (i.e. one file per day for three days), then only the first file
+    will be compressed under the current configuration.
+    
+    nccopy does not support the -O overwrite flag, so we need to manually rename the files,
+    and remove the originals on sucess"""
+    
+    logger=get_logger()
+    logger.info("*** Compressing wrfout files ***")
+    wrfout_dir = config['wrfout_dir']
+    init_time  = config['init_time']
+    max_dom    = config['max_dom']
+    comp_level = config['compression_level']
+    
+    
+    wrfout_files = ['%s/wrfout_d%02d_%s' %(wrfout_dir, d, init_time.strftime('%Y-%m-%d_%H:%M:%S')) for d in range(1,max_dom+1)]
+    for f in wrfout_files:
+        logger.debug("compressing %s" % f)
+        if not os.path.exists(f):
+            raise MissingFile("could not find %s" % f)
+        tmp_name = f + '.tmp'
+        cmd = 'nccopy -k4 -d %s %s %s' %(comp_level, f, tmp_name)
+        run_cmd(cmd, config)
+        if not os.path.exists(tmp_name):
+            raise IOError("compression failed for %s" % f)
+        
+        os.remove('%s' %f)
+        os.rename(f+'.tmp', f) 
+    
+    logger.info("*** Done compressing wrfout files ***")        
+
+def add_metadata(nl):
+    """ Adds metadata tags into the wrfout files. Expects there to be one 
+    wrfout file per init_time. If there are more, they will not have metadata added."""
+
+    logger = get_logger()
+    logger.info("*** Adding metadata to wrfout files ***")
+
+    config = nl.settings
+    wrfout_dir = config['wrfout_dir']
+    init_time  = config['init_time']
+    max_dom    = config['max_dom']
+    
+    metadata = nl.sections['metadata']
+    logger.debug(metadata)
+    wrfout_files = ['%s/wrfout_d%02d_%s' %(wrfout_dir, d, init_time.strftime('%Y-%m-%d_%H:%M:%S')) for d in range(1,max_dom+1)]
+    
+    for f in wrfout_files:
+        logger.debug("compressing %s" % f)
+        if not os.path.exists(f):
+            raise MissingFile("could not find %s" % f)
+        
+        # create attribute description for ncatted 
+        # note that we make the attribute names uppercase for consistency with WRF output
+        att_defs = ' '.join(['-a %s,global,c,c,"%s"' %(s.upper(), config[s]) for s in metadata])
+        logger.debug(att_defs)
+        cmd = 'ncatted -O -h %s %s' % (att_defs, f)
+        logger.debug(cmd)
+        run_cmd(cmd, config)
     
     
 #******************************************************************************
@@ -805,8 +866,7 @@ def run_gribmaster(config):
     log_dir = '/home/slha/forecasting'
        
     cmd     = '%s/gribmaster --verbose --%s --dset %s --date %s --cycle %s --length %s > %s' %(gm_dir, gm_transfer, gm_dataset, start.strftime('%Y%m%d'), start.strftime('%H'), fcst_hours, gm_log )
-    logger.debug(gm_max_attempts)
-    logger.debug(type(gm_max_attempts))
+
     for attempt in range(gm_max_attempts):
         logger.info('*** RUNNING GRIBMASTER, %s attempt ***' % (attempt+1))
         run_cmd(cmd, config)
@@ -1608,24 +1668,24 @@ def update_namelist_input(config):
     #
     hour         = datetime.timedelta(0, 60*60)
     minute       = datetime.timedelta(0, 60)
-    dfi_bck      = config['dfi_bck'] * minute
-    dfi_fwd      = config['dfi_fwd'] * minute
-    dfi_bckstop  = start - dfi_bck
-    dfi_fwdstop  = start + dfi_fwd
+    #dfi_bck      = config['dfi_bck'] * minute
+    #dfi_fwd      = config['dfi_fwd'] * minute
+    #dfi_bckstop  = start - dfi_bck
+    #dfi_fwdstop  = start + dfi_fwd
     
 
-    namelist.update('dfi_bckstop_year',   dfi_bckstop.year,   'dfi_control')
-    namelist.update('dfi_bckstop_month',  dfi_bckstop.month,  'dfi_control')
-    namelist.update('dfi_bckstop_day',    dfi_bckstop.day,    'dfi_control')
-    namelist.update('dfi_bckstop_hour',   dfi_bckstop.hour,   'dfi_control')
-    namelist.update('dfi_bckstop_minute', dfi_bckstop.minute, 'dfi_control')
-    namelist.update('dfi_bckstop_second', dfi_bckstop.second, 'dfi_control')
-    namelist.update('dfi_fwdstop_year',   dfi_fwdstop.year,   'dfi_control')
-    namelist.update('dfi_fwdstop_month',  dfi_fwdstop.month,  'dfi_control')
-    namelist.update('dfi_fwdstop_day',    dfi_fwdstop.day,    'dfi_control')
-    namelist.update('dfi_fwdstop_hour',   dfi_fwdstop.hour,   'dfi_control')
-    namelist.update('dfi_fwdstop_minute', dfi_fwdstop.minute, 'dfi_control')
-    namelist.update('dfi_fwdstop_second', dfi_fwdstop.second, 'dfi_control')
+    #namelist.update('dfi_bckstop_year',   dfi_bckstop.year,   'dfi_control')
+    #namelist.update('dfi_bckstop_month',  dfi_bckstop.month,  'dfi_control')
+    #namelist.update('dfi_bckstop_day',    dfi_bckstop.day,    'dfi_control')
+    #namelist.update('dfi_bckstop_hour',   dfi_bckstop.hour,   'dfi_control')
+    #namelist.update('dfi_bckstop_minute', dfi_bckstop.minute, 'dfi_control')
+    #namelist.update('dfi_bckstop_second', dfi_bckstop.second, 'dfi_control')
+    #namelist.update('dfi_fwdstop_year',   dfi_fwdstop.year,   'dfi_control')
+    #namelist.update('dfi_fwdstop_month',  dfi_fwdstop.month,  'dfi_control')
+    #namelist.update('dfi_fwdstop_day',    dfi_fwdstop.day,    'dfi_control')
+    #namelist.update('dfi_fwdstop_hour',   dfi_fwdstop.hour,   'dfi_control')
+    #namelist.update('dfi_fwdstop_minute', dfi_fwdstop.minute, 'dfi_control')
+    #namelist.update('dfi_fwdstop_second', dfi_fwdstop.second, 'dfi_control')
    
     logger.debug('writing new settings to file')
     namelist.to_file(namelist_input)
@@ -2527,6 +2587,7 @@ def cleanup(config):
     
     for d in cleanup_dir:
         cmd = 'rm -f %s' % d
-        run_cmd(cmd, config)
+        logger.debug(cmd)
+        #run_cmd(cmd, config)
 
     logger.info('*** FINISHED CLEANUP ***')
