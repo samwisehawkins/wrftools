@@ -159,7 +159,7 @@ def write_seperate_files(ncfiles, out_dir, dims=None):
             
             
             for l in range(nlocs):
-                loc = ''.join(location[l,0:loc_str_len-1])
+                loc = ''.join(location[l,0:loc_str_len])
                 loc = loc.strip()
                 
                 # 2D variable
