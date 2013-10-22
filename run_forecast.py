@@ -58,7 +58,8 @@ except KeyError:
 
 #************************************************
 # Main options. Unpack from config to make sure 
-# they are defined
+# they are defined. Is this wise? What if an option 
+# is not needed, why should it be defined?
 #************************************************
 logger.info('*** FORECAST CYCLE STARTED ***')
 fail_mode           = config['fail_mode']
@@ -73,7 +74,8 @@ ndown               = config['ndown']
 real                = config['real']
 wrf                 = config['wrf']
 upp                 = config['upp']
-time_series         = config['time_series']
+post                = config['post']
+time_series         = config['tseries']
 compress            = config['compress']
 metadata            = config['metadata']
 json                = config['json']
@@ -218,43 +220,44 @@ for init_time in init_times:
     
     #logger.warn('*** SLEEPING FOR 10 SECONDS TO ALLOW FS TIME TO SORT ITSELF OUT ***')
     #time.sleep(10)
-    
-    if compress:
-        try:
-            wrftools.compress(config)
-        except Exception, e:
-            wrftools.handle(e, fail_mode, full_trace)
 
-    
-    if metadata:
-        try:
-            wrftools.add_metadata(nl)
-        except Exception, e:
-            wrftools.handle(e, fail_mode, full_trace)
-        
-    
-    
-    
     #
     # Post processing
     #
-    if upp:
-        for d in range(1,max_dom+1):
+
+    if post:
+        if compress:
             try:
-                config['dom'] = d
-                wrftools.run_unipost(config)
+                wrftools.compress(config)
             except Exception, e:
-                logger.error('*** FAIL TIME SERIES ***')
                 wrftools.handle(e, fail_mode, full_trace)
-                
-    if convert_grb:
-        for d in range(1,max_dom+1):
+
+        
+        if metadata:
             try:
-                config['dom'] = d
-                wrftools.convert_grib(config)
+                wrftools.add_metadata(nl)
             except Exception, e:
-                logger.error('*** FAIL GRIB CONVERSION ***')
                 wrftools.handle(e, fail_mode, full_trace)
+        
+   
+    
+        if upp:
+            for d in range(1,max_dom+1):
+                try:
+                    config['dom'] = d
+                    wrftools.run_unipost(config)
+                except Exception, e:
+                    logger.error('*** FAIL TIME SERIES ***')
+                    wrftools.handle(e, fail_mode, full_trace)
+                    
+        if convert_grb:
+            for d in range(1,max_dom+1):
+                try:
+                    config['dom'] = d
+                    wrftools.convert_grib(config)
+                except Exception, e:
+                    logger.error('*** FAIL GRIB CONVERSION ***')
+                    wrftools.handle(e, fail_mode, full_trace)
 
 
         
