@@ -38,7 +38,7 @@ undef("read_locations")
 function read_locations(loc_file)
 
 begin
-  loc_str_len = 6
+  ;loc_str_len = 3
   cmd       = "sed  '/^[[:space:]]*#/d' " + loc_file          ; skip any commented lines
   lines     = systemfunc(cmd)                                 ; take input from sed
   header    = str_split(lines(0), ",")                        ; first line is header 
@@ -50,13 +50,13 @@ begin
   name_ind  = str_match_ind_ic(header, "name")
 
   loc_id    = str_get_field(data, loc_ind+1, ",")                ; str_get_field numbering starts at 1
-  loc_id_l  = blank_pad(loc_id, loc_str_len)
+  ;loc_id_l  = blank_pad(loc_id, loc_str_len)                     ; pad with blanks in case id is shorter than loc_str_len
   lat       = stringtofloat(str_get_field(data, lat_ind+1, ",")) ; so add 1 to indices
   lon       = stringtofloat(str_get_field(data, lon_ind+1, ","))
   name      = str_get_field(data, name_ind+1, ",")
   
   
-  out    = [/loc_id_l, name, lat, lon/]
+  out    = [/loc_id, name, lat, lon/]
   return(out)
 
 end
@@ -278,7 +278,7 @@ begin
     ; Dimension sizes
     ;******************************************************
     
-    loc_str_length = 6 ; hard coded length of loc IDs
+    loc_str_length = 3 ; hard coded length of loc IDs
     dims      = dimsizes(hgt_out)
     nheight   = dims(0)
     delete(dims)
@@ -431,6 +431,8 @@ begin
     ; been predefined. The "(/", "/)" syntax tells NCL to only output the
     ; data values to the predefined locations on the file.
     ;******************************************************    
+    printVarSummary(loc_char)
+    print(loc_str_length)
     fout->time     = (/time/)     
     fout->location = (/loc_char(:,0:loc_str_length-1)/)
     fout->height   = (/hgt_out/) 

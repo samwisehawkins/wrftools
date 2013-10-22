@@ -15,7 +15,7 @@ begin
   File     = getenv("FCST_FILE")
   type     = getenv("NCL_OUT_TYPE")
   diro     = getenv("NCL_OUT_DIR")
-  domain   = getenv("NEST_ID")    
+  domain   = getenv("NEST_ID") ; this perhaps should be GRID_ID for consistency with wrfout files    
   run_hour = getenv("RUN_HOUR")
   loc_file = getenv("LOCATIONS_FILE")
 
@@ -23,7 +23,7 @@ begin
 ;******************************************************
 ; File naming
 ;******************************************************
-  prefix   = "pict"
+  prefix   = "ts"
 
 ;******************************************************
 ; Add the file
@@ -151,6 +151,8 @@ begin
     ; Open the workstation
     ;**********************************************************
     fileout = diro+"/" + prefix + "_d" + domain + "_" + sprinti("%0.2i", ip+1)
+    fileout = diro+"/" + prefix + "_"+ loc_id(ip) + "_d" + domain 
+    
     wks = gsn_open_wks(type,fileout)
 
     loc = wrf_user_latlon_to_ij(file_handle, lat(ip), lon(ip))
