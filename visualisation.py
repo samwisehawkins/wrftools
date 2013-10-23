@@ -108,18 +108,11 @@ def transfer_to_web_dir(config):
     init_time      = config['init_time']    
     full_trace     = config['full_trace']
     ncl_out_dir    = wrftools.sub_date(config['ncl_out_dir'], init_time=init_time)
-    web_out_dir    = wrftools.sub_date(config['web_dir'], init_time=init_time)
+    ncl_web_dir    = wrftools.sub_date(config['ncl_web_dir'], init_time=init_time)
     
     if not os.path.exists(web_out_dir):
-        os.makedirs(web_out_dir)
+        os.makedirs(ncl_web_dir)
     
     flist = glob.glob(ncl_out_dir+'/*')
-    wrftools.transfer(flist, web_out_dir, mode='move', debug_level='NONE')
+    wrftools.transfer(flist, ncl_web_dir, mode='copy', debug_level='NONE')
     
-    #cmd            = "cp -f %s/* %s" % (ncl_out_dir,  web_out_dir)
-    #ret            = wrftools.run_cmd(cmd, config)
-    #if ret!=0:
-    #    raise IOError("Error while copying plot files")
-        
-    #cmd = "rm -f %s/*" % (ncl_out_dir)
-    #wrftools.run_cmd(cmd, config)

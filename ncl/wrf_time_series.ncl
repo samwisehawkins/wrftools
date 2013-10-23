@@ -150,7 +150,6 @@ begin
     ;**********************************************************
     ; Open the workstation
     ;**********************************************************
-    fileout = diro+"/" + prefix + "_d" + domain + "_" + sprinti("%0.2i", ip+1)
     fileout = diro+"/" + prefix + "_"+ loc_id(ip) + "_d" + domain 
     
     wks = gsn_open_wks(type,fileout)

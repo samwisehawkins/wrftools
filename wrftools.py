@@ -566,26 +566,6 @@ def link(pattern):
     logger.debug(cmd)
     subprocess.call(cmd, shell=True)
 
-#*****************************************************************
-# Post-checking logging
-#*****************************************************************
-def summarise(config):
-    """Reports which file exist in different directories.
-    Deprecated. Here only for useful code snippet """
-    logger           = get_logger()
-    config['domain']
-    config['model']
-    config['model_run']
-    init_time = config['init_time'] 
-    model_run_dir   = config['model_run_dir']
-    web_dir   = sub_date(config['web_dir'], init_time=init_time)
-    
-    flist = glob.glob(web_dir+'/*')
-    for filename in sorted(flist):
-        info  = os.stat(filename)
-        mtime = datetime.datetime.fromtimestamp(info.st_mtime)
-        logger.info('%s : %s ' %(filename, mtime.strftime('%Y-%m-%d %H:%M')))
-
 
 
 #*****************************************************************
@@ -1802,22 +1782,22 @@ def move_wrfout_files(config):
     transfer(flist, wrfout_dir, mode='move', debug_level='debug')
 
     # Move log files to new directoy
-    flist = glob.glob(wrf_run_dir+'/rsl.*')
-    transfer(flist, rsl_dir, mode='move', debug_level='debug')
+    #flist = glob.glob(wrf_run_dir+'/rsl.*')
+    #transfer(flist, rsl_dir, mode='move', debug_level='debug')
 
-#    cmd = 'cp %s/namelist.input %s/namelist.input.%s.%s' % (wrf_run_dir, namelist_dir, run_key, init_str)
-#    run_cmd(cmd, config)
-#    
-#    cmd = 'cp %s/namelist.wps %s/namelist.wps.%s.%s' % (domain_dir, model_run, namelist_dir, run_key, init_str)
-#    run_cmd(cmd, config)
+    cmd = 'cp %s/namelist.input %s/namelist.input.%s.%s' % (wrf_run_dir, namelist_dir, run_key, init_str)
+    run_cmd(cmd, config)
+    
+    cmd = 'cp %s/namelist.wps %s/namelist.wps.%s.%s' % (domain_dir, model_run, namelist_dir, run_key, init_str)
+    run_cmd(cmd, config)
 
 
     #
     # Archive log files
     # 
-#    logger.debug('moving rsl files to %s' % rsl_dir )
-#    cmd = 'cp %s/rsl.out.0000 %s/rsl.out.%s' %(wrf_model_run_dir, rsl_dir, run_key)
-#    run_cmd(cmd, config)
+    logger.debug('moving rsl files to %s' % rsl_dir )
+    cmd = 'cp %s/rsl.out.0000 %s/rsl.out.%s' %(wrf_model_run_dir, rsl_dir, run_key)
+    run_cmd(cmd, config)
     
 
 
