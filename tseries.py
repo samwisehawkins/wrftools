@@ -49,7 +49,8 @@ def to_json(frame):
                 result+=',\n'
         ts     = [time.mktime(t.timetuple())*1000 for t in group.valid_time]
         values = group.value
-        series = map(list, zip(ts,values )) 
+        valstrs = ['%0.3f' % v for v in values]
+        series = map(list, zip(ts,valstrs )) 
         result += '"data" : '
         result += str(series)
         result += '}'

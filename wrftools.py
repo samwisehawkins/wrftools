@@ -1767,6 +1767,9 @@ def move_wrfout_files(config):
     init_time     = config['init_time']
     init_str      = init_time.strftime('%Y-%m-%d_%H')
 
+    namelist_input = config['namelist_input']
+    namelist_wps   = config['namelist_wps']
+    
     wrfout_dir    = '%s/wrfout'   %(model_run_dir)
     log_dir       = '%s/log'      % model_run_dir    
     rsl_dir       = '%s/rsl'      % model_run_dir
@@ -1777,18 +1780,16 @@ def move_wrfout_files(config):
 
     # Move WRF output files to new directory
     flist = glob.glob(wrf_run_dir+'/wrfout*')
-    for f in flist:
-        logger.debug(f)
     transfer(flist, wrfout_dir, mode='move', debug_level='debug')
 
     # Move log files to new directoy
     #flist = glob.glob(wrf_run_dir+'/rsl.*')
     #transfer(flist, rsl_dir, mode='move', debug_level='debug')
 
-    cmd = 'cp %s/namelist.input %s/namelist.input.%s.%s' % (wrf_run_dir, namelist_dir, run_key, init_str)
+    cmd = 'cp %s %s/namelist.input.%s.%s' % (namelist_input, namelist_dir, run_key, init_str)
     run_cmd(cmd, config)
     
-    cmd = 'cp %s/namelist.wps %s/namelist.wps.%s.%s' % (domain_dir, model_run, namelist_dir, run_key, init_str)
+    cmd = 'cp %s/namelist.wps %s/namelist.wps.%s.%s' % (dir, model_run, namelist_dir, run_key, init_str)
     run_cmd(cmd, config)
 
 

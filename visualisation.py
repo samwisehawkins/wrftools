@@ -110,7 +110,7 @@ def transfer_to_web_dir(config):
     ncl_out_dir    = wrftools.sub_date(config['ncl_out_dir'], init_time=init_time)
     ncl_web_dir    = wrftools.sub_date(config['ncl_web_dir'], init_time=init_time)
     
-    if not os.path.exists(web_out_dir):
+    if not os.path.exists(ncl_web_dir):
         os.makedirs(ncl_web_dir)
     
     flist = glob.glob(ncl_out_dir+'/*')
