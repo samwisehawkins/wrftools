@@ -58,7 +58,7 @@ begin
     res@TimeLabel = times(i)   ; Set Valid time to use on plots
     current_lead_hh=sprinti("%0.2i", i)
     print("Lead time is:"+current_lead_hh)
-    fileout = web_dir+"/SST_d"+sprinti("%0.2i", grid_id)+".png"
+    fileout = web_dir+"/sst_d"+sprinti("%0.2i", grid_id)+".png"
     print("fileout is "+fileout)
     wks = gsn_open_wks(type,fileout)
     gsn_define_colormap(wks,"temp1")        
