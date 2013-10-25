@@ -49,10 +49,16 @@ def to_json(frame):
                 result+=',\n'
         ts     = [time.mktime(t.timetuple())*1000 for t in group.valid_time]
         values = group.value
+        
+        # This is a bit of a hack
+        # Truncate values to 3 decimal places
         valstrs = ['%0.3f' % v for v in values]
         series = map(list, zip(ts,valstrs )) 
         result += '"data" : '
-        result += str(series)
+        
+        # Because the values have been converted to 3-decimal place strings
+        # They are enclosed in ' ', which we need to remove.
+        result += str(series).replace("'", "")
         result += '}'
         if i<ngroups-1:
             result+=',\n'

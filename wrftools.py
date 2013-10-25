@@ -839,7 +839,7 @@ def run_gribmaster(config):
     start       = config['init_time']
     fcst_hours  = config['fcst_hours']
     gm_log      = config['gm_log']
-    gm_sleep    = config['gm_sleep']
+    gm_sleep    = config['gm_sleep'] # this is in minutes
     gm_max_attempts = int(config['gm_max_attempts'])
 
 
@@ -856,7 +856,7 @@ def run_gribmaster(config):
         # if we positively find the string BUMMER, we know we have failed
         if ret==0:
             logger.error('*** FAIL GRIBMASTER: Attempt %d of %d ***' % (attempt+1, gm_max_attempts))
-            logger.info('Sleeping for %d mins' % gm_sleep) 
+            logger.info('Sleeping for %s seconds' % gm_sleep) 
             time.sleep(gm_sleep*60)
         
         # else we check for definite sucess
@@ -1789,7 +1789,7 @@ def move_wrfout_files(config):
     cmd = 'cp %s %s/namelist.input.%s.%s' % (namelist_input, namelist_dir, run_key, init_str)
     run_cmd(cmd, config)
     
-    cmd = 'cp %s/namelist.wps %s/namelist.wps.%s.%s' % (dir, model_run, namelist_dir, run_key, init_str)
+    cmd = 'cp %s/namelist.wps %s/namelist.wps.%s.%s' % (model_run_dir, namelist_dir, run_key, init_str)
     run_cmd(cmd, config)
 
 
