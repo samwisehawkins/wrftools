@@ -244,6 +244,7 @@ begin
     g  = 9.81               ; gravitational acceleration
     cp = 1003.5             ; specific heat capacity of air
     lv = 2400000            ; latent heat of evaporation 
+    c_to_k = 273.15         ; degrees C to Kelvin 
  
     
     ;******************************************************
@@ -584,7 +585,7 @@ begin
         delete(tk_agl)
         
         ; temperature in degrees C
-        tc_agl_locs = tk_agl_locs -273.15
+        tc_agl_locs = tk_agl_locs - c_to_k
         copy_VarMeta(v3d_template, tc_agl_locs)
         tc_agl_locs@units = "C"
         tc_agl_locs@description = "Temperature in degrees C"
@@ -680,8 +681,7 @@ begin
 
     if vars@rib
         
-        ; compute bulk richardson as difference between level k and lowest level
-
+        ; compute bulk richardson as difference between level i_upper and i_lower
         rib_i_upper = opts@rib_i_upper
         rib_i_lower = opts@rib_i_lower
         rib_h_upper = hgt_out(rib_i_upper)
@@ -707,8 +707,8 @@ begin
         delete(dspeed)
         delete(beta)
 
-        rib_agl_locs@description = "Bulk richardson number between height_upper and height_lower using option" + sprinti("%0.1i", opts@rib_opt)
-        rib_agl_locs@rib_option = opts@rib_opt
+        rib_agl_locs@description  = "Bulk richardson number between height_upper and height_lower using option" + sprinti("%0.1i", opts@rib_opt)
+        rib_agl_locs@rib_option   = opts@rib_opt
         rib_agl_locs@height_upper = rib_h_upper
         rib_agl_locs@height_lower = rib_h_lower
         rib_agl_locs@units        = "dimensionless"
@@ -754,14 +754,26 @@ begin
     end if
 
     if vars@t2 then
-        t2          = wrf_user_getvar(file_handle, "T2", t)
-        t2_sfc_locs = wrf_user_hinterp(nc_file, t2, lat, lon, xlat, xlong, opts@interp_option)
-        t2_sfc_locs@varname = "T2"
-        t2_sfc_locs@height  = 2
-        filevardef(fout, "T2",typeof(t2_sfc_locs),dims_2d)                           
-        fout->T2     = (/t2_sfc_locs/) 
-        filevarattdef(fout,"T2", t2_sfc_locs)
+        t2            = wrf_user_getvar(file_handle, "T2", t)
+        t2c_sfc_locs  = wrf_user_hinterp(nc_file, t2, lat, lon, xlat, xlong, opts@interp_option) - c_to_k
+        
+        t2c_sfc_locs@height  = 2
+        t2c_sfc_locs@units   = "C"
+        filevardef(fout, "T2",typeof(t2c_sfc_locs),dims_2d)                           
+        fout->T2     = (/t2c_sfc_locs/) 
+        filevarattdef(fout,"T2", t2c_sfc_locs)
         delete(t2)
+    end if
+
+    if vars@td2 then
+        td2          = wrf_user_getvar(file_handle, "td2", t)
+        td2_sfc_locs = wrf_user_hinterp(nc_file, td2, lat, lon, xlat, xlong, opts@interp_option)
+        td2_sfc_locs@height  = 2
+        ;td2_sfc_locs@units   = "C"
+        filevardef(fout, "TD2",typeof(td2_sfc_locs),dims_2d)                           
+        fout->TD2     = (/td2_sfc_locs/) 
+        filevarattdef(fout,"TD2", td2_sfc_locs)
+        delete(td2)
     end if
 
     
@@ -800,9 +812,10 @@ begin
 
     if vars@sst then
         sst          = wrf_user_getvar(file_handle, "SST", t)
-        sst_sfc_locs = wrf_user_hinterp(nc_file, sst, lat, lon, xlat, xlong, opts@interp_option)
+        sst_sfc_locs = wrf_user_hinterp(nc_file, sst, lat, lon, xlat, xlong, opts@interp_option) - c_to_k
         sst_sfc_locs@varname = "SST"
         sst_sfc_locs@height = 0
+        sst_sfc_locs@units = "C"
         filevardef(fout, "SST",typeof(sst_sfc_locs),dims_2d)                           
         fout->SST     = (/sst_sfc_locs/) 
         filevarattdef(fout,"SST", sst_sfc_locs)
