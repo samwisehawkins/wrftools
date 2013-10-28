@@ -24,12 +24,6 @@ begin
 
   a = addfile(fcst_file, "r")
 
-
-;filename stuff
-    ;fileout = diro+"/plt_Surface"
- 	;wks = gsn_open_wks(type,fileout)
-
-
 ; Set some basic resources
   res = True
   res@gsnMaximize = True
@@ -38,8 +32,7 @@ begin
   res@InitTime = True 
   res@ValidTime= True
  
-pltres = True
-  mpres = True
+  pltres = True
   mpres = True
   mpres@mpGeophysicalLineThicknessF = 2.0
   mpres@mpGeophysicalLineColor = "black"
@@ -47,6 +40,7 @@ pltres = True
   if (a@GRID_ID .ge. 3) then
     mpres@mpDataBaseVersion  = "HighRes"
   end if
+
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -81,12 +75,17 @@ do it=0,ntimes-1
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
     ; Plotting options for T                
-    ; Read contour options from file
-
     opts = res                         
     opts@cnFillOn = True  
-    ;opts@ContourParameters = contOptions
-    opts@ContourParameters = (/-10.,15.,1/)  
+    
+    t_max = floattoint(ceil(max(tc2)))
+    t_min = floattoint(floor(min(tc2)))
+    t_start = t_min - (t_max % 5)
+    t_end   = t_max + (t_max % 5)
+    ;print(t_start)
+    ;print(t_end)
+    opts@ContourParameters = (/t_start,t_end,1/) ; winter 
+    ;opts@ContourParameters = (/5.,30.,1/)  
     opts@gsnSpreadColorStart = 6
     opts@gsnSpreadColorEnd = 97
     contour_tc = wrf_contour(a,wks,tc2,opts)
@@ -111,7 +110,7 @@ do it=0,ntimes-1
     delete(opts)
     ; MAKE PLOTS
 
-        plot = wrf_map_overlays(a,wks,(/contour_tc,contour_psl,vector/),pltres,mpres)
+    plot = wrf_map_overlays(a,wks,(/contour_tc,contour_psl,vector/),pltres,mpres)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 end do 

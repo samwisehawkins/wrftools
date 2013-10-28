@@ -63,7 +63,8 @@ def to_json(frame):
         if i<ngroups-1:
             result+=',\n'
     result+=']'
-    result=result.replace('nan', 'null')
+    result = result.replace('nan', 'null')
+    result = result.replace("'", "")
     return result
     
 
