@@ -842,7 +842,6 @@ def run_gribmaster(config):
     gm_sleep    = config['gm_sleep'] # this is in minutes
     gm_max_attempts = int(config['gm_max_attempts'])
 
-
     log_dir = '/home/slha/forecasting'
        
     cmd     = '%s/gribmaster --verbose --%s --dset %s --date %s --cycle %s --length %s > %s' %(gm_dir, gm_transfer, gm_dataset, start.strftime('%Y%m%d'), start.strftime('%H'), fcst_hours, gm_log )
@@ -1797,7 +1796,7 @@ def move_wrfout_files(config):
     # Archive log files
     # 
     logger.debug('moving rsl files to %s' % rsl_dir )
-    cmd = 'cp %s/rsl.out.0000 %s/rsl.out.%s' %(wrf_model_run_dir, rsl_dir, run_key)
+    cmd = 'cp %s/rsl.out.0000 %s/rsl.out.%s' %(wrf_run_dir, rsl_dir, run_key)
     run_cmd(cmd, config)
     
 

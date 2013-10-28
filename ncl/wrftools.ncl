@@ -812,9 +812,10 @@ begin
 
     if vars@sst then
         sst          = wrf_user_getvar(file_handle, "SST", t)
-        sst_sfc_locs = wrf_user_hinterp(nc_file, sst, lat, lon, xlat, xlong, opts@interp_option)
+        sst_sfc_locs = wrf_user_hinterp(nc_file, sst, lat, lon, xlat, xlong, opts@interp_option) - c_to_k
         sst_sfc_locs@varname = "SST"
         sst_sfc_locs@height = 0
+        sst_sfc_locs@units = "C"
         filevardef(fout, "SST",typeof(sst_sfc_locs),dims_2d)                           
         fout->SST     = (/sst_sfc_locs/) 
         filevarattdef(fout,"SST", sst_sfc_locs)
