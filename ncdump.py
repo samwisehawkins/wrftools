@@ -115,10 +115,18 @@ def write_seperate_files(ncfiles, out_dir, dims=None):
         
         dataset = Dataset(f, 'r')
         # get some global attributes
-        model     = dataset.MODEL
-        nest_id   = dataset.GRID_ID
-        model_run = dataset.MODEL_RUN
-        domain    = dataset.DOMAIN
+        #model     = dataset.MODEL
+        #nest_id   = dataset.GRID_ID
+        #model_run = dataset.MODEL_RUN
+        #domain    = dataset.DOMAIN
+        
+        logger.warn('Remove Aberdeen hack')
+        model= 'WRF'
+        nest_id  = dataset.GRID_ID
+        model_run = 'resource'
+        domain = 'aberdeen'
+        #
+        #
         logger.debug('model run is ' + model_run)
         
         
@@ -146,16 +154,18 @@ def write_seperate_files(ncfiles, out_dir, dims=None):
             # skip coordinate variables
             if v in COORD_VARS:
                 continue
+            print v
             
             fullvar = variables[v]
+            print fullvar
             ndims = len(fullvar.shape)
             
             # 2D variable, variable[time, location]
             if ndims==2:
-                var = fullvar[ts:te, ls:le]
+                var = fullvar[ls:le, ts:te]
             
             if ndims==3:
-                var = fullvar[ts:te, ls:le, hs:he]
+                var = fullvar[ls:le, hs:he, ts:te]
             
             
             for l in range(nlocs):
@@ -180,7 +190,7 @@ def write_seperate_files(ncfiles, out_dir, dims=None):
                         if ndims==2:
                             val = var[l,t]
                         elif ndims==3:
-                            val = var[l,h, t]
+                            val = var[l,h,t]
                         line = '%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%03d,%0.3f\n' %(domain, model_run, model,nest_id,loc, lat[l], lon[l], v, init_time.strftime(DATE_FMT), valid_time, hgt, val)
                         fout.write(line)
         

@@ -59,7 +59,12 @@ def main():
 
         # Create NCL file array
         in_file = '(/"%s"/)' % f
-        cmd = """ncl 'in_file=%s' 'out_file="%s"' 'extract_heights=%s' 'loc_file="%s"' 'domain="%s"' 'model_run="%s"' %s/%s""" % (in_file,out_file,hgts, args['--loc'], args['--domain'], args['--model-run'], ncl_code_dir, NCL_SCRIPT)
+        in_file = f
+        #cmd = """ncl 'in_file=%s' 'out_file="%s"' 'extract_heights=%s' 'loc_file="%s"' %s/%s""" % (in_file,out_file,hgts, args['--loc'], ncl_code_dir, NCL_SCRIPT)
+        cmd = """FCST_FILE=%s  NCL_OUT_FILE=%s LOCATIONS_FILE=%s ncl %s/%s 'extract_heights=%s' """ %(in_file, out_file, args['--loc'], ncl_code_dir, NCL_SCRIPT, hgts)
+        
+        
+        
         print cmd
         # We could either aggregate all files together or loop over files
         subprocess.call(cmd, shell=True)
