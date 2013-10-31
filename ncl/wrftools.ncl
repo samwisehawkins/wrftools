@@ -689,7 +689,12 @@ begin
         
         dtheta_v = thetav_agl_locs(:, rib_i_upper, :) - thetav_agl_locs(:, rib_i_lower, :)
         dspeed   = ws_agl_locs(:, rib_i_upper, :) - ws_agl_locs(:, rib_i_lower, :)
-            
+
+        ; What is the definition of Bulk Richardson in the case where wind speed and thetav is 
+        ; the same between two levels? The equation would imply it tends to infinity, 
+        ; which makes sense, this this would imply extreme stability, and you can't have turbulence
+        ; generated from one layer.
+        
         ; AMS method. Take virtual temperature from top layer
         if (opts@rib_opt .eq. 1)
             beta     = g/tv_agl_locs(:, rib_i_upper, :)
@@ -699,9 +704,10 @@ begin
             beta = g/dim_avg_n(thetav_agl_locs(:, rib_i_lower:rib_i_upper, :), 1)
         end if
         
-        
+        ; mask speed where the difference is very small 
+        dspeed = where(dspeed.lt.0.0001, default_fillvalue("float"), dspeed)
         rib_agl_locs   = beta * dtheta_v * (rib_h_upper - rib_h_lower) / dspeed^2
-       
+
         
         delete(dtheta_v)
         delete(dspeed)
