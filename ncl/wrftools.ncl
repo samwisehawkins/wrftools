@@ -194,6 +194,12 @@ begin
         return var_out(location|:, time|:)
     end if
 
+    ;******************************************************
+    ; Give variable correct units
+    ;******************************************************
+    var_out@units = var_in@units
+    var_out@description = var_in@description
+    
 end
 
 
@@ -765,6 +771,7 @@ begin
         
         t2c_sfc_locs@height  = 2
         t2c_sfc_locs@units   = "C"
+        t2c_sfc_locs@description   = "2M TEMPERATURE"
         filevardef(fout, "T2",typeof(t2c_sfc_locs),dims_2d)                           
         fout->T2     = (/t2c_sfc_locs/) 
         filevarattdef(fout,"T2", t2c_sfc_locs)
@@ -775,7 +782,8 @@ begin
         td2          = wrf_user_getvar(file_handle, "td2", t)
         td2_sfc_locs = wrf_user_hinterp(nc_file, td2, lat, lon, xlat, xlong, opts@interp_option)
         td2_sfc_locs@height  = 2
-        ;td2_sfc_locs@units   = "C"
+        td2_sfc_locs@units   = "C"
+        td2_sfc_locs@description   = "2M DEPOINT TEMPERATURE"
         filevardef(fout, "TD2",typeof(td2_sfc_locs),dims_2d)                           
         fout->TD2     = (/td2_sfc_locs/) 
         filevarattdef(fout,"TD2", td2_sfc_locs)
@@ -822,6 +830,7 @@ begin
         sst_sfc_locs@varname = "SST"
         sst_sfc_locs@height = 0
         sst_sfc_locs@units = "C"
+        sst_sfc_locs@description = "SEA SURFACE TEMPERATURE"
         filevardef(fout, "SST",typeof(sst_sfc_locs),dims_2d)                           
         fout->SST     = (/sst_sfc_locs/) 
         filevarattdef(fout,"SST", sst_sfc_locs)
@@ -832,6 +841,7 @@ begin
         tsk          = wrf_user_getvar(file_handle, "TSK", t)
         tsk_sfc_locs = wrf_user_hinterp(nc_file, tsk, lat, lon, xlat, xlong, opts@interp_option)
         tsk_sfc_locs@height = 0
+        tsk_sfc_locs@units  = tsk@units
         filevardef(fout, "TSK",typeof(tsk_sfc_locs),dims_2d)                           
         fout->TSK     = (/tsk_sfc_locs/) 
         filevarattdef(fout,"TSK", tsk_sfc_locs)
