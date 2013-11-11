@@ -31,7 +31,7 @@ FILE_DATE_FMT   = '%Y-%m-%d_%H%M'  # Date format for file name
 DATE_FMT        = '%Y-%m-%d %H:%M' # Date format within files
 GLOBAL_ATTS     = ['DOMAIN', 'MODEL_RUN', 'GRID_ID']  # which global attributes to copy from ncfile to json
 VAR_ATTS        = ['units', 'description']  # which variables attributes to include in json series
-
+FULL_SLICE      = {'time': (0,None), 'location': (0,None), 'height':(0,None)} # this represents no slicing
 
 def main():         
     """ Pass command line arguments to NCL script"""
@@ -200,7 +200,7 @@ def write_seperate_files(ncfiles, out_dir, dims=None):
 
         
         
-def write_json_files(ncfiles, global_atts, var_atts,coord_vars, out_dir, file_date_fmt, dimspec):        
+def write_json_files(ncfiles, global_atts, var_atts,coord_vars, out_dir, file_date_fmt, dimspec=FULL_SLICE):        
     """ Writes each series into a separate json file
     
     Arguments
@@ -210,7 +210,7 @@ def write_json_files(ncfiles, global_atts, var_atts,coord_vars, out_dir, file_da
         @coord_vars  -- list of variables considered coordinate variables and not output as a series
         @out_dir     -- output directory to write files to
         @file_date_fmt -- date format to use in file naming
-        @dims        -- dimension specification used so slice output variables"""
+        @dims          -- dimension specification used so slice output variables"""
 
     logger = wrftools.get_logger()
     
@@ -219,6 +219,7 @@ def write_json_files(ncfiles, global_atts, var_atts,coord_vars, out_dir, file_da
     hs,he = dimspec['height']
 
     for f in ncfiles:
+        logger.debug(f)
         logger.debug('dumping netcdf time series to json files')
         
         dataset = Dataset(f, 'r')
@@ -284,7 +285,7 @@ def write_json_files(ncfiles, global_atts, var_atts,coord_vars, out_dir, file_da
             
             
             for l in range(nlocs):
-                loc = ''.join(location[l,0:loc_str_len-1])
+                loc = ''.join(location[l,0:loc_str_len])
                 loc = loc.strip()
                 
                 # 2D variable
@@ -304,6 +305,8 @@ def write_json_files(ncfiles, global_atts, var_atts,coord_vars, out_dir, file_da
                     
                     hgt = hgts[h]
                     data = map(list, zip(timestamps,values )) 
+                    series_dict['location_id'] = loc
+                    series_dict['height'] = hgt
                     series_dict['data'] = data
                     s = str(series_dict)
 
@@ -321,6 +324,151 @@ def write_json_files(ncfiles, global_atts, var_atts,coord_vars, out_dir, file_da
         
         dataset.close()        
         
+def write_json_files_loc(ncfiles, global_atts, var_atts,coord_vars, out_dir, file_date_fmt, dimspec=FULL_SLICE):        
+    """ Writes each series into a separate json file
+    
+    Arguments
+        @ncfiles     -- list of netcdf file names to extract data from
+        @global_atts -- list of global attribute names in the nc files to copy to json series
+        @var_atts    -- list of variables attributes to copy to json series
+        @coord_vars  -- list of variables considered coordinate variables and not output as a series
+        @out_dir     -- output directory to write files to
+        @file_date_fmt -- date format to use in file naming
+        @dims          -- dimension specification used so slice output variables"""
+
+    logger = wrftools.get_logger()
+    
+    ts,te = dimspec['time']
+    ls,le = dimspec['location']
+    hs,he = dimspec['height']
+
+    for f in ncfiles:
+        logger.debug(f)
+        logger.debug('dumping netcdf time series to json files')
+        
+        dataset = Dataset(f, 'r')
+        # get some global attributes used for file naming
+        model     = dataset.MODEL
+        nest_id   = dataset.GRID_ID
+        model_run = dataset.MODEL_RUN
+        domain    = dataset.DOMAIN
+        
+        # Get subset of global attributes into a dictionary
+        global_att_dict = dict([(att,dataset.getncattr(att)) for att in global_atts])
+        
+        variables     = dataset.variables
+        fulltime      = variables['time']
+        # convert to datetime objects
+        fulldatetimes = num2date(fulltime,units=fulltime.units,calendar=fulltime.calendar)
+        
+        # subset time dimension
+        times     = fulltime[ts:te]
+        datetimes = fulldatetimes[ts:te]
+        init_time = fulldatetimes[0]
+        
+        # For highcharts plotting, time must be in milliseconds since unix epoch
+        timestamps      = [time.mktime(t.timetuple())*1000 for t in datetimes]
+        init_timestamp = time.mktime(init_time.timetuple())*1000 
+
+        # subset locations if asked
+        location  = variables['location'][ls:le]
+        height    = variables['height']
+
+        
+        
+        lat       = variables['lat'][ls:le]
+        lon       = variables['lon'][ls:le]
+        
+        ntimes    = len(times)
+        nlocs     = location.shape[0]
+        nvars     = len(variables)
+        
+        loc_str_len = location.shape[1]
+        
+
+            
+            
+        for l in range(nlocs):
+            loc = ''.join(location[l,0:loc_str_len])
+            loc = loc.strip()
+
+            print '\n\n\n************************************************'
+            print loc
+
+            fname = '%s/%s_d%02d_%s.json' % (out_dir, loc, nest_id, init_time.strftime(file_date_fmt))
+            fout = open(fname, 'w')
+            first=True
+            fout.write('[')
+            # For each variable in the file
+            for v in range(nvars):
+                varname = variables.keys()[v]
+
+                print 'processing %s ' % varname
+                # skip coordinate variables
+                if varname in coord_vars:
+                    continue
+                
+                fullvar = variables[varname]
+                ndims   = len(fullvar.shape)
+                
+                # 2D variable, variable[time, location]
+                if ndims==2:
+                    var = fullvar[ts:te, ls:le]
+                
+                if ndims==3:
+                    print 'ts,te', ts,te
+                    #print ls,le
+                    #print hs,he
+                    var = fullvar[ts:te, ls:le, hs:he]
+
+                
+                var_att_dict = dict([(att,fullvar.getncattr(att)) for att in var_atts])
+                series_dict = dict(global_att_dict.items()+ var_att_dict.items())
+                
+                
+                # 2D variable
+                if ndims==2:
+                    hgts = [0.0]
+                # 3D variable
+                elif ndims==3:
+                    hgts = height[hs:he]
+                
+                for h in range(len(hgts)):
+                    # note if variable is 2D, we still execute this loop once
+                    # with height=0
+                    if ndims==2:
+                        values = var[l, :]
+                    elif ndims==3:
+                        values = var[l,h,:]
+                    
+                    hgt = hgts[h]
+                    data = map(list, zip(timestamps,values )) 
+                    series_dict['location_id'] = loc
+                    series_dict['height'] = hgt
+                    series_dict['data'] = data
+                    s = str(series_dict)
+
+                    # this is an ugly hack which could potentially lead to errors if " u'" occurs at the end of a string
+                    s =  s.replace(" u'", " '")
+
+                    
+                    # change single quotes to double
+                    s = s.replace("'", '"')
+                    
+                    fout.write(s)
+                    #end of height loop, write comma but not last time in loop
+                    if h<len(hgts)-1:
+                        fout.write(',\n')
+                if v<nvars-1:
+                    fout.write(',\n')
+            
+            fout.write(']')
+            fout.close()
+        
+        dataset.close()        
+
+
+
         
         
         
