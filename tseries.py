@@ -128,10 +128,6 @@ def extract_tseries(config):
     logger = wrftools.get_logger()
     logger.info('*** EXTRACTING TIME SERIES ***')
      
-    #queue          = config['queue']
-    #domain_dir     = config['domain_dir']
-    #domain         = config['domain']
-    #model_run      = config['model_run']
     wrfout_dir     = config['wrfout_dir']
     tseries_dir    = config['tseries_dir']
     init_time      = config['init_time']
@@ -139,28 +135,24 @@ def extract_tseries(config):
     fcst_file      = '%s/wrfout_d%02d_%s:00:00.nc' %(wrfout_dir, dom, init_time.strftime("%Y-%m-%d_%H")) # note we add on the nc extension here
     loc_file       = config['locations_file']
     ncl_code       = config['tseries_code']
-    #nest_id        =  '%02d' % dom
+    tseries_fmt    = config['tseries_fmt']
+    
     ncl_log        = config['ncl_log']
     if not os.path.exists(tseries_dir):
         os.makedirs(tseries_dir)
     
+    # Always go via the netcdf file
     tseries_file = '%s/tseries_d%02d_%s.nc' % (tseries_dir, dom,init_time.strftime("%Y-%m-%d_%H"))
 
     os.environ['FCST_FILE']      = fcst_file
     os.environ['LOCATIONS_FILE'] = loc_file
     os.environ['NCL_OUT_DIR']    = tseries_dir
     os.environ['NCL_OUT_FILE']   = tseries_file
-    #os.environ['NEST_ID']        = nest_id
-    #os.environ['DOMAIN']         = domain
-    #os.environ['MODEL_RUN']      = model_run
 
     logger.debug('Setting environment variables')
     logger.debug('FCST_FILE    ----> %s'  % fcst_file)
     logger.debug('NCL_OUT_DIR  ----> %s'  % tseries_dir)
     logger.debug('NCL_OUT_FILE  ----> %s' % tseries_file)
-    #logger.debug('NEST_ID      ----> %s' % nest_id)
-    #logger.debug('DOMAIN       ----> %s' % domain)
-    #logger.debug('MODEL_RUN    ----> %s' % model_run)
 
 
     for script in ncl_code:
@@ -168,8 +160,11 @@ def extract_tseries(config):
         wrftools.run_cmd(cmd, config)
 
 
-    ncdump.write_seperate_files([tseries_file], tseries_dir)
-
+    if 'txt' in tseries_fmt:
+        ncdump.write_seperate_files([tseries_file], tseries_dir)
+    
+    if 'json' in tseries_fmt:
+        ncdump.write_json_files_loc([tseries_file], ncdump.GLOBAL_ATTS, ncdump.VAR_ATTS,ncdump.COORD_VARS, tseries_dir, ncdump.FILE_DATE_FMT)        
 
 
 #*****************************************************************
