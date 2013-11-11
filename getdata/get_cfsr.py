@@ -90,10 +90,10 @@ sst_094 = {'parameters': '3%217-0.2-1:0.0.0',
 def main():         
     args = docopt.docopt(__doc__, sys.argv[1:])
 
-    
+    print args['--verbose']
     if args['auth']:
-        response = authenticate(RDA_LOGIN_SERVER, args['--email'], args['--passwd'],args['--cookie'])
-    
+        response = authenticate(RDA_LOGIN_SERVER, args['--email'], args['--passwd'],args['--cookie'],verbose=args['--verbose'])
+        #print reponse
     if args['submit']:
         print '\n\n\n****************************************'
         dsid   = args['--dsid']
@@ -109,7 +109,7 @@ def main():
             datasets = [pressure_094, surface_094]
 
         try:            
-            verify_requests(datasets, options, cookie)
+            verify_requests(datasets, options, cookie, verbose=args['--verbose'])
             if not args['--dry-run']:
                 ids, indexs = submit_requests(datasets, options, cookie)
                 print 'the following dataset requests were sucessfully submitted to server'
@@ -153,7 +153,7 @@ def main():
 
 
        
-def verify_requests(datasets, options, cookie):         
+def verify_requests(datasets, options, cookie, verbose=False):         
     
     print 'verifying requests for CSFR data for WRF on pressure and surface levels'
     print 'start date: %s' % options['startdate']
@@ -161,7 +161,7 @@ def verify_requests(datasets, options, cookie):
     print 'verifiying requests'
     for dataset in datasets:
         dataset.update(options)
-        response = submit(RDA_VERIFY, dataset, cookie)
+        response = submit(RDA_VERIFY, dataset, cookie, verbose)
         if not 'Success' in response:
             print response
             raise RequestError(response)
@@ -259,6 +259,7 @@ def authenticate(server, email, password, cookie, verbose=False):
     """Authenticates and saves cookie to local cookie file"""
     
     print 'authenticating at: %s' % RDA_LOGIN_SERVER
+    print verbose
     cmd = 'curl -s -o /dev/null -k -s -c %s -d "email=%s&passwd=%s&action=login" %s '%(cookie, email, password, server)
     if verbose:
         print cmd
