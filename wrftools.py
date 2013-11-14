@@ -906,7 +906,7 @@ def get_sst(config):
     sst_server_dir = config['sst_server_dir']
     sst_local_dir  = config['sst_local_dir']
     sst_time       = get_sst_time(config)
-    sst_filename   = get_sst_filename(config)
+    sst_filename   = sub_date(get_sst_filename(config), init_time=config['init_time'])
    
     if not os.path.exists(sst_local_dir):
         os.makedirs(sst_local_dir)
@@ -914,6 +914,7 @@ def get_sst(config):
     if os.path.exists('%s/%s' %(sst_local_dir, sst_filename)):
         logger.info('*** SST ALREADY EXISTS LOCALLY, NOT DOWNLOADED ***')
         return
+    
     lftpfilename = '%s/%s/lftpscript' % (domain_dir, model_run)
     logger.debug('Writing lftpscript to %s' % lftpfilename)
     lftpscript     = open(lftpfilename, 'w')    
