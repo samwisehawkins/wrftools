@@ -162,13 +162,13 @@ def write_csv_files(ncfiles, out_dir, dimspec=FULL_SLICE):
                     
                     # 2D variable
                     if len(data.shape)==2:
-                        rowdict[v] = data[l,t]
+                        rowdict[v] = data[t,l]
                     
                     # 3D variable
                     if len(data.shape)==3:
                         for h in range(nheight):
                             key = '%s_%03d' %(v, int(height[h]))
-                            rowdict[key] = data[l,h,t]
+                            rowdict[key] = data[t,l,h]
                         
                 rows.append(rowdict)
         dataset.close()
@@ -333,6 +333,7 @@ def write_json_files(ncfiles, global_atts, var_atts,coord_vars, out_dir, file_da
         model_run = dataset.MODEL_RUN
         domain    = dataset.DOMAIN
         
+        
         # Get subset of global attributes into a dictionary
         global_att_dict = dict([(att,dataset.getncattr(att)) for att in global_atts])
         
@@ -353,7 +354,7 @@ def write_json_files(ncfiles, global_atts, var_atts,coord_vars, out_dir, file_da
         # subset locations if asked
         location  = variables['location'][ls:le]
         height    = variables['height']
-
+        print location
         
         
         lat       = variables['lat'][ls:le]
@@ -371,7 +372,7 @@ def write_json_files(ncfiles, global_atts, var_atts,coord_vars, out_dir, file_da
         series = []    
             
         for l in range(nlocs):
-            loc = ''.join(location[l,0:loc_str_len])
+            loc = ''.join(location[l,0:loc_str_len-1])
             loc = loc.strip()
    
             
@@ -402,7 +403,7 @@ def write_json_files(ncfiles, global_atts, var_atts,coord_vars, out_dir, file_da
                     #print hs,he
                     var = fullvar[ts:te, ls:le, hs:he]
 
-                
+                print var_atts
                 var_att_dict = dict([(att,fullvar.getncattr(att)) for att in var_atts])
                 series_dict = dict(global_att_dict.items()+ var_att_dict.items())
                 
@@ -418,9 +419,9 @@ def write_json_files(ncfiles, global_atts, var_atts,coord_vars, out_dir, file_da
                     # note if variable is 2D, we still execute this loop once
                     # with height=0
                     if ndims==2:
-                        values = np.ma.array(var[l, :])
+                        values = np.ma.array(var[:,l])
                     elif ndims==3:
-                        values = np.ma.array(var[l,h,:])
+                        values = np.ma.array(var[:,l,h])
                     
                     hgt = hgts[h]
                     # encode with 3 decimal places

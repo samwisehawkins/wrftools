@@ -181,7 +181,12 @@ begin
         delete_VarAtts(var_out,  "coordinates")
     end if
     
-    
+    ;******************************************************
+    ; Give variable correct units
+    ;******************************************************
+    var_out@units = var@units
+    var_out@description = var@description
+
     ;******************************************************
     ; Give dimensions correct names and reorder
     ;******************************************************
@@ -189,20 +194,17 @@ begin
         var_out!0="time"
         var_out!1="height"
         var_out!2="location"
-        return var_out(location|:,height|:, time|:)
+        ;return var_out(location|:,height|:, time|:)
+        return var_out(time|:,location|:,height|:)
     end if
         
     if (ndims .eq. 3)     ; var_in(time,y, x) --> var_out(time,loc)
         var_out!0="time"
         var_out!1="location"
-        return var_out(location|:, time|:)
+        ;return var_out(location|:, time|:)
+        return var_out(time|:, location|:)
     end if
 
-    ;******************************************************
-    ; Give variable correct units
-    ;******************************************************
-    var_out@units = var_in@units
-    var_out@description = var_in@description
     
 end
 
@@ -350,21 +352,25 @@ begin
     ; Create a template for 2D and 3D variables
     ;******************************************************    
 
-    v2d_template = new((/nloc,ntime/),"float")
-    v3d_template = new((/nloc,nheight,ntime/),"float")
+    ;v2d_template = new((/nloc,ntime/),"float")
+    ;v3d_template = new((/nloc,nheight,ntime/),"float")
 
-    v2d_template!0    = "location"
-    v2d_template!1    = "time"    
+    v2d_template = new((/ntime,nloc/),"float")
+    v3d_template = new((/ntime,nloc,nheight/),"float")
+    
+    
+    v2d_template!0    = "time"
+    v2d_template!1    = "location"    
     v2d_template&time = time
 
-    v3d_template!0    = "location"
-    v3d_template!1    = "height"
-    v3d_template!2    = "time"    
+    v3d_template!0    = "time"
+    v3d_template!1    = "location"
+    v3d_template!2    = "height"    
     v3d_template&height = hgt_out
     v3d_template&time   = time
 
-    dims_2d = (/"location", "time"/)                
-    dims_3d = (/"location", "height", "time"/)                         
+    dims_2d = (/"time", "location"/)                
+    dims_3d = (/"time", "location", "height"/)                         
     ;******************************************************    
 
     
@@ -398,8 +404,8 @@ begin
     ; Note: to get an UNLIMITED record dimension, we set the dimensionality
     ; to -1 (or the actual size) and set the dimension name to True.
     ;******************************************************    
-    dimNames = (/"location", "height", "time", "loc_str_length"/)  
-    dimSizes = (/ -1   ,  nheight,  ntime, loc_str_length/) 
+    dimNames = (/"time", "location", "height", "loc_str_length"/)  
+    dimSizes = (/ -1   , nloc,  nheight, loc_str_length/) 
     dimUnlim = (/ True , False, False, False/)   
     filedimdef(fout,dimNames,dimSizes,dimUnlim)
     
@@ -541,11 +547,16 @@ begin
         if vars@u
             filevardef(fout, "U", typeof(u_agl_locs), dims_3d)
             filevarattdef(fout,"U", u_agl_locs) 
+            u_agl_locs@description = "eastward component of wind speed"
+            u_agl_locs@units       = "m/s"
             fout->U     = (/u_agl_locs/)
+            filevarattdef(fout,"U", u_agl_locs)
         end if
         
         if vars@v
             filevardef(fout, "V",typeof(v_agl_locs),dims_3d)
+            v_agl_locs@description = "northward component of wind speed"
+            v_agl_locs@units       = "m/s"
             fout->V     = (/v_agl_locs/)
             filevarattdef(fout,"V", v_agl_locs)
         end if
@@ -697,8 +708,8 @@ begin
         rib_h_upper = hgt_out(rib_i_upper)
         rib_h_lower = hgt_out(rib_i_lower)
         
-        dtheta_v = thetav_agl_locs(:, rib_i_upper, :) - thetav_agl_locs(:, rib_i_lower, :)
-        dspeed   = ws_agl_locs(:, rib_i_upper, :) - ws_agl_locs(:, rib_i_lower, :)
+        dtheta_v = thetav_agl_locs(:, :, rib_i_upper) - thetav_agl_locs(:, :, rib_i_lower)
+        dspeed   = ws_agl_locs(:, :, rib_i_upper) - ws_agl_locs(:, :, rib_i_lower)
 
         ; What is the definition of Bulk Richardson in the case where wind speed and thetav is 
         ; the same between two levels? The equation would imply it tends to infinity, 
@@ -707,11 +718,11 @@ begin
         
         ; AMS method. Take virtual temperature from top layer
         if (opts@rib_opt .eq. 1)
-            beta     = g/tv_agl_locs(:, rib_i_upper, :)
+            beta     = g/tv_agl_locs(:, :, rib_i_upper)
         
         ; Zilankavitch. Average virtual temperature over profile between layers
         else
-            beta = g/dim_avg_n(thetav_agl_locs(:, rib_i_lower:rib_i_upper, :), 1)
+            beta = g/dim_avg_n(thetav_agl_locs(:, :, rib_i_lower:rib_i_upper), 1)
         end if
         
         ; mask speed where the difference is very small 
@@ -746,11 +757,13 @@ begin
         ; Convert to rain to accumulation per hour
         do n=1,ntime-2
             k = ntime-n
-            rain_sfc_locs(:, k) = rain_sfc_locs(:,k)-rain_sfc_locs(:,k-1)
+            rain_sfc_locs(k, :) = rain_sfc_locs(k,:)-rain_sfc_locs(k-1,:)
         end do
         
         copy_VarMeta(v2d_template, rain_sfc_locs)
         rain_sfc_locs@height = 0
+        delete_VarAtts(rain_sfc_locs, "description")
+        delete_VarAtts(rain_sfc_locs, "units")
         rain_sfc_locs@description = "precipitation rate"
         rain_sfc_locs@units       = "mm/hour"
         filevardef(fout, "RAIN",typeof(rain_sfc_locs),dims_2d)                           
@@ -867,8 +880,8 @@ begin
         cldfra             = wrf_user_getvar(file_handle, "CLDFRA", t)
         cldfra_locs        = wrf_user_hinterp(nc_file, cldfra, lat, lon, xlat, xlong, opts@interp_option)
 
-        cldfraavg_sfc_locs = dim_avg_n_Wrap(cldfra_locs, 1)
-        cldframax_sfc_locs = dim_max_n(cldfra_locs, 1)
+        cldfraavg_sfc_locs = dim_avg_n_Wrap(cldfra_locs, 2)
+        cldframax_sfc_locs = dim_max_n(cldfra_locs, 2)
         copy_VarMeta(cldfra_locs, cldframax_sfc_locs)
         cldfraavg_sfc_locs@height = 0
         cldfraavg_sfc_locs@description = "CLOUD FRACTION COLUMN AVG"
