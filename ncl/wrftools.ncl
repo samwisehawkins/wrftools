@@ -38,7 +38,7 @@ undef("read_locations")
 function read_locations(loc_file)
 
 begin
-  ;loc_str_len = 3
+  loc_str_len = 6
   cmd       = "sed  '/^[[:space:]]*#/d' " + loc_file          ; skip any commented lines
   lines     = systemfunc(cmd)                                 ; take input from sed
   header    = str_split(lines(0), ",")                        ; first line is header 
@@ -50,13 +50,13 @@ begin
   name_ind  = str_match_ind_ic(header, "name")
 
   loc_id    = str_get_field(data, loc_ind+1, ",")                ; str_get_field numbering starts at 1
-  ;loc_id_l  = blank_pad(loc_id, loc_str_len)                     ; pad with blanks in case id is shorter than loc_str_len
+  loc_id_l  = blank_pad(loc_id, loc_str_len)                     ; pad with blanks in case id is shorter than loc_str_len
   lat       = stringtofloat(str_get_field(data, lat_ind+1, ",")) ; so add 1 to indices
   lon       = stringtofloat(str_get_field(data, lon_ind+1, ","))
   name      = str_get_field(data, name_ind+1, ",")
   
   
-  out    = [/loc_id, name, lat, lon/]
+  out    = [/loc_id_l, name, lat, lon/]
   return(out)
 
 end
@@ -79,7 +79,7 @@ begin
     dims   = dimsizes(var)
     ddims  = dimsizes(dims)
     ndims  = ddims(0)
-    print(ndims)  
+    ;print(ndims)  
     
     delete(dims)
     delete(ddims)
@@ -107,8 +107,8 @@ begin
         delete(dims)
     end if
     
-    print(south_north)
-    print(west_east)
+    ;print(south_north)
+    ;print(west_east)
     
     ;******************************************************
     ; Enclosing cell interpolation
@@ -131,14 +131,18 @@ begin
             var_out = new((/ntime,nheight,nloc/),"float")
 
             do n=0,nloc-1
-                print(loc(:,n))
+                ;print(loc(:,n))
                 ; if location is outside domain
                 if ( (loc(1,n) .ge. south_north) .or. (loc(0,n) .ge. west_east))
                     print("Warning, location is outside domain, values will be missing")
                     var_out(n,:,:) = default_fillvalue("float")
                 else
                     ; var(time, level, y, x)
-                    var_out(:,:,n) = var(:,:,loc(1,n),loc(0,n))
+                    y = loc(1,n)
+                    x = loc(0,n)
+                    ;print(y)
+                    ;print(x)
+                    var_out(:,:,n) = var(:,:,y,x)
                 end if
             end do
         end if
@@ -285,7 +289,7 @@ begin
     ; Dimension sizes
     ;******************************************************
     
-    loc_str_length = 3 ; hard coded length of loc IDs
+    loc_str_length = 6 ; hard coded length of loc IDs
     dims      = dimsizes(hgt_out)
     nheight   = dims(0)
     delete(dims)
@@ -438,8 +442,8 @@ begin
     ; been predefined. The "(/", "/)" syntax tells NCL to only output the
     ; data values to the predefined locations on the file.
     ;******************************************************    
-    printVarSummary(loc_char)
-    print(loc_str_length)
+    ;printVarSummary(loc_char)
+    ;print(loc_str_length)
     fout->time     = (/time/)     
     fout->location = (/loc_char(:,0:loc_str_length-1)/)
     fout->height   = (/hgt_out/) 
@@ -737,7 +741,7 @@ begin
         rainnc = wrf_user_getvar(file_handle, "RAINNC", t) 
         rain   = rainc+rainnc
         rain_sfc_locs = wrf_user_hinterp(nc_file, rain, lat, lon, xlat, xlong, opts@interp_option)
-        printVarSummary(rain_sfc_locs)
+        ;printVarSummary(rain_sfc_locs)
     
         ; Convert to rain to accumulation per hour
         do n=1,ntime-2

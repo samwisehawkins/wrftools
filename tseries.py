@@ -130,6 +130,7 @@ def extract_tseries(config):
      
     wrfout_dir     = config['wrfout_dir']
     tseries_dir    = config['tseries_dir']
+    json_dir       = config['json_dir']
     init_time      = config['init_time']
     dom            = config['dom']
     fcst_file      = '%s/wrfout_d%02d_%s:00:00.nc' %(wrfout_dir, dom, init_time.strftime("%Y-%m-%d_%H")) # note we add on the nc extension here
@@ -153,6 +154,7 @@ def extract_tseries(config):
     logger.debug('FCST_FILE    ----> %s'  % fcst_file)
     logger.debug('NCL_OUT_DIR  ----> %s'  % tseries_dir)
     logger.debug('NCL_OUT_FILE  ----> %s' % tseries_file)
+    logger.debug('LOCATIONS_FILE ----> %s' % loc_file)
 
 
     for script in ncl_code:
@@ -164,8 +166,7 @@ def extract_tseries(config):
         ncdump.write_seperate_files([tseries_file], tseries_dir)
     
     if 'json' in tseries_fmt:
-        ncdump.write_json_files_loc([tseries_file], ncdump.GLOBAL_ATTS, ncdump.VAR_ATTS,ncdump.COORD_VARS, tseries_dir, ncdump.FILE_DATE_FMT)        
-
+        ncdump.write_json_files([tseries_file], ncdump.GLOBAL_ATTS, ncdump.VAR_ATTS,ncdump.COORD_VARS, json_dir, ncdump.FILE_DATE_FMT)        
 
 #*****************************************************************
 # Read location files

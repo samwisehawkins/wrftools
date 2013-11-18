@@ -1,12 +1,12 @@
 """extract_time_series.py is a thin wrapper around extract_time_series.ncl which interpolations to locations and heights.
 
 Usage: 
-    extract_time_series.py <file>... --loc=<file> --height=<h>... [--out=<dir>] [-h | --help] [--ncl-code=<path>] 
+    extract_time_series.py <file>... --loc=<file> --vars=<file> --height=<h>... [--out=<dir>] [-h | --help] [--ncl-code=<path>] 
     
 Options:
     --loc=<file>      locations file containing latitude and longitude
-    --out=<file>      output netcdf file to write time-series
-    --text=<dir>      optionally dump flat text files to this directory
+    --out=<dir>       output netcdf file to write time-series
+    --vars=<file>     location of a ncl file specifying which variables to extract
     --ncl-code=<path> location of extract_time_series.ncl [default: ./ncl]
     -h |--help        show this message
     
@@ -61,7 +61,7 @@ def main():
         in_file = '(/"%s"/)' % f
         in_file = f
         #cmd = """ncl 'in_file=%s' 'out_file="%s"' 'extract_heights=%s' 'loc_file="%s"' %s/%s""" % (in_file,out_file,hgts, args['--loc'], ncl_code_dir, NCL_SCRIPT)
-        cmd = """FCST_FILE=%s  NCL_OUT_FILE=%s LOCATIONS_FILE=%s ncl %s/%s 'extract_heights=%s' """ %(in_file, out_file, args['--loc'], ncl_code_dir, NCL_SCRIPT, hgts)
+        cmd = """FCST_FILE=%s  NCL_OUT_FILE=%s LOCATIONS_FILE=%s NCL_VAR_FILE=%s ncl %s/%s 'extract_heights=%s' """ %(in_file, out_file, args['--loc'],args['--vars'], ncl_code_dir, NCL_SCRIPT, hgts)
         
         
         
