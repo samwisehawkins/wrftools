@@ -90,8 +90,8 @@ begin
 	opts@rib_opt=2     ; Zilintikivich et al
     ;opts@rib_h_lower = 50.0     ; lower height must be of the interpolation heights
     ;opts@rib_h_upper = 100.0    ; upper height
-    opts@rib_i_lower = 0         ; lower (extract_height) index
-    opts@rib_i_upper = 1         ; upper (extract_height) index
+    opts@rib_i_lower = 2         ; lower (extract_height) index
+    opts@rib_i_upper = 4         ; upper (extract_height) index
     ;**************************************************
 
 ;******************************************************  
