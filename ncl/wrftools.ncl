@@ -166,6 +166,12 @@ begin
     else
         ; rcm2points will replace the last 2 dimensions with 1 dimension, 
         ; which is the locations
+        printVarSummary(xlat)
+        printVarSummary(xlong)
+        printVarSummary(var)
+        printVarSummary(lat)
+        printVarSummary(lon)
+        printVarSummary(interp_option)
         var_out = rcm2points(xlat, xlong,  var, lat, lon, interp_option)
     end if        
     
@@ -248,6 +254,17 @@ dims, nd, xlat, xlong, rank, \
 R, g, cp, lv, t
 
 begin
+
+    ;******************************************************
+    ; Print some information
+    ;******************************************************
+    print("Interpolating WRF variables to locations and heights")
+    print(hgt_out)
+    print(file_out)
+    print(vars)
+    print(opts)
+
+
     ;******************************************************
     ; Constants / hard coded options
     ;******************************************************
@@ -325,17 +342,29 @@ begin
     
     ;*******************************************************
     ; Convert time units
-    times     = nc_file->Times
-    time      = wrf_times_c(times, opts@time_units) 
-    init_time = chartostring(times(0,0:12))
+    if(ISFILE) then
+        time_c     = file_handle->Times
+    else
+        time_c     = file_handle[:]->Times
+    end if
+    
+    
+    
+    time_s    = chartostring(time_c)                     ; string
+    print(time_s)
+    time       = wrf_times_c(time_c, opts@time_units) 
+    init_time  = ut_string(time(0), "%Y-%m-%d_%H:%M:%S")
 
+    
+    
     ; t of -1 gets all timesteps, otherwise we are feching one timestep
-    dims = dimsizes(times)
+    dims = dimsizes(time)
     if (t    .eq. -1) then 
         ntime=dims(0)
     else ntime=1
     end if
     delete(dims)
+    delete(time_c)
     ;*******************************************************    
     
     
@@ -486,15 +515,22 @@ begin
     dims = getfilevardims(nc_file,"HGT")        
     ndims = dimsizes(dims)
 
-    if (ndims .eq. 3) ; terrain height varies with time
-        hgt_ter_i       = file_handle->HGT(:,:,:)                    ; get terrain height at all timesteps
-        hgt_ter         = conform(hgt_amsl, hgt_ter_i, (/0,2,3/))    ; add a level dimension 
+    if (ndims .eq. 3)                                        ; terrain height varies with time, i.e. to support moving nest
+        if(ISFILE) then
+            hgt_ter_i       = file_handle->HGT(0,:,:)        ; get terrain height at first
+        else
+            hgt_ter_i       = file_handle[0]->HGT(0,:,:)     ; get terrain height at first
+        end if
+        
+        ; hgt_amsl(time, level, y, x)
+        ; hgt_ter_i(y, x)
+        hgt_ter         = conform(hgt_amsl, hgt_ter_i, (/2,3/))      ; add a level dimension 
+    
     end if                                                           ; for easy subtraction with level heights                   
     
     if (ndims .eq. 2) ; terrain height doesn't vary with time
-        hgt_ter_i     = file_handle->HGT(:,:)                       ; height already invariant
+        hgt_ter_i     = file_handle[0]->HGT(:,:)                    ; height already invariant
         hgt_ter = conform(hgt_amsl, hgt_ter_i, (/2,3/))             ; so add time and level dimension 
-        delete(hgt_ter_i)
     end if         
     
     ;******************************************************
@@ -503,11 +539,21 @@ begin
     hgt_agl = hgt_amsl - hgt_ter                                    ; get the height of model levels above ground level
     hgt_agl@units = "metres"
     
+    delete(hgt_amsl)
+    delete(hgt_ter)
+    delete(hgt_ter_i)
+    
     ;******************************************************
     ; Horizontally interolate the height of model levels to the locations
     ;******************************************************    
+    ;printVarSummary(lat)
+    ;printVarSummary(lon)
+    ;printVarSummary(xlat)
+    ;printVarSummary(xlong)
+    ;printVarSummary(hgt_agl)
     hgt_agl_locs = wrf_user_hinterp(nc_file, hgt_agl, lat, lon, xlat, xlong, opts@interp_option)
-
+    
+    
  
     ;******************************************************
     ; Do we need to calculate wind speed?
@@ -521,6 +567,8 @@ begin
         u = uvmet(0,:,:,:,:)
         v = uvmet(1,:,:,:,:)
         
+        delete(uvmet)
+    
         u@description = "eastward component of wind velocity"
         v@description = "northward component of wind velocity"
         
@@ -568,7 +616,6 @@ begin
         copy_VarMeta(v3d_template, ws_agl_locs) 
         ws_agl_locs&height = hgt_out
         ws_agl_locs&time   = time
-
         ws_agl_locs@description = "wind speed"
         ws_agl_locs@units       = "m/s"
 
@@ -664,6 +711,11 @@ begin
         
         ; virtual potential temperature
         thetav_agl_locs = theta_agl_locs*(1+(0.61*qv_agl_locs))
+        printVarSummary(thetav_agl_locs)
+        delete_VarAtts(thetav_agl_locs, "description")
+        delete_VarAtts(thetav_agl_locs, "units")
+
+        
         thetav_agl_locs@units = "K"
         thetav_agl_locs@description = "Virtual potetial temperature"
 
@@ -708,7 +760,7 @@ begin
         rib_h_upper = hgt_out(rib_i_upper)
         rib_h_lower = hgt_out(rib_i_lower)
         
-        dtheta_v = thetav_agl_locs(:, :, rib_i_upper) - thetav_agl_locs(:, :, rib_i_lower)
+        dtheta_v = thetav_agl_locs(:, :,rib_i_upper) - thetav_agl_locs(:, :, rib_i_lower)
         dspeed   = ws_agl_locs(:, :, rib_i_upper) - ws_agl_locs(:, :, rib_i_lower)
 
         ; What is the definition of Bulk Richardson in the case where wind speed and thetav is 
@@ -722,11 +774,15 @@ begin
         
         ; Zilankavitch. Average virtual temperature over profile between layers
         else
-            beta = g/dim_avg_n(thetav_agl_locs(:, :, rib_i_lower:rib_i_upper), 1)
+            beta = g/dim_avg_n(thetav_agl_locs(:, :, rib_i_lower:rib_i_upper), 2)
         end if
         
         ; mask speed where the difference is very small 
         dspeed = where(dspeed.lt.0.0001, default_fillvalue("float"), dspeed)
+        printVarSummary(beta)
+        printVarSummary(dspeed)
+        printVarSummary(dtheta_v)
+        
         rib_agl_locs   = beta * dtheta_v * (rib_h_upper - rib_h_lower) / dspeed^2
 
         

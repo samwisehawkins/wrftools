@@ -2562,13 +2562,14 @@ def cleanup(config):
     """Cleans up various files """
     logger = get_logger()
 
-    init_time = config['init_time']
-    post_clean = config['post_clean']
+    logger.debug('**** CLEANUP FILES ****')
+    init_time   = config['init_time']
+    post_clean  = config['post_clean']
     cleanup_dir = [sub_date(s, init_time=init_time) for s in post_clean]
     
     for d in cleanup_dir:
         cmd = 'rm -f %s' % d
         logger.debug(cmd)
-        #run_cmd(cmd, config)
+        run_cmd(cmd, config)
 
     logger.info('*** FINISHED CLEANUP ***')

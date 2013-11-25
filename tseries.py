@@ -137,6 +137,7 @@ def extract_tseries(config):
     loc_file       = config['locations_file']
     ncl_code       = config['tseries_code']
     tseries_fmt    = config['tseries_fmt']
+    ncl_opt_file   = config['ncl_opt_file']
     
     ncl_log        = config['ncl_log']
     if not os.path.exists(tseries_dir):
@@ -149,13 +150,15 @@ def extract_tseries(config):
     os.environ['LOCATIONS_FILE'] = loc_file
     os.environ['NCL_OUT_DIR']    = tseries_dir
     os.environ['NCL_OUT_FILE']   = tseries_file
-
+    os.environ['NCL_OPT_FILE']   = ncl_opt_file
+    
+    
     logger.debug('Setting environment variables')
     logger.debug('FCST_FILE    ----> %s'  % fcst_file)
     logger.debug('NCL_OUT_DIR  ----> %s'  % tseries_dir)
     logger.debug('NCL_OUT_FILE  ----> %s' % tseries_file)
     logger.debug('LOCATIONS_FILE ----> %s' % loc_file)
-
+    logger.debug('NCL_OPT_FILE   ----> %s' % ncl_opt_file)
 
     for script in ncl_code:
         cmd  = "ncl %s >> %s 2>&1" % (script, ncl_log)

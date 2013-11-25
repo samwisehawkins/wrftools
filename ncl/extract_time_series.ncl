@@ -1,18 +1,28 @@
 ;******************************************************
-; Extract time-series from WRF gridded netcdf files write output 
-; to netcdf files where location is a dimension.
+; Extract time-series from WRF gridded netcdf files to 
+; netcdf files where location is a dimension.
 ;
 ; The variables in the resulting NetCDF files will be 
-; of the form 3DVar(location, height, time)
-;             2DVar(location, time)
+; of the form 3DVar(time,location,height)
+;             2DVar(time, location)
 ;
-; i.e. location is the record dimension. This could be changed 
-; in future if there is a need for that
+; Usage:  Arguments can be specified either on the command line
+; or by setting environment variables. Command line definitions
+; will override environment variables.
+;
+; The following arguments/environment variables are used:
+;
+; Command line arg  Env variable      Description
+; in_file           FCST_FILE         a single input file or array of input files
+; out_dir           NCL_OUT_DIR       a single output directory
+; out_file          NCL_OUT_FILE      the name of an output file
+; loc_file          LOCATIONS_FILE    the name of a locations file specifying locations
+;                   NCL_OPT_FILE      a snippet of ncl code which will get loaded,
+;                                     defining options and variables. Must be env variable.
 ;
 ; Credit to Dennis Shea's wrfout_to_cf.ncl for some inspiration
 ;
-;
-; Author Sam Hawkins, Jesper Nissen
+; Author Sam Hawkins
 ; sam.hawkins@vattenfall.com
 ; 
 ;******************************************************
@@ -23,23 +33,45 @@ begin
 ;******************************************************
 ; Either get input from command-line options (preference)
 ; or environment variables
+; Strategy. If the variable is directly 
+; defined on the command-line, then that takes preference.
+; Otherwise we take it from an environment variable.
+
 ;******************************************************
-  in_file    = getenv("FCST_FILE")
-  out_dir    = getenv("NCL_OUT_DIR")
-  out_file   = getenv("NCL_OUT_FILE")
-  var_file   = getenv("NCL_VAR_FILE")
-  loc_file   = getenv("LOCATIONS_FILE")
-;******************************************************
+    if .not. isdefined("in_file") then 
+        in_file = getenv("FCST_FILE") 
+    end if
+
+    if .not. isdefined("out_dir") then 
+        out_dir    = getenv("NCL_OUT_DIR")
+    end if
+
+    if .not. isdefined("out_file") then 
+        out_file   = getenv("NCL_OUT_FILE")
+    end if 
+    
+    if .not. isdefined("loc_file") then 
+        loc_file   = getenv("LOCATIONS_FILE")
+    end if
+    
+    ; this must be defined as a environment variable
+    ; due to the way a load statement works in NCL
+    opt_file   = getenv("NCL_OPT_FILE")
 
     
-;******************************************************
-; Constants / hard coded options
-;******************************************************
-  if .not. isdefined("extract_heights") then 
-      extract_heights = (/80.0,100.0/)      
-  end if
+    ;******************************************************
+    ; Default height options hard-coded
+    ;******************************************************
+    if .not. isdefined("extract_heights") then 
+        extract_heights = (/20.0,40.0,60.0,80.0,100.0,150.0,200.0/)      
+    end if
   
-
+;******************************************************
+ 
+ 
+;******************************************************
+; Work out number of heights  
+;******************************************************
   dims    = dimsizes(extract_heights)
   nhgts   = dims(0)
   delete(dims)
@@ -50,66 +82,29 @@ begin
 ; ordering is hardcoded in wrftools.ncl
 ; but would be useful to have it here at some point
 ;*****************************************************
-
-  if .not. isdefined("dim_order_2D") then
-      dim_order_2D =(/"time", "location"/)
-  end if 
+;
+;  if .not. isdefined("dim_order_2D") then
+;      dim_order_2D =(/"time", "location"/)
+;  end if 
+;  
+;  if .not. isdefined("dim_order_3D") then
+;      dim_order_3D = (/"time", "location", "height"/)
+;  end if
+;*****************************************************
   
-  if .not. isdefined("dim_order_3D") then
-      dim_order_3D = (/"time", "location", "height"/)
-  end if
-
-  
 ;******************************************************
-; Options
-  opts = True
+; Options and output variables
+; Load these at run-time to avoid hard-coding options
+; into the script.
 ;******************************************************  
-    ;**************************************************
-    ; Horizontal interpolation options
-    ; 0: none, use grid cell value from wrf_user_ll_to_ij (not implemented yet!)
-    ; 1: inverse distance weighting as implemented by rcm2points(opt=1)
-    ; 2: bilinear interpolation as implemented by rcm2points(opt=2)
-    ;**************************************************
-    opts@interp_option = 2
-
-    ;**************************************************
-    ; Time units
-	opts@time_units = 1 
-    ;                 0 units of "hours since" initial time on the current file (type "double")
-    ;                 1 returns units of "hours since 1901-01-01 00:00:00" (type "double")
-    ;                 2 returns units of "yyyymmddhhmnss" (type "double")
-    ;                 3 returns units of "yyyymmddhh" (type "integer")
-    ;**************************************************
-
-    
-    ;**************************************************
-    ; Bulk richardson options. 
-    ; TODO, allow these to be arrays, 
-    ; so we can do multiple heights
-    ; rib_opt=1        ; AMS versions 
-	opts@rib_opt=2     ; Zilintikivich et al
-    ;opts@rib_h_lower = 50.0     ; lower height must be of the interpolation heights
-    ;opts@rib_h_upper = 100.0    ; upper height
-    opts@rib_i_lower = 2         ; lower (extract_height) index
-    opts@rib_i_upper = 4         ; upper (extract_height) index
-    ;**************************************************
-
-;******************************************************  
-
-
+    load "$NCL_OPT_FILE"
 ;******************************************************
-; Output Variables. 
-;******************************************************
-    load "$NCL_VAR_FILE"
-
-
 
 ;******************************************************
 ; Give some info
 ;******************************************************
-;print("NCL Extracting time series from file(s): "+in_file)
+print(in_file)
 ;******************************************************
-
 
 
 
