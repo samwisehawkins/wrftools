@@ -86,7 +86,8 @@ from visualisation import *
 from customexceptions import *
 import logging
 
-from tseries import extract_tseries, power, tseries_to_json, json_to_web
+from tseries import extract_tseries, tseries_to_json, json_to_web
+from power import power, PowerCurve
 from queue import fill_template, qsub, qstat
 
 LOGGER         = 'wrf_forecast'

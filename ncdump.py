@@ -1,12 +1,13 @@
 """ncdump.py dumps data from a netcdf file to text file
 
 Usage: 
-    ncdump.py <file>... --format=<fmt> [--dims=<dimspec>]... [--out=<dir>] [-h | --help]
+    ncdump.py <file>... --format=<fmt> [--dims=<dimspec>] [--out=<dir>] [-h | --help]
     
 Options:
-    --out=<dir>       output directory to write time-series
-    --dims=<dimspec>  dimension specification of the form dimname,start,end
+    <file>            input files
     --format=<fmt>    format for output, txt or json
+    --dims=<dimspec>  dimension specification of the form dimname,start,end
+    --out=<dir>       output directory to write time-series
     -h |--help        show this message
  
 Notes:
@@ -123,10 +124,10 @@ def write_csv_files(ncfiles, out_dir, dimspec=FULL_SLICE):
         dataset = Dataset(f, 'r')
         # get some global attributes
 
-        #model     = dataset.MODEL
-        #nest_id   = dataset.GRID_ID
-        #model_run = dataset.MODEL_RUN
-        #domain    = dataset.DOMAIN
+        model     = dataset.MODEL
+        nest_id   = dataset.GRID_ID
+        model_run = dataset.MODEL_RUN
+        domain    = dataset.DOMAIN
         
         variables     = dataset.variables
 
@@ -138,9 +139,9 @@ def write_csv_files(ncfiles, out_dir, dimspec=FULL_SLICE):
         ntime     = len(datetimes) 
         init_time = fulldatetimes[0]
       
-        location    = variables['location_id'][ls:le]
+        location    = variables['location'][ls:le]
         nloc        = location.shape[0]
-        loc_id      = [''.join(location[l,:]) for l in range(nloc)]
+        loc_id      = [''.join(location[l,0:-1]) for l in range(nloc)]
         
         height    = variables['height'][hs:he]
         nheight   = len(height)
@@ -151,7 +152,7 @@ def write_csv_files(ncfiles, out_dir, dimspec=FULL_SLICE):
 
         for t in range(ntime):
             for l in range(nloc):
-                rowdict = {}
+                rowdict = OrderedDict()
                 rowdict['valid_time']  = datetimes[t]
                 rowdict['location_id'] = loc_id[l]
                 rowdict['init_time']   = init_time
@@ -176,16 +177,25 @@ def write_csv_files(ncfiles, out_dir, dimspec=FULL_SLICE):
     df       = pd.DataFrame(rows)
     cols     = list(df.columns)
 
-    var_cols = cols[2:]
 
-    pre_cols = ['','','']
-    pre_cols[0] = 'init_time'
-    pre_cols[1] = 'valid_time'
-    pre_cols[2] = 'location_id'
-    new_cols = pre_cols + var_cols
+    
+    # change the order of columns 
+    #var_cols = cols[2:]
+
+    pre_cols = ['init_time','valid_time','location_id']
+    data_cols = [c for c in cols if c not in pre_cols]
+    print pre_cols
+    print data_cols
+    new_cols = pre_cols + data_cols
+    
+    #
+    #pre_cols[0] = 'init_time'
+    #pre_cols[1] = 'valid_time'
+    #pre_cols[2] = 'location_id'
+    #
     df = df[new_cols]
     df.to_csv('%s/%s' % (out_dir, CSV_NAME), index=False, float_format='%0.3f')
-    print df.to_string()
+    #print df.to_string()
     
     
     
@@ -262,7 +272,6 @@ def write_seperate_files(ncfiles, out_dir, dims=None):
             print v
             
             fullvar = variables[v]
-            print fullvar
             ndims = len(fullvar.shape)
             
             # 2D variable, variable[time, location]
@@ -354,8 +363,6 @@ def write_json_files(ncfiles, global_atts, var_atts,coord_vars, out_dir, file_da
         # subset locations if asked
         location  = variables['location'][ls:le]
         height    = variables['height']
-        print location
-        
         
         lat       = variables['lat'][ls:le]
         lon       = variables['lon'][ls:le]

@@ -42,6 +42,8 @@ def runs_of_ones_array(bits):
   return idx, run_lengths, run_starts, run_ends
 
 
+ 
+  
 def filter(data, all_tbs, sel_tbs, lower, upper, method='all'):
     """Returns row indices to filter data where conditions hold.
     This could arguably be done with rec_arrays, but subsetting

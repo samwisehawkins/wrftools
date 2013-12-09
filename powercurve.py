@@ -6,7 +6,19 @@
 #
 # Author:    sam.hawkins@vattenfall.com
 #
-# TODO: work out the behaviour of the bivariate spline, the shape of arrays
+# TODO: Deal with wind speed/direction distribution.  Either we could deal 
+#       with this in the construction of the power curve, or we could
+#       deal with it in the computation of the power.
+#
+#       A simple but slow way of doing it will just be to loop through each 
+#       (speed,direction) pair in the input, compute a distribution around 
+#       those points, and then average over that.  
+#
+#       This raises the other question, how to deal with wind direction 
+#       distibutions? A simple way would be to extend the power curve along
+#       the direction axis, or to mod the direction by 360 before interpolating.
+#
+#       work out the behaviour of the bivariate spline, the shape of arrays
 #       it returns are unusual.
 #
 #       Remove scipy depdendency? We only use it to do 2D interpolation
@@ -48,8 +60,46 @@ class PowerCurve(object):
         self._spline   = interpolate.RectBivariateSpline(scentres, dcentres, pcentres, kx=1, ky=1, s=0)
 
     def power(self, speed, direction):
-        return self._spline(speed, direction)
+        """Returns an array of power interpolated from the speed and direction pairs.
+        Due to the implemtation of the RectBivariateSpline, which requires that the data
+        is monotonic increasing, this must loop through values and do them pairwise """
+        
+        assert speed.shape==direction.shape
+        
+        result = np.array([self._spline(s,v) for (s,v) in zip(speed.flatten(), direction.flatten()])
+        return result.reshape(speed.shape)
+        
 
+    def power_dist(self, speed, direction, sstd=None, ddev=None, n=None):
+        """Returns an array of power interpolated from the speed and direction pairs.
+        Due to the implemtation of the RectBivariateSpline, which requires that the data
+        is monotonic increasing, this must loop through values and do them pairwise 
+        
+            Arguments:
+                speed: 1d array of wind speed values
+                sstd:  1d array of wind direction values
+                sstd:  standard deviation to apply to wind speed values when sampling from Normal distribution
+                dddev: standard deviation to wind direction values when sampling from Normal distribution
+                n:     number of sample points to use when drawing from distributions
+            
+            Returns:
+                ndarray with first dimension the same as speed and direction, and second dimension of size n if specified"""
+        
+        assert speed.shape==direction.shape
+        
+        # generate a randomly sampled speed distribution
+        sdist = np.array([norm(loc=s, scale=sstd).rvs(n) for s in speed])
+        ddist = np.array([norm(loc=d, scale=dstd).rvs(n) for d in direction])
+        
+        
+        
+        pdist = np.array([self._spline(s,d) for (s,d) in zip(sdist.flatten(), ddist.flatten()])
+        return pdist.reshape(speed.shape[0], n)
+        
+        
+        
+        
+        
     def tofile(self, filename):
         """ Write a textual repesenation of PowerCurve"""
         f = open(filename, 'w')
@@ -90,7 +140,6 @@ def from_file(filename):
 ##    data     = map(float, )
 ##    scentres = map(float, tokens[0][1:])
 ##    print scentres
-
 
 
 
