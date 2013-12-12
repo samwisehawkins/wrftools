@@ -138,7 +138,7 @@ def create_logger(config):
     fh.setLevel(numeric_level)
     ch.setLevel(numeric_level)
 
-    formatter = logging.Formatter('%(levelname)s\t %(message)s')
+    formatter = logging.Formatter('%(asctime)s %(levelname)s\t %(message)s')
     fh.setFormatter(formatter)
     ch.setFormatter(formatter)
     logger.addHandler(fh)

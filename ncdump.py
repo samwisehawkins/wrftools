@@ -485,7 +485,7 @@ def write_json_files(ncfiles, global_atts, var_atts,coord_vars, out_dir, file_da
 def check_json(fname):
     try:
         '\n\n Checking %s ' % fname
-        json.loads(fname)
+        json.load(open(fname))
         print "Valid JSON"
     
     except ValueError, err:

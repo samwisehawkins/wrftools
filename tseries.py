@@ -67,44 +67,28 @@ def to_json(frame):
     return result
     
 
+    
+    
 def tseries_to_json(config):
     """Converts the time series, in the record-based format, to JSON strings for plotting """
     logger=wrftools.get_logger()
     
     domain_dir  = config['domain_dir']
     domain      = config['domain']
+    dom         = config['dom']
     model_run   = config['model_run']
     init_time   = config['init_time']
-    tseries_dir = '%s/%s/tseries' % (domain_dir, model_run)
-    json_dir    = '%s/%s/json' % (domain_dir, model_run)
-    json_file   = '%s/fcst_data.json' % json_dir
 
-    logger.debug('json_dir: %s ' %json_dir)
+    tseries_dir  = '%s/%s/tseries' % (domain_dir, model_run)
+    tseries_file = '%s/tseries_d%02d_%s.nc' % (tseries_dir, dom,init_time.strftime("%Y-%m-%d_%H"))
+    json_dir     = '%s/%s/json' % (domain_dir, model_run)
+    json_file    = '%s/fcst_data.json' % json_dir
 
     if not os.path.exists(json_dir):
         os.makedirs(json_dir)
     
-
-    logger.info('*** CONVERTING TIME SERIES TO JSON ***')
-    pattern = '%s/*%s*.txt' % (tseries_dir, init_time.strftime('%Y-%m-%d_%H'))
-    logger.debug(pattern)
-    infiles = glob.glob(pattern)
-    if len(infiles)==0:
-        raise IOError('could not find any time-series files to process')    
-
-    logger.debug('Found %d time-series files to process' % len(infiles))
-    for n,f in enumerate(infiles):
-        if n==0:
-            frame = pd.read_csv(f, parse_dates=[8,9])
-        else:
-            new_frame =  pd.read_csv(f, parse_dates=[8,9])
-            frame = pd.concat((frame,new_frame))
-
-    jstring = to_json(frame)
-    f = open(json_file, 'w')
-    f.write(jstring)
-    f.close()
-   
+    ncdump.write_json_files([tseries_file], ncdump.GLOBAL_ATTS, ncdump.VAR_ATTS,ncdump.COORD_VARS, json_dir, ncdump.FILE_DATE_FMT)        
+  
     logger.info('*** WRITTEN JSON DATA ***')
 
 def json_to_web(config):
@@ -164,11 +148,11 @@ def extract_tseries(config):
         wrftools.run_cmd(cmd, config)
 
 
-    if 'txt' in tseries_fmt:
-        ncdump.write_seperate_files([tseries_file], tseries_dir)
+    #if 'txt' in tseries_fmt:
+    #    ncdump.write_seperate_files([tseries_file], tseries_dir)
     
-    if 'json' in tseries_fmt:
-        ncdump.write_json_files([tseries_file], ncdump.GLOBAL_ATTS, ncdump.VAR_ATTS,ncdump.COORD_VARS, json_dir, ncdump.FILE_DATE_FMT)        
+    #if 'json' in tseries_fmt:
+    #    ncdump.write_json_files([tseries_file], ncdump.GLOBAL_ATTS, ncdump.VAR_ATTS,ncdump.COORD_VARS, json_dir, ncdump.FILE_DATE_FMT)        
 
 #*****************************************************************
 # Read location files

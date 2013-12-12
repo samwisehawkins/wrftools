@@ -323,8 +323,7 @@ for init_time in init_times:
 
     if json:
         try:
-            pass
-            #wrftools.tseries_to_json(config)
+            wrftools.tseries_to_json(config)
         except Exception, e:
                 logger.error('*** FAIL JSON CONVERSION ***')
                 wrftools.handle(e, fail_mode, full_trace)
