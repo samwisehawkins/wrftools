@@ -107,7 +107,8 @@ def main():
             datasets = [pressure_093, surface_093]
         elif dsid=='094.0':
             datasets = [pressure_094, surface_094]
-
+        else:
+            raise Exception("unknown dataset, try 093.0 or 094.0")
         try:            
             verify_requests(datasets, options, cookie, verbose=args['--verbose'])
             if not args['--dry-run']:
@@ -235,7 +236,7 @@ def get_filenames(server, user, ind, cookie):
     # We only need the lines with the id in
     # The filename is token[4]
     #
-    print response
+    #print response
     fnames = [l.split()[4] for l in response.split('\n') if request_id in l]
     return sorted(fnames)
 
