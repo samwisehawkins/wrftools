@@ -34,6 +34,7 @@ COORD_VARS      = ['time', 'height', 'location', 'lat', 'lon', 'location_id']
 FILE_DATE_FMT   = '%Y-%m-%d_%H%M'  # Date format for file name
 DATE_FMT        = '%Y-%m-%d %H:%M' # Date format within files
 GLOBAL_ATTS     = ['DOMAIN', 'MODEL_RUN', 'GRID_ID']  # which global attributes to copy from ncfile to json
+GLOBAL_ATTS     = ['GRID_ID']  # which global attributes to copy from ncfile to json
 VAR_ATTS        = ['units', 'description']  # which variables attributes to include in json series
 FULL_SLICE      = {'time': (0,None), 'location': (0,None), 'height':(0,None)} # this represents no slicing
 CSV_NAME        = 'tseries.csv'       
@@ -124,11 +125,8 @@ def write_csv_files(ncfiles, out_dir, dimspec=FULL_SLICE):
         dataset = Dataset(f, 'r')
         # get some global attributes
 
-        model     = dataset.MODEL
-        nest_id   = dataset.GRID_ID
-        model_run = dataset.MODEL_RUN
-        domain    = dataset.DOMAIN
-        
+
+        grid_id       = dataset.GRID_ID
         variables     = dataset.variables
 
         fulltime      = variables['time']
@@ -139,9 +137,14 @@ def write_csv_files(ncfiles, out_dir, dimspec=FULL_SLICE):
         ntime     = len(datetimes) 
         init_time = fulldatetimes[0]
       
-        location    = variables['location'][ls:le]
+        # hack to catch thanet
+        try:
+            location    = variables['location'][ls:le]
+        except KeyError:
+            location    = variables['location_id'][ls:le] 
+        
         nloc        = location.shape[0]
-        loc_id      = [''.join(location[l,0:-1]) for l in range(nloc)]
+        loc_id      = [''.join(location[l,:]) for l in range(nloc)]
         
         height    = variables['height'][hs:he]
         nheight   = len(height)
@@ -156,7 +159,8 @@ def write_csv_files(ncfiles, out_dir, dimspec=FULL_SLICE):
                 rowdict['valid_time']  = datetimes[t]
                 rowdict['location_id'] = loc_id[l]
                 rowdict['init_time']   = init_time
-
+                rowdict['grid_id']     = grid_id
+                
                 for v in varnames:
                     data = vardata[v]
                     print v, data.shape
