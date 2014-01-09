@@ -29,6 +29,8 @@ import pandas as pd
 from collections import OrderedDict
 import re
 import numpy as np
+import scipy.stats as stats
+import string
 
 COORD_VARS      = ['time', 'height', 'location', 'lat', 'lon', 'location_id']
 FILE_DATE_FMT   = '%Y-%m-%d_%H%M'  # Date format for file name
@@ -79,18 +81,275 @@ def main():
 
     dimspec = {'time': (ts, te), 'location':(ls, le), 'height': (hs, he)}
 
-    if args['--format']=='txt':
+    if 'txt' in args['--format']:
         write_seperate_files(ncfiles, out_dir, dims)
     
-    elif args['--format']=='json':
+    if 'json' in args['--format']:
         write_json_files(ncfiles, GLOBAL_ATTS, VAR_ATTS,COORD_VARS,out_dir, FILE_DATE_FMT, dimspec)
     
-    elif args['--format']=='csv':
+    if 'csv' in args['--format']:
         write_csv_files(ncfiles, out_dir, dimspec)
+    
+    if 'aot' in args['--format']:
+        write_aot_files(ncfiles, out_dir, dimspec=dimspec)
     
     else:
         print 'format not understood'
+
+
+
+def frame_from_nc(ncfiles, dimspec=FULL_SLICE):
+    """ Build a Pandas DataFrame from a series of netcdf files
+    
+    Arguments:
+        @ncfiles -- a list of netcdf files to read
+        @dimspec -- dictionary specifying start and end indices of coordinated dimensions"""
+
         
+    ts,te = dimspec['time']
+    ls,le = dimspec['location']
+    hs,he = dimspec['height']
+
+    rows = []
+    for f in ncfiles:
+        dataset = Dataset(f, 'r')
+        # get some global attributes
+
+        grid_id       = dataset.GRID_ID
+        variables     = dataset.variables
+
+        fulltime      = variables['time']
+        fulldatetimes = num2date(fulltime,units=fulltime.units,calendar=fulltime.calendar)
+        
+        time      = fulltime[ts:te]
+        datetimes = fulldatetimes[ts:te]
+        ntime     = len(datetimes) 
+        init_time = fulldatetimes[0]
+      
+        # hack to catch thanet
+        try:
+            location    = variables['location'][ls:le]
+        except KeyError:
+            location    = variables['location_id'][ls:le] 
+        
+        nloc        = location.shape[0]
+        loc_id_raw  = [''.join(location[l,0:-1]) for l in range(nloc)]
+        loc_id      = map(string.strip, loc_id_raw)
+        height    = variables['height'][hs:he]
+        nheight   = len(height)
+
+        # this will force the reading all of the required variable data into memory
+        varnames = [v for v in variables if v not in COORD_VARS]
+        vardata  = dict([(v, variables[v][:]) for v in varnames])
+
+        for t in range(ntime):
+            for l in range(nloc):
+                rowdict = OrderedDict()
+                rowdict['valid_time']  = datetimes[t]
+                rowdict['location']    = loc_id[l]
+                rowdict['init_time']   = init_time
+                rowdict['grid_id']     = grid_id
+                
+                for v in varnames:
+                    data = vardata[v]
+                    print v, data.shape
+                    
+                    # 2D variable
+                    if len(data.shape)==2:
+                        rowdict[v] = data[t,l]
+                    
+                    # 3D variable
+                    if len(data.shape)==3:
+                        for h in range(nheight):
+                            key = '%s_%03d' %(v, int(height[h]))
+                            rowdict[key] = data[t,l,h]
+                        
+                rows.append(rowdict)
+        dataset.close()
+    
+    df       = pd.DataFrame(rows)
+    
+    #re-arrange columns
+    cols = df.columns
+    pre_cols = ['init_time','valid_time','location']
+    data_cols = [c for c in cols if c not in pre_cols]
+    new_cols = pre_cols + data_cols
+    df = df[new_cols]
+    return df
+
+    
+def write_aot_files(ncfiles, out_dir, dimspec=FULL_SLICE):        
+    """Writes file format the same as AOTs existing supplier, which is:
+  
+    
+    "Location","Date/time (utc)","Date/time (local)","Forecast (hours)","Windspeed 21m (m/sec)","Winddirection 21m (degrees)","Windspeed 70m (m/sec)","Winddirection 70m (degrees)","Windspeed 110m (m/sec)","Winddirection 110m (degrees)","Percentile  10 (m/sec) 70m","Percentile  20 (m/sec) 70m","Percentile  30 (m/sec) 70m","Percentile  40 (m/sec) 70m","Percentile  50 (m/sec) 70m","Percentile  60 (m/sec) 70m","Percentile  70 (m/sec) 70m","Percentile  80 (m/sec) 70m","Percentile  90 (m/sec) 70m
+    "Thanet",2013-05-31 00:00,2013-05-31 02:00,0,7.80,351,8.70,352,8.93,352,7.27,7.83,8.20,8.52,8.70,8.97,9.27,9.66,10.16
+    
+    Arguments:
+        @ncfiles netcdf time-series files to process
+        @out_dir directory to write output to
+        @locations additional table giving information about the locations"""
+    
+    logger = wrftools.get_logger()
+    
+    df = frame_from_nc(ncfiles, dimspec)
+
+    #
+    # The AOT files require a local time, as well as UTC time. This requires a mapping between location 
+    # and timezone. The quickest way to do this is to hardcode this here. This is not very elegant or
+    # extensible, but it works.
+    #
+    import pytz
+    tz_map = { "FRE": "Europe/Amsterdam",
+                    "HAM":	"Europe/Amsterdam",
+                    "DTK":	"Europe/Amsterdam",
+                    "SNB":	"Europe/Amsterdam",
+                    "AVS":	"Europe/Amsterdam",
+                    "FN1":	"Europe/Amsterdam",
+                    "FN3":	"Europe/Amsterdam",
+                    "AMS":	"Europe/Amsterdam",
+                    "NEZ":	"Europe/Amsterdam",
+                    "ZDB":	"Europe/Amsterdam",
+                    "RCN":	"Europe/Amsterdam",
+                    "BEK":	"Europe/Amsterdam",
+                    "DEB":	"Europe/Amsterdam",
+                    "DKY":	"Europe/Amsterdam",
+                    "DLN":	"Europe/Amsterdam",
+                    "HGV":	"Europe/Amsterdam",
+                    "LWN":	"Europe/Amsterdam",
+                    "LYD":	"Europe/Amsterdam",
+                    "SPL":	"Europe/Amsterdam",
+                    "SVN":	"Europe/Amsterdam",
+                    "VLK":	"Europe/Amsterdam",
+                    "ZSN":	"Europe/Amsterdam",
+                    "STO":	"Europe/Amsterdam",
+                    "SLG":	"Europe/Amsterdam",
+                    "YTS":	"Europe/Amsterdam",
+                    "UTG":	"Europe/Amsterdam",
+                    "EA1":	"Europe/London",
+                    "EAZ":	"Europe/London",
+                    "EDI":	"Europe/London",
+                    "LON":	"Europe/London",
+                    "UKF":	"Europe/London",
+                    "UTH":	"Europe/London",
+                    "UKR":	"Europe/London",
+                    "EDB":	"Europe/London"}
+
+    name_map = {"FRE" : "Fredericia",
+                "EDI" : "Edinburgh",
+                "LON" : "London",
+                "STO" : "Stockholm",
+                "HAM" : "Hamburg",
+                "AMS" : "Amsterdam",
+                "UKF" : "Kentish Flats",
+                "UTH" : "Thanet",
+                "UKR" : "Ormonde",
+                "SLG" : "Lillgrund",
+                "DTK" : "Dan Tysk",
+                "SNB" : "Sand Bank",
+                "EDB" : "Edinbane",
+                "NEZ" : "Egmonde an Zee",
+                "ZDB" : "Zuidlob",
+                "AVS" : "Alpha Ventus",
+                "RCN" : "RCN Mast",
+                "FN1" : "Fino 1 Platform",
+                "FN3" : "Fino 3 Platform",
+                "BEK" : "Beek",
+                "DEB" : "Debilt",
+                "DKY" : "Dekooy",
+                "DLN" : "Deelen",
+                "HGV" : "Hoogeveen",
+                "LWN" : "Leeuwarden",
+                "LYD" : "Lelystad",
+                "SPL" : "Schipol",
+                "SVN" : "Stavoren",
+                "VLK" : "Valkenburg",
+                "ZSN" : "Zestienhoven",
+                "EA1" : "East Anglia 1B",
+                "EAZ" : "East Anglia ZE",
+                "YTS" : "Yttre Stengrund",
+                "UTG" : "Utgrunded"}
+
+    #
+    # We also need to rename (and drop) some columns which we will hard code here
+    #
+    col_map = OrderedDict([("location",   "Location"),
+                               ("valid_time",    "Date/time (utc)"),
+                               ("local_time",    "Date/time (local)"),
+                               ("lead_time",     "Forecast (hours)"),
+                               ("SPEED_020",     "Windspeed 21m (m/sec)"),
+                               ("DIRECTION_020", "Winddirection 21m (degrees)"),
+                               ("SPEED_070",     "Windspeed 70m (m/sec))"),
+                               ("DIRECTION_070", "Winddirection 70m (degrees)"),
+                               ("SPEED_110",     "Windspeed 110m (m/sec)"),
+                               ("DIRECTION_110", "Winddirection 110m (degrees)"),
+                               ("SPEED_070.P10", "Percentile  10 (m/sec) 70m"),
+                               ("SPEED_070.P20", "Percentile  20 (m/sec) 70m"),
+                               ("SPEED_070.P30", "Percentile  30 (m/sec) 70m"),
+                               ("SPEED_070.P40", "Percentile  40 (m/sec) 70m"),
+                               ("SPEED_070.P50", "Percentile  50 (m/sec) 70m"),
+                               ("SPEED_070.P60", "Percentile  60 (m/sec) 70m"),
+                               ("SPEED_070.P70", "Percentile  70 (m/sec) 70m"),
+                               ("SPEED_070.P80", "Percentile  80 (m/sec) 70m"),
+                               ("SPEED_070.P90", "Percentile  90 (m/sec) 70m") ])
+
+
+    utc = pytz.UTC
+    # weeeeee, what a lot of chained operators!
+    convert = lambda row: utc.localize(row['valid_time']).astimezone(pytz.timezone(tz_map[row['location']])).strftime('%Y-%m-%d %H:%M')
+    
+    
+    # Now we apply our uber-lambda function to insert local time
+    df['local_time'] = df.apply(convert, axis=1)
+
+    # Calculate lead time as integer number of hours
+    deltas = df['valid_time'] - df['init_time']
+    hours = lambda x: x / np.timedelta64(1, 'h')
+    lead_ints = deltas.apply(hours)
+    df['lead_time'] = lead_ints.astype(int)
+
+    # Expand short names to long names
+    rename = lambda x: name_map[x]
+    long_names = df['location'].apply(rename)
+    df['location'] = long_names
+    
+    
+    # *******************************************
+    # WARING - this is a hack and does not belong
+    # here long term. This is just a quick way of
+    # adding statistical percentiles to the output 
+    # time series. We need to thinl carefully about
+    # where these shoudl be calculated.
+    #********************************************
+#     "SPEED_070.P10" : "Percentile  10 (m/sec) 70m",
+#                  "SPEED_070.P20" : "Percentile  20 (m/sec) 70m",
+#                  "SPEED_070.P30" : "Percentile  30 (m/sec) 70m",
+#                  "SPEED_070.P40" : "Percentile  40 (m/sec) 70m",
+#                  "SPEED_070.P50" : "Percentile  50 (m/sec) 70m",
+#                  "SPEED_070.P60" : "Percentile  60 (m/sec) 70m",
+#                  "SPEED_070.P70" : "Percentile  70 (m/sec) 70m",
+#                  "SPEED_070.P80" : "Percentile  80 (m/sec) 70m",
+#                  "SPEED_070.P90" : "Percentile  90 (m/sec) 70m" 
+    
+    percentiles = [10, 20, 30, 40, 50, 60, 70, 80, 90]
+    for p in percentiles:
+        pname = 'SPEED_070.P%02d' % p
+        pfunc = lambda x : stats.norm.ppf(p/100.0, x, x*0.10)
+        df[pname] = df['SPEED_070'].apply(pfunc)
+
+    print df[['SPEED_070', 'SPEED_070.P20', 'SPEED_070.P90']].to_string()
+    
+    subset = df[col_map.keys()]
+    subset.columns = col_map.values()
+
+    gb = subset.groupby(by='Location')
+    groups = dict(list(gb))
+    import csv
+    for location in groups.keys():
+        group = groups[location]
+        out_name = '%s/%s.csv' % (out_dir, location)
+        group.to_csv(out_name, index=False, float_format='%0.2f')
+    
 
         
         
@@ -114,90 +373,7 @@ def write_csv_files(ncfiles, out_dir, dimspec=FULL_SLICE):
     #
     
     logger = wrftools.get_logger()
-    ts,te = dimspec['time']
-    ls,le = dimspec['location']
-    hs,he = dimspec['height']
-
-    rows = []    
-
-    for f in ncfiles:
-        logger.debug('dumping netcdf time series to cvs columns')
-        dataset = Dataset(f, 'r')
-        # get some global attributes
-
-
-        grid_id       = dataset.GRID_ID
-        variables     = dataset.variables
-
-        fulltime      = variables['time']
-        fulldatetimes = num2date(fulltime,units=fulltime.units,calendar=fulltime.calendar)
-        
-        time      = fulltime[ts:te]
-        datetimes = fulldatetimes[ts:te]
-        ntime     = len(datetimes) 
-        init_time = fulldatetimes[0]
-      
-        # hack to catch thanet
-        try:
-            location    = variables['location'][ls:le]
-        except KeyError:
-            location    = variables['location_id'][ls:le] 
-        
-        nloc        = location.shape[0]
-        loc_id      = [''.join(location[l,:]) for l in range(nloc)]
-        
-        height    = variables['height'][hs:he]
-        nheight   = len(height)
-
-        # this will force the reading all of the required variable data into memory
-        varnames = [v for v in variables if v not in COORD_VARS]
-        vardata  = dict([(v, variables[v][:]) for v in varnames])
-
-        for t in range(ntime):
-            for l in range(nloc):
-                rowdict = OrderedDict()
-                rowdict['valid_time']  = datetimes[t]
-                rowdict['location_id'] = loc_id[l]
-                rowdict['init_time']   = init_time
-                rowdict['grid_id']     = grid_id
-                
-                for v in varnames:
-                    data = vardata[v]
-                    print v, data.shape
-                    
-                    # 2D variable
-                    if len(data.shape)==2:
-                        rowdict[v] = data[t,l]
-                    
-                    # 3D variable
-                    if len(data.shape)==3:
-                        for h in range(nheight):
-                            key = '%s_%03d' %(v, int(height[h]))
-                            rowdict[key] = data[t,l,h]
-                        
-                rows.append(rowdict)
-        dataset.close()
-    
-    df       = pd.DataFrame(rows)
-    cols     = list(df.columns)
-
-
-    
-    # change the order of columns 
-    #var_cols = cols[2:]
-
-    pre_cols = ['init_time','valid_time','location_id']
-    data_cols = [c for c in cols if c not in pre_cols]
-    print pre_cols
-    print data_cols
-    new_cols = pre_cols + data_cols
-    
-    #
-    #pre_cols[0] = 'init_time'
-    #pre_cols[1] = 'valid_time'
-    #pre_cols[2] = 'location_id'
-    #
-    df = df[new_cols]
+    df = frame_from_nc(ncfiles, dimspec)
     df.to_csv('%s/%s' % (out_dir, CSV_NAME), index=False, float_format='%0.3f')
     #print df.to_string()
     

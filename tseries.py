@@ -119,8 +119,10 @@ def extract_tseries(config):
     fcst_file      = '%s/wrfout_d%02d_%s:00:00.nc' %(wrfout_dir, dom, init_time.strftime("%Y-%m-%d_%H")) # note we add on the nc extension here
     loc_file       = config['locations_file']
     ncl_code       = config['tseries_code']
+    extract_hgts   = config['extract_hgts']
     tseries_fmt    = config['tseries_fmt']
     ncl_opt_file   = config['ncl_opt_file']
+    
     
     ncl_log        = config['ncl_log']
     if not os.path.exists(tseries_dir):
@@ -142,14 +144,17 @@ def extract_tseries(config):
     logger.debug('NCL_OUT_FILE  ----> %s' % tseries_file)
     logger.debug('LOCATIONS_FILE ----> %s' % loc_file)
     logger.debug('NCL_OPT_FILE   ----> %s' % ncl_opt_file)
+    logger.debug(extract_hgts)
 
+    ncl_hgts = '(/%s/)' % ','.join(map(str,extract_hgts))
+    
     for script in ncl_code:
-        cmd  = "ncl %s >> %s 2>&1" % (script, ncl_log)
+        cmd  = "ncl 'extract_heights=%s'  %s >> %s 2>&1" % (ncl_hgts,script, ncl_log)
         wrftools.run_cmd(cmd, config)
 
 
-    #if 'txt' in tseries_fmt:
-    #    ncdump.write_seperate_files([tseries_file], tseries_dir)
+    if 'aot' in tseries_fmt:
+        ncdump.write_aot_files([tseries_file], tseries_dir)
     
     #if 'json' in tseries_fmt:
     #    ncdump.write_json_files([tseries_file], ncdump.GLOBAL_ATTS, ncdump.VAR_ATTS,ncdump.COORD_VARS, json_dir, ncdump.FILE_DATE_FMT)        

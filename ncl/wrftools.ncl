@@ -564,19 +564,44 @@ begin
         ; uvmet - rotated unstaggered wind
         ;************************************
         uvmet = wrf_user_getvar(file_handle, "uvmet", time_in)
-        u = uvmet(0,:,:,:,:)
-        v = uvmet(1,:,:,:,:)
+        ul = uvmet(0,:,:,:,:)
+        vl = uvmet(1,:,:,:,:)
         
+        uvmet10 = wrf_user_getvar(file_handle, "uvmet10", time_in)
+        u10 = uvmet10(0,:,:,:)
+        v10 = uvmet10(1,:,:,:)
+        
+        
+        u = merge_levels_sfc(ul, u10, -1)
+        v = merge_levels_sfc(vl, v10, -1)
+
         delete(uvmet)
-    
+        delete(uvmet10)
+        delete(ul)
+        delete(vl)
+        
+
+        
+        ; will be time, level, south_north, west_east
+        delete(dims)
+        dims = dimsizes(hgt_agl)
+        
+        ; we have one extra height level for wind, due to 10m diagnostic
+        hgt_agl_uv = new((/dims(0), dims(1)+1, dims(2), dims(3)/), float) 
+        hgt_agl_uv(:, 1:dims(1), :, :) = hgt_agl(:, :, :, :)
+        hgt_agl_uv(:,0,:,:) = 10.0
+        
+        delete(dims)
+        
+
         u@description = "eastward component of wind velocity"
         v@description = "northward component of wind velocity"
-        
+
         ;************************************
         ; Vertically interpolate wind speeds to height levels
         ;************************************
-        u_agl   = wrf_user_intrp3d(u, hgt_agl, "h", hgt_out,0, False) 
-        v_agl   = wrf_user_intrp3d(v, hgt_agl, "h", hgt_out,0, False) 
+        u_agl   = wrf_user_intrp3d(u, hgt_agl_uv, "h", hgt_out,0, False) 
+        v_agl   = wrf_user_intrp3d(v, hgt_agl_uv, "h", hgt_out,0, False) 
 
         delete(u)
         delete(v)
@@ -711,9 +736,8 @@ begin
         
         ; virtual potential temperature
         thetav_agl_locs = theta_agl_locs*(1+(0.61*qv_agl_locs))
-        printVarSummary(thetav_agl_locs)
-        delete_VarAtts(thetav_agl_locs, "description")
-        delete_VarAtts(thetav_agl_locs, "units")
+        ;delete_VarAtts(thetav_agl_locs, "description")
+        ;delete_VarAtts(thetav_agl_locs, "units")
 
         
         thetav_agl_locs@units = "K"
