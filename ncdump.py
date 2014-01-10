@@ -506,6 +506,8 @@ def write_json_files(ncfiles, global_atts, var_atts,coord_vars, out_dir, file_da
         @dims          -- dimension specification used so slice output variables"""
 
     logger = wrftools.get_logger()
+
+    
     
     ts,te = dimspec['time']
     ls,le = dimspec['location']
@@ -535,6 +537,11 @@ def write_json_files(ncfiles, global_atts, var_atts,coord_vars, out_dir, file_da
         times     = fulltime[ts:te]
         datetimes = fulldatetimes[ts:te]
         init_time = fulldatetimes[0]
+
+        # Output file name
+        fname = '%s/fcst_data_d%02d_%s.json' % (out_dir, nest_id, init_time.strftime('%H'))
+
+
         
         # For highcharts plotting, time must be in milliseconds since unix epoch
         timestamps      = [time.mktime(t.timetuple())*1000 for t in datetimes]
@@ -590,7 +597,7 @@ def write_json_files(ncfiles, global_atts, var_atts,coord_vars, out_dir, file_da
                     #print hs,he
                     var = fullvar[ts:te, ls:le, hs:he]
 
-                print var_atts
+
                 var_att_dict = dict([(att,fullvar.getncattr(att)) for att in var_atts])
                 series_dict = dict(global_att_dict.items()+ var_att_dict.items())
                 
@@ -650,7 +657,7 @@ def write_json_files(ncfiles, global_atts, var_atts,coord_vars, out_dir, file_da
 
         dataset.close()        
 
-        fname = '%s/fcst_data.json' % (out_dir)
+        #fname = '%s/fcst_data.json' % (out_dir)
         logger.debug('********* writing json to %s ****************'  % fname)
 
         fout  = open(fname, 'w')

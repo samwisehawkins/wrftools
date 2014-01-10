@@ -86,6 +86,7 @@ met                 = config['met']
 convert_grb         = config['convert_grb']
 timing              = config['timing'] # produce timing information
 web                 = config['web']
+dispatch            = config['dispatch']
 archive             = config['archive']
 cleanup             = config['cleanup']
 
@@ -322,9 +323,12 @@ for init_time in init_times:
 
 
     if json:
-        try:
-            wrftools.tseries_to_json(config)
-        except Exception, e:
+
+        for d in range(1,max_dom+1):
+            try:        
+                config['dom'] = d
+                wrftools.tseries_to_json(config)
+            except Exception, e:
                 logger.error('*** FAIL JSON CONVERSION ***')
                 wrftools.handle(e, fail_mode, full_trace)
 
@@ -345,6 +349,8 @@ for init_time in init_times:
             logger.error('*** FAIL ADDITONAL SCRIPTS ***')
             wrftools.handle(e, fail_mode, full_trace)
 
+    if dispatch:
+        wrftools.dispatch(config)
 
     if archive:
         logger.debug("moving files to longbackup")

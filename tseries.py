@@ -79,7 +79,7 @@ def tseries_to_json(config):
     model_run   = config['model_run']
     init_time   = config['init_time']
 
-    tseries_dir  = '%s/%s/tseries' % (domain_dir, model_run)
+    tseries_dir  = config['tseries_dir']
     tseries_file = '%s/tseries_d%02d_%s.nc' % (tseries_dir, dom,init_time.strftime("%Y-%m-%d_%H"))
     json_dir     = '%s/%s/json' % (domain_dir, model_run)
     json_file    = '%s/fcst_data.json' % json_dir

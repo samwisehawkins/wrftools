@@ -79,7 +79,7 @@ import glob
 import time, datetime
 from dateutil import rrule
 from namelist import Namelist, read_namelist, add_cmd_args
-
+from dispatch import dispatch
 import glob
 
 from visualisation import *
