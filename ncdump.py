@@ -539,7 +539,7 @@ def write_json_files(ncfiles, global_atts, var_atts,coord_vars, out_dir, file_da
         init_time = fulldatetimes[0]
 
         # Output file name
-        fname = '%s/fcst_data_d%02d_%s.json' % (out_dir, nest_id, init_time.strftime('%H'))
+        fname = '%s/fcst_data_d%02d_%sZ.json' % (out_dir, nest_id, init_time.strftime('%H'))
 
 
         
