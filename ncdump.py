@@ -539,7 +539,7 @@ def write_json_files(ncfiles, global_atts, var_atts,coord_vars, out_dir, file_da
         init_time = fulldatetimes[0]
 
         # Output file name
-        fname = '%s/fcst_data_d%02d_%s.json' % (out_dir, nest_id, init_time.strftime('%H'))
+        fname = '%s/fcst_data_d%02d_%sZ.json' % (out_dir, nest_id, init_time.strftime('%H'))
 
 
         
@@ -568,13 +568,7 @@ def write_json_files(ncfiles, global_atts, var_atts,coord_vars, out_dir, file_da
         for l in range(nlocs):
             loc = ''.join(location[l,0:loc_str_len-1])
             loc = loc.strip()
-   
-            
-            #fname = '%s/%s_d%02d_%s.json' % (out_dir, loc, nest_id, init_time.strftime(file_date_fmt))
-            #logger.debug('writing json to %s'  % fname)
-            #fout = open(fname, 'w')
-            #first=True
-            #fout.write('[')
+
             # For each variable in the file
             for v in range(nvars):
                 varname = variables.keys()[v]
@@ -657,7 +651,7 @@ def write_json_files(ncfiles, global_atts, var_atts,coord_vars, out_dir, file_da
 
         dataset.close()        
 
-        #fname = '%s/fcst_data.json' % (out_dir)
+
         logger.debug('********* writing json to %s ****************'  % fname)
 
         fout  = open(fname, 'w')
