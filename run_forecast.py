@@ -289,6 +289,17 @@ for init_time in init_times:
                 logger.error('*** FAIL NCL ***')
                 wrftools.handle(e, fail_mode, full_trace)
     
+        
+        if config['openlayers']:
+            for d in range(1,max_dom+1):
+                try:
+                    logger.debug('Processing domain d%02d' %d)
+                    config['dom'] = d
+                    wrftools.produce_ncl_ol_plots(config)
+                except Exception, e:
+                    logger.error('*** FAIL NCL ***')
+                    wrftools.handle(e, fail_mode, full_trace)
+    
         if web:
             wrftools.transfer_to_web_dir(config)
 
