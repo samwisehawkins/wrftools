@@ -33,6 +33,8 @@ TODO
 
 CHANGES
 
+2014-01-17 Added support for OpenLayers output
+
 2013-08-30 Modified ungrib to support multiple  grib files in one run
 
 2013-07-11 Added job scheduling/queing functionality
