@@ -152,9 +152,10 @@ def extract_tseries(config):
         cmd  = "ncl 'extract_heights=%s'  %s >> %s 2>&1" % (ncl_hgts,script, ncl_log)
         wrftools.run_cmd(cmd, config)
 
-
-    if 'aot' in tseries_fmt:
-        ncdump.write_aot_files([tseries_file], tseries_dir)
+    ncdump.ncdump_wrftools(config)
+    
+    #if 'aot' in tseries_fmt:
+    #    ncdump.write_aot_files([tseries_file], tseries_dir)
     
     #if 'json' in tseries_fmt:
     #    ncdump.write_json_files([tseries_file], ncdump.GLOBAL_ATTS, ncdump.VAR_ATTS,ncdump.COORD_VARS, json_dir, ncdump.FILE_DATE_FMT)        

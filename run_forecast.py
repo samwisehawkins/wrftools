@@ -62,6 +62,9 @@ except KeyError:
 # is not needed, why should it be defined?
 #************************************************
 logger.info('*** FORECAST CYCLE STARTED ***')
+config['simulation_start'] = datetime.datetime.now()
+
+run_level           = config['run_level']
 fail_mode           = config['fail_mode']
 full_trace          = config['full_trace']
 gribmaster          = config['gribmaster']
@@ -78,7 +81,6 @@ post                = config['post']
 time_series         = config['tseries']
 compress            = config['compress']
 metadata            = config['metadata']
-json                = config['json']
 power               = config['power']
 ncl                 = config['ncl']
 scripts             = config['scripts']
@@ -115,8 +117,6 @@ for init_time in init_times:
     #
     config['init_time'] = init_time
     logger.info('Running forecast from initial time: %s' %init_time) 
-
-    
 
     #
     # Gribmaster
@@ -219,13 +219,21 @@ for init_time in init_times:
         except Exception, e:
             wrftools.handle(e, fail_mode, full_trace)
     
-    #logger.warn('*** SLEEPING FOR 10 SECONDS TO ALLOW FS TIME TO SORT ITSELF OUT ***')
-    #time.sleep(10)
+    
+    if 'status' in config and config['status']:
+        logger.debug("writing status file")
+        try:
+            config['simulation_complete'] = datetime.datetime.now()
+            wrftools.status(config)
+        except Exception, e:
+            logger.error('*** FAIL STATUS WRITE ***')
+            wrftools.handle(e, fail_mode, full_trace)
 
+    
+    
     #
     # Post processing
     #
-
     if post:
         if compress:
             try:
@@ -261,7 +269,6 @@ for init_time in init_times:
                     wrftools.handle(e, fail_mode, full_trace)
 
 
-        
                 
                 
     #
@@ -303,26 +310,28 @@ for init_time in init_times:
         if web:
             wrftools.transfer_to_web_dir(config)
 
-    #
-    # Extract time-series from grib files
-    #
     if time_series:
         for d in range(1,max_dom+1):
             try:
+                logger.debug('Processing domain d%02d' %d)
                 config['dom'] = d
                 wrftools.extract_tseries(config)
             except Exception, e:
-                logger.error('*** FAIL TIME SERIES ***')
+                logger.error('*** FAIL NCL TIME SERIES ***')
                 wrftools.handle(e, fail_mode, full_trace)
 
+                
     #
     # Some bug seems to be creeping in, causing the programme to 
     # fail silently around here. I'm adding a sleep statement
     # as I have a hunch this might be some kind of race condition
     #
-    logger.warn('*** SLEEPING FOR 1 SECONDS TO ENSURE TSERIES FILES ARE CLOSED ***')
-    time.sleep(1)
+    #logger.warn('*** SLEEPING FOR 1 SECONDS TO ENSURE TSERIES FILES ARE CLOSED ***')
+    #time.sleep(1)
 
+    
+    
+    
     if power:
         for d in range(1,max_dom+1):
             try:
@@ -333,35 +342,27 @@ for init_time in init_times:
                 wrftools.handle(e, fail_mode, full_trace)
 
 
-    if json:
-
+    if time_series:
         for d in range(1,max_dom+1):
-            try:        
+            try:
                 config['dom'] = d
-                wrftools.tseries_to_json(config)
+                wrftools.ncdump(config)
             except Exception, e:
-                logger.error('*** FAIL JSON CONVERSION ***')
+                logger.error('*** FAIL TIME SERIES DUMPING  ***')
                 wrftools.handle(e, fail_mode, full_trace)
 
-        if web:
-            logger.info('*** TRANSFERRING JSON TO WEB DIR ***')
-            try:
-                wrftools.json_to_web(config)
-            except Exception,e:
-                logger.error('*** FAIL TRANSFERRING JSON ***')
-                wrftools.handle(e, fail_mode, full_trace)
-    #
-    # Any additional scripts
-    #
-    if scripts:
+    if web:
+        logger.info('*** TRANSFERRING JSON TO WEB DIR ***')
         try:
-            wrftools.run_scripts(config)
-        except Exception, e:
-            logger.error('*** FAIL ADDITONAL SCRIPTS ***')
+            wrftools.json_to_web(config)
+        except Exception,e:
+            logger.error('*** FAIL TRANSFERRING JSON ***')
             wrftools.handle(e, fail_mode, full_trace)
 
+            
     if dispatch:
-        wrftools.dispatch(config)
+        dry_run = run_level=='DUMMY'
+        wrftools.dispatch.dispatch_all(config['dispatch_json'], init_time, dry_run, log_name=wrftools.LOGGER)
 
     if archive:
         logger.debug("moving files to longbackup")

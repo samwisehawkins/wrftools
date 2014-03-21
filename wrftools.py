@@ -80,6 +80,8 @@ import numpy as np
 import glob
 import time, datetime
 from dateutil import rrule
+from collections import OrderedDict
+
 from namelist import Namelist, read_namelist, add_cmd_args
 from dispatch import dispatch
 import glob
@@ -88,7 +90,8 @@ from visualisation import *
 from customexceptions import *
 import logging
 
-from tseries import extract_tseries, tseries_to_json, json_to_web
+from tseries import extract_tseries, json_to_web
+from ncdump import ncdump_wrftools as ncdump
 from power import power, PowerCurve
 from queue import fill_template, qsub, qstat
 
@@ -379,16 +382,18 @@ def transfer(flist, dest, mode='copy', debug_level='NONE'):
     for f in flist:
         fname = os.path.split(f)[1]
         dname = '%s/%s' % (dest, fname)
-        logger.debug(dname)
+        #logger.debug(dname)
         # bit dangerous, could delete then fail
         if os.path.exists(dname):
             os.remove(dname)
 
         shutil.copy2(f, dname)
         if debug_level=='DEBUG':
-            logger.debug('copied %s ---------> %s' % (f, dname))
+            pass
+            #logger.debug('copied %s ---------> %s' % (f, dname))
         elif debug_level=='INFO':
-            logger.info('copied %s ---------> %s' % (f, dname))
+            pass
+            #logger.info('copied %s ---------> %s' % (f, dname))
         if mode=='move':
             os.remove(f)                        
         n+=1
@@ -2557,8 +2562,20 @@ def extract_gfs_fields(config):
         logger.debug(cmd)
         subprocess.call(cmd, shell=True)
     
+
+def status(config):
+    """Writes a json file specifying the model status"""
+    import json
+    # somewhere the order gets reversed
+    status = OrderedDict({ 
+                "Forecast started"    : config['simulation_start'].strftime('%Y-%m-%d %H:%M'),
+				"Forecast completed"  : config['simulation_complete'].strftime('%Y-%m-%d %H:%M'),
+                "Model initialised"   : config['init_time'].strftime('%Y-%m-%d %H:%M'),
+                "Boundary conditions" : config['bdy_conditions']})
    
-    
+    f = open(config['status_file'], 'w')
+    f.write(json.dumps(status, indent=4))
+    f.close()
 
 
 def cleanup(config):

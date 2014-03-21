@@ -1,199 +1,431 @@
 """ncdump.py dumps data from a netcdf file to text file
 
 Usage: 
-    ncdump.py <file>... --format=<fmt> [--dims=<dimspec>] [--out=<dir>] [-h | --help]
-    
-Options:
-    <file>            input files
-    --format=<fmt>    format for output, txt or json
-    --dims=<dimspec>  dimension specification of the form dimname,start,end
-    --out=<dir>       output directory to write time-series
-    -h |--help        show this message
- 
-Notes:
-    Currently the file format is fixed
-    
-Examples:
-    python ncdump.py wrfout_d01_2010-01-* --out=./tseries """
+    ncdump.py <file>... [--config=<json>]
+        [--output=<dict>]
+        [--dimspec=<dict>]
+        [--log-level=<level>]
+        [-h | --help]
 
+Options:
+    <file>                  input files
+    [--config=<json>]       config file specifying these options
+    [--output=<dict>]       output dictionary mapping output directories to formats
+    [--dimspec=<dict>]      dimension specification for subsetting
+    [--log-level==<level>]  info, debug or warn
+    -h |--help              show this message
+
+
+   
+Examples:
+    python ncdump.py wrfout_d01_2010-01-* --config=myconfig.json"""
+
+import os
 import sys
 import docopt
-import subprocess
+import logging
+import string
 import time
 import datetime
-from netCDF4 import Dataset
-from netCDF4 import num2date, date2num
-import wrftools
 import json
 import pandas as pd
 from collections import OrderedDict
-import re
 import numpy as np
 import scipy.stats as stats
-import string
+from netCDF4 import Dataset
+from netCDF4 import num2date, date2num
+import scripting as sc
 
-COORD_VARS      = ['time', 'height', 'location', 'lat', 'lon', 'location_id']
+
+RESERVED_ATTS = ['_index']
+LOGGER        = 'ncdump'
+HGT2DNUM      = 9999   # height to encode 2D variables as (must be numeric and not clash with real heights)
+HGT2DSTR      = "2D"   # how 2D vars are specified in config file (can be string)
+
+
+FORMATS         = ['csv','txt','json','aot'] # supported output formats
+#COORD_VARS      = ['time', 'height', 'location', 'lat', 'lon', 'location_id']
 FILE_DATE_FMT   = '%Y-%m-%d_%H%M'  # Date format for file name
 DATE_FMT        = '%Y-%m-%d %H:%M' # Date format within files
-GLOBAL_ATTS     = ['DOMAIN', 'MODEL_RUN', 'GRID_ID']  # which global attributes to copy from ncfile to json
 GLOBAL_ATTS     = ['GRID_ID']  # which global attributes to copy from ncfile to json
 VAR_ATTS        = ['units', 'description']  # which variables attributes to include in json series
 FULL_SLICE      = {'time': (0,None), 'location': (0,None), 'height':(0,None)} # this represents no slicing
-CSV_NAME        = 'tseries.csv'       
-JSON_NAME       = 'fcst_data.json'
+#CSV_NAME        = 'tseries.csv'       
+#JSON_NAME       = 'fcst_data.json'
+LOGGER          = 'ncdump'
 
-def main():         
-    """Dump a netcdf time-series file to a textual representation"""
-    args = docopt.docopt(__doc__, sys.argv[1:])
 
-    print '\n********************************'
-    print 'dumping netCDF time series to flat files'
-    print 'format chosen: %s' % args['--format'] 
-    ncfiles = args['<file>']
+
+def main():
     
-    if args['--out']==None:
-        out_dir = '.'
-    else:
-        out_dir = args['--out']
+    args  = docopt.docopt(__doc__, sys.argv[1:])
 
-    dims = args['--dims']
-    # time, location and height start and end indices
-    # default is whole range
-    ts = 0
-    te = None
-    ls = 0
-    le = None
-    hs = 0
-    he = None
+    # since command-line args are not parsed as json unlike the config file,
+    # any lists come back as single strings, e.g. "[arg1, arg2]"
+    # this ensures they are parsed as json, and become lists.
+    # not sure how dictionaries are treated!
+    args = sc.expand_cmd_args(args)
+
+    # load config file or defaults
+    cfile = sc.load_config(args['--config'])
     
-    if dims!=None:
-        for dim in dims:
-            d,s,e = dim.split(',')
-            if d=='time':
-                ts = int(s)
-                te = int(e)
-            if d=='location':
-                ls = int(s)
-                le = int(e)
-            if d=='height':
-                hs = int(s)
-                he = int(e)
+    # merge, with command-line args taking precendence
+    # note, if an argument is not specified in either source, its value will be None
+    config = sc.merge(args, cfile)
 
-    dimspec = {'time': (ts, te), 'location':(ls, le), 'height': (hs, he)}
+    # create a logging instance
+    logger = sc.create_logger(LOGGER, config['--log-level'], config['--log-format'])
 
-    if 'txt' in args['--format']:
-        write_seperate_files(ncfiles, out_dir, dims)
+    logger.debug(json.dumps(config, indent=4))
     
-    if 'json' in args['--format']:
-        write_json_files(ncfiles, GLOBAL_ATTS, VAR_ATTS,COORD_VARS,out_dir, FILE_DATE_FMT, dimspec)
-    
-    if 'csv' in args['--format']:
-        write_csv_files(ncfiles, out_dir, dimspec)
-    
-    if 'aot' in args['--format']:
-        write_aot_files(ncfiles, out_dir, dimspec=dimspec)
-    
-    else:
-        print 'format not understood'
+    output = config['--output'] 
 
-
-
-def frame_from_nc(ncfiles, dimspec=FULL_SLICE):
-    """ Build a Pandas DataFrame from a series of netcdf files
+    ncdump(config['<file>'],config['--vars'],config['--global-atts'],config['--var-atts'], config['--coord-vars'],output, LOGGER)
     
-    Arguments:
-        @ncfiles -- a list of netcdf files to read
-        @dimspec -- dictionary specifying start and end indices of coordinated dimensions"""
 
+def ncdump_wrftools(config):
+
+    """ Designed to be called from run_forecast.py"""
+    import wrftools
+    
+    init_time = config['init_time']
+    dom = config['dom']
+    
+    cstring = open(config['ncdump'], 'r').read()
+    filled  = wrftools.sub_date(cstring, init_time=init_time)
+    
+    ncconfig = json.loads(filled)
+    for key,val in ncconfig.items():
+        print key,val
+    
+    
+    tseries_dir = wrftools.sub_date(config['tseries_dir'], init_time=init_time)
+    tseries_file = '%s/tseries_d%02d_%s.nc' % (tseries_dir, dom, init_time.strftime('%Y-%m-%d_%H'))
+    files = [tseries_file]
+    ncdump(files, ncconfig['--vars'],ncconfig['--global-atts'],ncconfig['--var-atts'], ncconfig['--coord-vars'],ncconfig['--output'], 'wrf_forecast')
+    
+    
+    
+    
+def ncdump(files,vars,global_atts,var_atts,coord_vars,output,log_name):
+    
+    logger = logging.getLogger(log_name)
+    logger.warn("subsetting at read time is not implemented")
+    # Read all data into memory as pandas Series objects
+    logger.debug("ncdump called with arguments")
+    logger.debug("\t files: %s"       % str(files))
+    logger.debug("\t vars: %s"        % str(vars))
+    logger.debug("\t global_atts: %s" % str(global_atts))
+    logger.debug("\t var_atts: %s"    % str(var_atts))
+    logger.debug("\t coord_vars: %s"  % str(coord_vars))
+    logger.debug("\t output: %s"      % str(output))
+    logger.debug("\t log_name: %s"    % str(log_name))
+    
+    
+    for file in files:
+        frame = frame_from_nc([file], vars, global_atts, var_atts, coord_vars,log_name)
+    
+        new_name = file.replace('.nc', '.csv')
+    
+        # if we are only given out output directive, pack it in list
+        # to simplify the code below
+        if type(output)!=type([]): 
+            output = [output]
         
-    ts,te = dimspec['time']
-    ls,le = dimspec['location']
-    hs,he = dimspec['height']
-
-    rows = []
-    for f in ncfiles:
-        dataset = Dataset(f, 'r')
-        # get some global attributes
-
-        grid_id       = dataset.GRID_ID
-        variables     = dataset.variables
-
-        fulltime      = variables['time']
-        fulldatetimes = num2date(fulltime,units=fulltime.units,calendar=fulltime.calendar)
+        # For each output directive
+        for entry in output:
+            format = entry['format']
+            format = format.strip()
+            
+            if format not in FORMATS:
+                logger.error("format %s not understood" % format)
+                continue
         
-        time      = fulltime[ts:te]
-        datetimes = fulldatetimes[ts:te]
-        ntime     = len(datetimes) 
-        init_time = fulldatetimes[0]
-      
-        # hack to catch thanet
-        try:
-            location    = variables['location'][ls:le]
-        except KeyError:
-            location    = variables['location_id'][ls:le] 
-        
-        nloc        = location.shape[0]
-        loc_id_raw  = [''.join(location[l,0:-1]) for l in range(nloc)]
-        loc_id      = map(string.strip, loc_id_raw)
-        height    = variables['height'][hs:he]
-        nheight   = len(height)
+            if format=='txt' :
+                pass
+                #write_txt_files(frame, entry['dir'], entry['dimspec'], log_name)
+            
+            elif format=='json':
+                write_json_files(frame, entry['dir'], entry['fname'], entry['vars'], entry['dimspec'], entry['drop'], entry['rename'], entry['float-format'], log_name)
 
-        # this will force the reading all of the required variable data into memory
-        varnames = [v for v in variables if v not in COORD_VARS]
-        vardata  = dict([(v, variables[v][:]) for v in varnames])
-
-        for t in range(ntime):
-            for l in range(nloc):
-                rowdict = OrderedDict()
-                rowdict['valid_time']  = datetimes[t]
-                rowdict['location']    = loc_id[l]
-                rowdict['init_time']   = init_time
-                rowdict['grid_id']     = grid_id
+            elif format=='csv':
+                write_csv_files(frame, entry['dir'], new_name, entry['vars'],entry['dimspec'], entry['drop'], values='value', rows=entry['rows'],cols=entry['cols'],sort_by=entry['sort-by'],rename=entry['rename'],float_format=entry['float-format'], na_rep=entry['na-rep'], log_name=log_name)
                 
-                for v in varnames:
-                    data = vardata[v]
-                    print v, data.shape
-                    
-                    # 2D variable
-                    if len(data.shape)==2:
-                        rowdict[v] = data[t,l]
-                    
-                    # 3D variable
-                    if len(data.shape)==3:
-                        for h in range(nheight):
-                            key = '%s_%03d' %(v, int(height[h]))
-                            rowdict[key] = data[t,l,h]
-                        
-                rows.append(rowdict)
+            elif format=='aot':
+                write_aot_files(frame, entry['dir'])
+
+
+        
+def frame_from_nc(ncfiles, vars, global_atts, var_atts, coord_vars,log_name):
+
+    """ Build a Pandas DataFrame from a series of netcdf files"""
+
+    logger = logging.getLogger(log_name)
+    frames = []
+    
+    # Open files one-by-one
+    for f in ncfiles:
+        logger.debug("reading:  %s" % f)
+        dataset = Dataset(f, 'r')
+                
+        variables = dataset.variables
+        # lookup global attributes in dataset
+        # shouldn't really use this, but it works
+        dataset_atts = dataset.__dict__
+        
+        
+        # if no vars specified, use all in ncfiles
+        if vars==None:
+            vars = list(variables.keys())
+            
+        # get coorinate variables
+        time      = variables['time']
+        datetimes = num2date(time,units=time.units,calendar=time.calendar)
+        ntime     = len(datetimes) 
+        init_time = datetimes[0]
+      
+      
+        # hack to catch thanet files which have location_id rather than location
+        try:
+            location    = variables['location']
+        except KeyError:
+            location    = variables['location_id']
+            
+        # Unmask string and strip, convert from unicode to string
+        nloc        = location.shape[0]
+        loc_id_raw  = [''.join(location[l,:].filled('')) for l in range(nloc)]
+        location    = map(string.strip, loc_id_raw)
+        location    = map(str,location)
+        
+        height      = variables['height']
+        nheight     = len(height)
+
+        varnames = [v for v in vars if v not in coord_vars]
+        vars2D = [v for v in varnames if len(variables[v].shape)==2]
+        vars3D = [v for v in varnames if len(variables[v].shape)==3]
+       
+
+        #can't really avoid nested loop here without making code unintelligble
+        for v in vars2D:
+            for l in range(nloc):
+                # create dataframe then append columns avoids copying each series
+                df = pd.DataFrame(datetimes, index=range(len(datetimes)), columns=['valid_time'])
+                df['init_time']  = init_time
+                df['location']   = location[l]  # this creates is an object type
+                df['location']   = df['location'].astype(str)
+                df['height']     = HGT2DNUM
+                df['variable']   = v
+                df['value']      = variables[v][:,l]
+                for att in global_atts:
+                    df[str(att)] = dataset_atts[att]
+                for att in var_atts:
+                    df[str(att)] = variables[v].getncattr(att)
+                frames.append(df)
+        
+        for v in vars3D:
+            for l in range(nloc):
+                for h in range(nheight):
+                    # create dataframe then append columns avoids copying each series
+                    df = pd.DataFrame(datetimes, index=range(len(datetimes)),columns=['valid_time'])
+                    df['init_time']  = init_time
+                    df['location']   = location[l]
+                    df['height']     = height[h]
+                    df['variable']   = v
+                    df['value']      = variables[v][:,l,h]
+                    for att in global_atts:
+                        df[str(att)] = dataset_atts[att]
+                    for att in var_atts:
+                        df[str(att)] = variables[v].getncattr(att)
+                    frames.append(df)
         dataset.close()
     
-    df       = pd.DataFrame(rows)
+    df = pd.concat(frames)
     
-    #re-arrange columns
     cols = df.columns
+
+    # re-order the columns for cleaner output
     pre_cols = ['init_time','valid_time','location']
     data_cols = [c for c in cols if c not in pre_cols]
     new_cols = pre_cols + data_cols
     df = df[new_cols]
+    df.index = range(len(df))
+    
     return df
 
+
+def _filter(frame, variables=None, dimspec=None, log_name=LOGGER):
     
-def write_aot_files(ncfiles, out_dir, dimspec=FULL_SLICE):        
+    logger = logging.getLogger(log_name)
+    
+    # filter by variables
+    if variables:
+        use_var = map(str,variables)
+        logger.debug("filtering on variable: %s" % str(use_var))
+        frame = frame[frame['variable'].isin(use_var)]
+        logger.debug("%d rows" % len(frame))
+    
+    # filter by location
+    if dimspec and 'location' in dimspec:
+        use_loc = map(str,dimspec['location'])
+        logger.debug("filtering on location: %s" % str(use_loc))
+        frame = frame[frame['location'].isin(use_loc)]
+        logger.debug("%d rows" % len(frame))
+    
+    # filter by height. How do we treat surface here?
+    if dimspec and 'height' in dimspec:
+        use_hgt = dimspec['height']
+        use_hgt = [HGT2DNUM if h==HGT2DSTR else h for h in use_hgt]
+        
+        logger.debug("filtering on height: %s" % str(use_hgt))
+        ind = frame['height'].isin(use_hgt)
+        frame = frame[ind]
+        logger.debug("%d rows" % len(frame))
+    
+    return frame
+    
+
+def _drop(frame, cols):
+    new_cols = [c for c in frame.columns if c not in cols]
+    return frame[new_cols]
+
+def _rename(frame, mapping):
+    new_names = [ mapping[c] if c in mapping else c for c in frame.columns]
+    frame.columns = new_names
+    return frame
+
+
+    
+def write_csv_files(frame, out_dir, out_name, variables, dimspec, drop, values, rows, cols, sort_by=None, rename=None, float_format='%0.3f', na_rep="",log_name=LOGGER):
+    """Writes each variable and height into a seperate column.  Columns will be labelled variable_height where height if formatted as %03d int(height)
+    
+    Takes as input a DataFrame in a record based format, e.g. init_time, valid_time, height, location, variable, units, value."""
+    
+    logger = logging.getLogger(log_name)
+
+    if not os.path.exists(out_dir):
+        os.makedirs(out_dir)
+    
+    # drop columns first, this will cause problems later if someone else wants to use it!
+    #if drop:
+    #    for col in drop:
+    #        del(frame[col])
+    #logger.debug(frame)
+    
+    # drop columns by subsetting to create a view
+    if drop: _drop(frame, drop)
+      
+    # subset based on variable, location, height
+    frame = _filter(frame, variables, dimspec, log_name)
+    
+    logger.debug(frame)
+    frame = pd.pivot_table(frame, values=values, rows=rows,cols=cols)
+    
+    #logger.debug(frame)
+    #tuples  = frame.columns
+    #columns = map(collapse, tuples)
+    #frame.columns = columns
+    frame = frame.reset_index()
+
+    logger.debug(frame)
+    logger.debug(sort_by)
+    if sort_by:
+        frame.sort(sort_by, inplace=True)
+
+    if rename:
+        frame = _rename(frame, rename)
+
+    frame.to_csv('%s/%s' % (out_dir, out_name), index=False, float_format=float_format, na_rep=na_rep)    
+    
+    
+def write_json_files(frame, out_dir, out_name, variables, dimspec, drop, rename=None, float_format="%0.3f",log_name=LOGGER ):
+    """ Writes each variable and init_time series into one json file. If vars is None, then all export all variables"""
+
+    logger = logging.getLogger(log_name)
+
+    logger.info("*** outputting data as json ***")
+    # drop columns by subsetting to create a view
+    if drop: _drop(frame, drop)
+      
+      
+    # subset based on variable, location, height
+    frame = _filter(frame, variables, dimspec, log_name)
+
+
+    if rename:
+        frame = _rename(frame, rename)
+
+        
+    # Bit of a hack to ease output formatting, convert init_time to string
+    frame['init_time'] = frame['init_time'].apply(str)
+    
+    
+    
+    # we need to group by everything except valid time and value
+    group_by = [c for c in frame.columns if c not in ["valid_time", "value"]]
+    gb = frame.groupby(group_by)
+
+        
+    # Convert time to milliseconds since epoc
+    convert = lambda t: time.mktime(t.timetuple())*1000        
+    
+    series = []
+    for name, group in gb:
+        logger.debug("processing %s" % str(name))
+        # create a dictionary from all the fields except valid time and value
+        d = dict(zip(group_by,list(name)))
+        
+        timestamp = map(convert, group['valid_time'])
+        values  = group['value']
+        mvals = np.ma.masked_invalid(np.array(values))
+        data    = [ (timestamp[n],mvals[n]) for n in range(len(timestamp))]
+        ldata   = map(list, data)
+        d['data'] = ldata
+        s = str(d)
+    
+        # this is an ugly hack which could potentially lead to errors if " u'" occurs at the end of a string
+        s =  s.replace(" u'", " '")
+                
+        # change single quotes to double
+        s = s.replace("'", '"')
+        
+        # replace masked values. Again, ugly
+        s = s.replace('masked', 'null')
+        
+        series.append(s)
+
+    json_str = ','.join(series)
+    
+    if not os.path.exists(out_dir):
+        os.makedirs(out_dir)
+    
+    fout = open('%s/%s' % (out_dir, out_name), 'w')
+    fout.write('[')
+    fout.write(json_str)
+    fout.write(']')
+    fout.close()
+    
+    
+def write_aot_files(frame, out_dir, log_name=LOGGER):        
     """Writes file format the same as AOTs existing supplier, which is:
   
-    
     "Location","Date/time (utc)","Date/time (local)","Forecast (hours)","Windspeed 21m (m/sec)","Winddirection 21m (degrees)","Windspeed 70m (m/sec)","Winddirection 70m (degrees)","Windspeed 110m (m/sec)","Winddirection 110m (degrees)","Percentile  10 (m/sec) 70m","Percentile  20 (m/sec) 70m","Percentile  30 (m/sec) 70m","Percentile  40 (m/sec) 70m","Percentile  50 (m/sec) 70m","Percentile  60 (m/sec) 70m","Percentile  70 (m/sec) 70m","Percentile  80 (m/sec) 70m","Percentile  90 (m/sec) 70m
     "Thanet",2013-05-31 00:00,2013-05-31 02:00,0,7.80,351,8.70,352,8.93,352,7.27,7.83,8.20,8.52,8.70,8.97,9.27,9.66,10.16
     
     Arguments:
-        @ncfiles netcdf time-series files to process
+        @ncfiles list of netcdf time-series files to process
         @out_dir directory to write output to
-        @locations additional table giving information about the locations"""
+        @dimspec use this to restrict dimensions"""
     
-    logger = wrftools.get_logger()
+    logger = logging.getLogger(log_name)
     
-    df = frame_from_nc(ncfiles, dimspec)
-
+    # Format is too bespoke, just hard code it all here!
+    
+    
+    # ensure sorted by init_time, valid_time, location
+    frame.sort(['init_time', 'valid_time', 'location'], inplace=True)
+    #init_time = frame.init_time[0]
+    
+    
     #
     # The AOT files require a local time, as well as UTC time. This requires a mapping between location 
     # and timezone. The quickest way to do this is to hardcode this here. This is not very elegant or
@@ -270,48 +502,55 @@ def write_aot_files(ncfiles, out_dir, dimspec=FULL_SLICE):
                 "YTS" : "Yttre Stengrund",
                 "UTG" : "Utgrunded"}
 
+    inv_name_map = {v:k for k, v in name_map.items()}
+    
+    
     #
-    # We also need to rename (and drop) some columns which we will hard code here
+    # This renames columns in the input into columns in the output
+    # Only columns named here will be exported
     #
-    col_map = OrderedDict([("location",   "Location"),
+    #
+    col_map = OrderedDict([("long_name",   "Location"),
                                ("valid_time",    "Date/time (utc)"),
                                ("local_time",    "Date/time (local)"),
                                ("lead_time",     "Forecast (hours)"),
-                               ("SPEED_020",     "Windspeed 21m (m/sec)"),
-                               ("DIRECTION_020", "Winddirection 21m (degrees)"),
-                               ("SPEED_070",     "Windspeed 70m (m/sec))"),
-                               ("DIRECTION_070", "Winddirection 70m (degrees)"),
-                               ("SPEED_110",     "Windspeed 110m (m/sec)"),
-                               ("DIRECTION_110", "Winddirection 110m (degrees)"),
-                               ("SPEED_070.P10", "Percentile  10 (m/sec) 70m"),
-                               ("SPEED_070.P20", "Percentile  20 (m/sec) 70m"),
-                               ("SPEED_070.P30", "Percentile  30 (m/sec) 70m"),
-                               ("SPEED_070.P40", "Percentile  40 (m/sec) 70m"),
-                               ("SPEED_070.P50", "Percentile  50 (m/sec) 70m"),
-                               ("SPEED_070.P60", "Percentile  60 (m/sec) 70m"),
-                               ("SPEED_070.P70", "Percentile  70 (m/sec) 70m"),
-                               ("SPEED_070.P80", "Percentile  80 (m/sec) 70m"),
-                               ("SPEED_070.P90", "Percentile  90 (m/sec) 70m") ])
+                               ("SPEED.20",     "Windspeed 21m (m/sec)"),
+                               ("DIRECTION.20", "Winddirection 21m (degrees)"),
+                               ("SPEED.70",     "Windspeed 70m (m/sec))"),
+                               ("DIRECTION.70", "Winddirection 70m (degrees)"),
+                               ("SPEED.110",     "Windspeed 110m (m/sec)"),
+                               ("DIRECTION.110", "Winddirection 110m (degrees)"),
+                               ("SPEED.70.P10", "Percentile  10 (m/sec) 70m"),
+                               ("SPEED.70.P20", "Percentile  20 (m/sec) 70m"),
+                               ("SPEED.70.P30", "Percentile  30 (m/sec) 70m"),
+                               ("SPEED.70.P40", "Percentile  40 (m/sec) 70m"),
+                               ("SPEED.70.P50", "Percentile  50 (m/sec) 70m"),
+                               ("SPEED.70.P60", "Percentile  60 (m/sec) 70m"),
+                               ("SPEED.70.P70", "Percentile  70 (m/sec) 70m"),
+                               ("SPEED.70.P80", "Percentile  80 (m/sec) 70m"),
+                               ("SPEED.70.P90", "Percentile  90 (m/sec) 70m") ])
 
 
     utc = pytz.UTC
     # weeeeee, what a lot of chained operators!
+    # converts to local time
     convert = lambda row: utc.localize(row['valid_time']).astimezone(pytz.timezone(tz_map[row['location']])).strftime('%Y-%m-%d %H:%M')
     
     
     # Now we apply our uber-lambda function to insert local time
-    df['local_time'] = df.apply(convert, axis=1)
+    frame['local_time'] = frame.apply(convert, axis=1)
 
     # Calculate lead time as integer number of hours
-    deltas = df['valid_time'] - df['init_time']
+    deltas = frame['valid_time'] - frame['init_time']
     hours = lambda x: x / np.timedelta64(1, 'h')
     lead_ints = deltas.apply(hours)
-    df['lead_time'] = lead_ints.astype(int)
+    frame['lead_time'] = lead_ints.astype(int)
 
+        
     # Expand short names to long names
     rename = lambda x: name_map[x]
-    long_names = df['location'].apply(rename)
-    df['location'] = long_names
+    long_names = frame['location'].apply(rename)
+    frame['long_name'] = long_names
     
     
     # *******************************************
@@ -321,360 +560,195 @@ def write_aot_files(ncfiles, out_dir, dimspec=FULL_SLICE):
     # time series. We need to thinl carefully about
     # where these shoudl be calculated.
     #********************************************
-#     "SPEED_070.P10" : "Percentile  10 (m/sec) 70m",
-#                  "SPEED_070.P20" : "Percentile  20 (m/sec) 70m",
-#                  "SPEED_070.P30" : "Percentile  30 (m/sec) 70m",
-#                  "SPEED_070.P40" : "Percentile  40 (m/sec) 70m",
-#                  "SPEED_070.P50" : "Percentile  50 (m/sec) 70m",
-#                  "SPEED_070.P60" : "Percentile  60 (m/sec) 70m",
-#                  "SPEED_070.P70" : "Percentile  70 (m/sec) 70m",
-#                  "SPEED_070.P80" : "Percentile  80 (m/sec) 70m",
-#                  "SPEED_070.P90" : "Percentile  90 (m/sec) 70m" 
+    #     "SPEED_070.P10" : "Percentile  10 (m/sec) 70m",
+    #     "SPEED_070.P20" : "Percentile  20 (m/sec) 70m",
+    #     "SPEED_070.P30" : "Percentile  30 (m/sec) 70m",
+    #     "SPEED_070.P40" : "Percentile  40 (m/sec) 70m",
+    #     "SPEED_070.P50" : "Percentile  50 (m/sec) 70m",
+    #     "SPEED_070.P60" : "Percentile  60 (m/sec) 70m",
+    #     "SPEED_070.P70" : "Percentile  70 (m/sec) 70m",
+    #     "SPEED_070.P80" : "Percentile  80 (m/sec) 70m",
+    #     "SPEED_070.P90" : "Percentile  90 (m/sec) 70m" 
+    # *******************************************
+
+
+    # Unstacking is causing missing values to propagate
+    # Unstacking is causing missing values.
     
+    frame = pd.pivot_table(frame, values="value", rows=["init_time", "valid_time", "local_time", "lead_time", "location", "long_name", "GRID_ID"], cols=["variable","height"])
+   
+    
+    # The columns are now tuples
+    # We want to collapse these to single strings
+    tuples  = frame.columns
+    columns = map(collapse, tuples)
+    # ensure string and not unicode
+    columns = map(str,columns)
+    # set frames columns
+    frame.columns = columns
+    # reset index to make column selection easier
+    frame = frame.reset_index()
+    
+
+        
+    logger.debug("adding percentiles")
     percentiles = [10, 20, 30, 40, 50, 60, 70, 80, 90]
     for p in percentiles:
-        pname = 'SPEED_070.P%02d' % p
+        pname = 'SPEED.70.P%02d' % p
         pfunc = lambda x : stats.norm.ppf(p/100.0, x, x*0.10)
-        df[pname] = df['SPEED_070'].apply(pfunc)
+        frame[pname] = frame['SPEED.70'].apply(pfunc)
 
-    print df[['SPEED_070', 'SPEED_070.P20', 'SPEED_070.P90']].to_string()
     
-    subset = df[col_map.keys()]
-    subset.columns = col_map.values()
-
-    gb = subset.groupby(by='Location')
+    gb = frame.groupby(by=['init_time','GRID_ID','location'])
     groups = dict(list(gb))
-    import csv
-    for location in groups.keys():
-        group = groups[location]
-        out_name = '%s/%s.csv' % (out_dir, location)
-        group.to_csv(out_name, index=False, float_format='%0.2f')
     
-
+    for key, group in gb:
         
         
-def write_csv_files(ncfiles, out_dir, dimspec=FULL_SLICE):        
-    """Writes each variable and height into a seperate column.  Columns will be labelled variable_height where height if formatted as %03d int(height)"""
+        logger.debug("processing group %s" %str(key))
+        init_time = key[0]
+        grid_id=key[1]
+        location = key[2]
+        
+        # subset and rename
+        subset = group[col_map.keys()]
+        subset.columns = col_map.values()
     
-    #
-    # How do we name the output files? One per input file? Or concatenate them together in the same way as the json files?
-    # Perhaps concatenation is the way to go? 
-    #
-    # A better way might be to build a pandas DataFrame first, and then write it to  csv file
-    #
-    # Efficiency considerations. The current method sucks.  It makes more sense to try and load as 
-    # much data into memory as possible. Currently, the time-series netcdf files are written out with 
-    # location as the record dimension. This means they can't be concantenated over time very easily.
-    #
-    # It might make more sense to make time the record dimension, then concatenate (or use a MFDataset)
-    # Then we could eliminate one of the file reading loops.
-    #
-    # It would bugger up other code though
-    #
+        d = '%s/%s/d%02d' % (out_dir, location, grid_id)
+        if not os.path.exists(d):
+            os.makedirs(d)
+        
+        out_name = '%s/%s.txt' % (d, init_time.strftime('%y%m%d%H'))
+        logger.debug("writing times series out to %s" % out_name)
+        subset.to_csv(out_name, index=False, float_format='%0.2f')
     
-    logger = wrftools.get_logger()
-    df = frame_from_nc(ncfiles, dimspec)
-    df.to_csv('%s/%s' % (out_dir, CSV_NAME), index=False, float_format='%0.3f')
-    #print df.to_string()
-    
-    
-    
-def write_seperate_files(ncfiles, out_dir, dims=None):        
-    """ Writes each variable and height into a seperate text file"""
+        
+        
 
-    logger = wrftools.get_logger()
-    # time, location and height start and end indices
-    ts = 0
-    te = None
-    ls = 0
-    le = None
-    hs = 0
-    he = None
-    
-    if dims!=None:
-        for dim in dims:
-            d,s,e = dim.split(',')
-            if d=='time':
-                ts = int(s)
-                te = int(e)
-            if d=='location':
-                ls = int(s)
-                le = int(e)
-            if d=='height':
-                hs = int(s)
-                he = int(e)
-    
+def frame_from_nc_old(ncfiles, vars, dimspec, global_atts, var_atts, log_name):
 
+    """ Build a Pandas DataFrame from a series of netcdf files
+    
+    This is horrendously inneficient! A better way would be to build up 
+    Index objects from the coordinate variables, then create DataFrames for 
+    each variable with the coordinate indexes, then concatenate together. 
+    
+    Unstacking a coordinate, e.g. height would have to be implemented somehow."""
+
+    logger = logging.getLogger(log_name)
+    logger.debug(vars)
+    logger.debug(dimspec)
+    logger.debug(global_atts)
+    logger.debug(var_atts)
+    
+    rows = []
+    
+    # subsetting defaults to full selection
+    ts,te = 0,None
+    ls,le = 0,None
+    hs,he = 0,None
+   
+    if dimspec!=None:
+        for dim,ind in dimspec.items():
+            if dim=='time':
+                ts = ind[0]
+                te = ind[1]
+            if dim=='location':
+                ls = ind[0]
+                le = ind[1]
+            if dim=='height':
+                hs = ind[0]
+                he = ind[1]
+    
+    
     for f in ncfiles:
-        logger.debug('dumping netcdf time series to flat files')
-        
         dataset = Dataset(f, 'r')
-        # get some global attributes
-        model     = dataset.MODEL
-        nest_id   = dataset.GRID_ID
-        model_run = dataset.MODEL_RUN
-        domain    = dataset.DOMAIN
+                
+        variables   = dataset.variables
+        dataset_atts = dataset.__dict__
         
-        #logger.warn('Remove Aberdeen hack')
-        #model= 'WRF'
-        #nest_id  = dataset.GRID_ID
-        #model_run = 'resource'
-        #domain = 'aberdeen'
-        #
-        #
-        logger.debug('model run is ' + model_run)
-        
-        
-        variables     = dataset.variables
+        if vars==None:
+            vars = list(variables.keys())
+            
         fulltime      = variables['time']
         fulldatetimes = num2date(fulltime,units=fulltime.units,calendar=fulltime.calendar)
         
         time      = fulltime[ts:te]
         datetimes = fulldatetimes[ts:te]
-        
+        ntime     = len(datetimes) 
         init_time = fulldatetimes[0]
-        location  = variables['location'][ls:le]
-        height    = variables['height']
+      
+        # hack to catch thanet
+        try:
+            location    = variables['location'][ls:le]
+        except KeyError:
+            location    = variables['location_id'][ls:le] 
+            
+        
+        nloc        = location.shape[0]
+        loc_id_raw  = [''.join(location[l,:].filled('')) for l in range(nloc)]
+        loc_id      = map(string.strip, loc_id_raw)
+        height      = variables['height'][hs:he]
+        nheight     = len(height)
 
-        
-        lat       = variables['lat'][ls:le]
-        lon       = variables['lon'][ls:le]
-        
-        ntimes    = len(time)
-        nlocs     = location.shape[0]
-        loc_str_len = location.shape[1]
-        
+        # this will force the reading all of the required variable data into memory
+        varnames = [v for v in vars if v not in COORD_VARS]
+        vardata  = dict([(v, variables[v][:]) for v in varnames])
 
-        for v in variables:
-            # skip coordinate variables
-            if v in COORD_VARS:
-                continue
-            print v
-            
-            fullvar = variables[v]
-            ndims = len(fullvar.shape)
-            
-            # 2D variable, variable[time, location]
-            if ndims==2:
-                var = fullvar[ls:le, ts:te]
-            
-            if ndims==3:
-                var = fullvar[ls:le, hs:he, ts:te]
-            
-            
-            for l in range(nlocs):
-                loc = ''.join(location[l,0:loc_str_len])
-                loc = loc.strip()
+        # Argh! Nested loop hell.
+        for t in range(ntime):
+            for l in range(nloc):
+                rowdict = OrderedDict()
                 
-                # 2D variable
-                if ndims==2:
-                    hgts = [0.0]
-                # 3D variable
-                elif ndims==3:
-                    hgts = height[hs:he]
+                for a in global_atts:
+                    logger.debug('adding value of attribute: %s' % a)
+                    rowdict[a] = dataset_atts[a]
+        
+                rowdict['valid_time']  = datetimes[t]
+                rowdict['location']    = loc_id[l]
+                rowdict['init_time']   = init_time
                 
+                for v in varnames:
+                    vatts = variables[v].__dict__
+                    data = vardata[v]
                     
-                for h in range(len(hgts)):
-                    hgt = hgts[h]
-                    fname = '%s/%s_%s_d%02d_%03d_%s.txt' % (out_dir, loc, v, nest_id, int(hgt), init_time.strftime(FILE_DATE_FMT))
-                    fout = open(fname, 'w')
-                    fout.write('domain,model_run,model,nest_id,location_id,latitude,longitude,variable,init_time,valid_time,height,value\n')
-                    for t in range(ntimes):
-                        valid_time = datetimes[t].strftime(DATE_FMT)
-                        if ndims==2:
-                            val = var[l,t]
-                        elif ndims==3:
-                            val = var[l,h,t]
-                        line = '%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%03d,%0.3f\n' %(domain, model_run, model,nest_id,loc, lat[l], lon[l], v, init_time.strftime(DATE_FMT), valid_time, hgt, val)
-                        fout.write(line)
-        
-                    fout.close()
-        
+                    for att in var_atts:
+                        rowdict[att] = vatts[att]
+                        
+                    # 2D variable
+                    if len(data.shape)==2:
+                        rowdict[v] = data[t,l]
+                    
+                    # 3D variable, unstack height
+                    if len(data.shape)==3:
+                        for h in range(nheight):
+                            key = '%s_%03d' %(v, int(height[h]))
+                            rowdict[key] = data[t,l,h]
+
+                rows.append(rowdict)
         dataset.close()
-
-        
-def write_json_files(ncfiles, global_atts, var_atts,coord_vars, out_dir, file_date_fmt, dimspec=FULL_SLICE):        
-    """ Writes each series into one json file
     
-    Arguments
-        @ncfiles     -- list of netcdf file names to extract data from
-        @global_atts -- list of global attribute names in the nc files to copy to json series
-        @var_atts    -- list of variables attributes to copy to json series
-        @coord_vars  -- list of variables considered coordinate variables and not output as a series
-        @out_dir     -- output directory to write files to
-        @file_date_fmt -- date format to use in file naming
-        @dims          -- dimension specification used so slice output variables"""
-
-    logger = wrftools.get_logger()
-
+    df = pd.DataFrame(rows)
     
-    
-    ts,te = dimspec['time']
-    ls,le = dimspec['location']
-    hs,he = dimspec['height']
-
-    for f in ncfiles:
-        logger.debug(f)
-        logger.debug('dumping netcdf time series to json files')
-        
-        dataset = Dataset(f, 'r')
-        # get some global attributes used for file naming
-        model     = dataset.MODEL
-        nest_id   = dataset.GRID_ID
-        model_run = dataset.MODEL_RUN
-        domain    = dataset.DOMAIN
-        
-        
-        # Get subset of global attributes into a dictionary
-        global_att_dict = dict([(att,dataset.getncattr(att)) for att in global_atts])
-        
-        variables     = dataset.variables
-        fulltime      = variables['time']
-        # convert to datetime objects
-        fulldatetimes = num2date(fulltime,units=fulltime.units,calendar=fulltime.calendar)
-        
-        # subset time dimension
-        times     = fulltime[ts:te]
-        datetimes = fulldatetimes[ts:te]
-        init_time = fulldatetimes[0]
-
-        # Output file name
-        fname = '%s/fcst_data_d%02d_%sZ.json' % (out_dir, nest_id, init_time.strftime('%H'))
-
-
-        
-        # For highcharts plotting, time must be in milliseconds since unix epoch
-        timestamps      = [time.mktime(t.timetuple())*1000 for t in datetimes]
-        init_timestamp = time.mktime(init_time.timetuple())*1000 
-
-        # subset locations if asked
-        location  = variables['location'][ls:le]
-        height    = variables['height']
-        
-        lat       = variables['lat'][ls:le]
-        lon       = variables['lon'][ls:le]
-        
-        ntimes    = len(times)
-        nlocs     = location.shape[0]
-        nvars     = len(variables)
-        
-        loc_str_len = location.shape[1]
-        
-        
-        # start of the json file
-        # fout.write('[')
-        series = []    
-            
-        for l in range(nlocs):
-            loc = ''.join(location[l,0:loc_str_len-1])
-            loc = loc.strip()
-
-            # For each variable in the file
-            for v in range(nvars):
-                varname = variables.keys()[v]
-
-                print 'processing %s ' % varname
-                # skip coordinate variables
-                if varname in coord_vars:
-                    continue
-                
-                fullvar = variables[varname]
-                ndims   = len(fullvar.shape)
-                
-                # 2D variable, variable[time, location]
-                if ndims==2:
-                    var = fullvar[ts:te, ls:le]
-                
-                if ndims==3:
-                    print 'ts,te', ts,te
-                    #print ls,le
-                    #print hs,he
-                    var = fullvar[ts:te, ls:le, hs:he]
-
-
-                var_att_dict = dict([(att,fullvar.getncattr(att)) for att in var_atts])
-                series_dict = dict(global_att_dict.items()+ var_att_dict.items())
-                
-                
-                # 2D variable
-                if ndims==2:
-                    hgts = [0.0]
-                # 3D variable
-                elif ndims==3:
-                    hgts = height[hs:he]
-                
-                for h in range(len(hgts)):
-                    # note if variable is 2D, we still execute this loop once
-                    # with height=0
-                    if ndims==2:
-                        values = np.ma.array(var[:,l])
-                    elif ndims==3:
-                        values = np.ma.array(var[:,l,h])
-                    
-                    hgt = hgts[h]
-                    # encode with 3 decimal places
-                    #valstrs = ['%0.3f' % v for v in values]
-                    data = map(list, zip(timestamps,values )) 
-                    series_dict['variable'] = varname
-                    series_dict['location_id'] = loc
-                    series_dict['height'] = hgt
-                    series_dict['data'] = data
-                    s = str(series_dict)
-
-                    # this is an ugly hack which could potentially lead to errors if " u'" occurs at the end of a string
-                    s =  s.replace(" u'", " '")
-
-                    
-                    # change single quotes to double
-                    s = s.replace("'", '"')
-                    
-                    # replace masked values. Again, ugly
-                    s = s.replace('masked', 'null')
-                    
-                    series.append(s)
-    
-
-                    #fout.write(s)
-                    #end of height loop, write comma but not last time in loop
-                    #if h<len(hgts)-1:
-                    #    fout.write(',\n')
-                #if v<nvars-1:
-                #    fout.write(',\n')
-            
-            #fout.write(']')
-            #fout.close()
-        
-        
-        
-        #fout.write(']')
-        #fout.close()
-
-        dataset.close()        
-
-
-        logger.debug('********* writing json to %s ****************'  % fname)
-
-        fout  = open(fname, 'w')
-        json_data = ',\n'.join(series)
-        fout.write('[')
-        fout.write(json_data)
-        fout.write(']')
-        fout.close()
-        check_json(fname)
-        
-        
-def check_json(fname):
-    try:
-        '\n\n Checking %s ' % fname
-        json.load(open(fname))
-        print "Valid JSON"
-    
-    except ValueError, err:
-        print "Invalid JSON"
-        msg = err.message
-        print msg
-
+    #re-arrange columns
+    cols = df.columns
+    pre_cols = ['init_time','valid_time','location']
+    data_cols = [c for c in cols if c not in pre_cols]
+    new_cols = pre_cols + data_cols
+    df = df[new_cols]
+    return df
    
+    
+def collapse(t):
+    """Collapses a three-element tuple representing MultiIndex values into a single column name"""
+    if t[1]==HGT2DNUM:
+        return t[0]
+    else:
+        return "%s.%s" % (t[0],t[1])    
+    
+    #df.columns = [' '.join(col).strip() for col in df.columns.values]
+    # http://stackoverflow.com/questions/14507794/python-pandas-how-to-flatten-a-hierarchical-index-in-columns
+    
     
 if __name__ == '__main__':
     main()

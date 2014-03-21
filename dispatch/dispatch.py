@@ -71,9 +71,10 @@ def main():
 def dispatch_all(distribution, init_time, dry_run, log_name):
 
     logger = logging.getLogger(log_name)
-    f = open(distribution, 'r')
+    fname = _sub_date(distribution, init_time=init_time)
+    f = open(fname, 'r')
     s = f.read()
-    s = _sub_date(s, init_time=init_time)
+    
     distribution =  json.loads(s)
     f.close()
     logger.info("dispatch.py sending files via email")
@@ -124,7 +125,7 @@ def _expand_dates(dic, init_time):
     logger = logging.getLogger()
     for key,value in dic.items():
         if "%" in value:
-            new_value =  _subdate(value, init_time=init_time)
+            new_value =  _sub_date(value, init_time=init_time)
             logger.debug("expanded %s ---> %s" % (value, new_value))
             dic[key] = new_value
 
