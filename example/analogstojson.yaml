@@ -1,0 +1,32 @@
+#**************************************************************
+# Shared
+#***************************************************************
+domain            : baseline_europe 
+model             : WRF
+model_run         : operational
+bdy_conditions    : GFS
+base_dir          : $(HOME)/forecasting/domains
+domain_dir        : "%(base_dir)/%(domain)" 
+tseries_dir       : "%(model_run_dir)/tseries"
+host_file         : "%(model_run_dir)/hostfile"
+wrftools_dir      : $(HOME)/code/wrftools/master
+
+
+#************************************************
+# Logging
+#************************************************
+log_level         : DEBUG
+log_fmt           : "%(message)s"
+log_file          : $(HOME)/forecasting/power.log
+full_trace        : true         # whether to print a stack trace of exceptions
+mail_level        : INFO 
+mailto            : sam.hawkins@vattenfall.com
+mail_buffer       : 10000            # how many messages to collate in one email
+mail_subject      : "WRF Power Predictions"
+
+#************************************************
+# analogtojson
+#************************************************
+init_time         : null    # initial time of forecast
+analog_in_dir     : /home/jepn/work/wrftools/ancode/forecast/matlab_2/An_EN_FC/Data/An_EN_output_text_files
+analog_out_dir    : $(HOME)/web/forecast/data         # location of output json files
