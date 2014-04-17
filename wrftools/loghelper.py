@@ -26,4 +26,5 @@ def create(name, log_level, log_fmt, log_file=None):
     
 
 def get(name):
-    return logging.getLogger(name)
+    logger = logging.getLogger(name)
+        

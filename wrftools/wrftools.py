@@ -9,7 +9,7 @@ Author: Sam Hawkins sam.hawkins@vattenfall.com
 
 Assumed domains directory structure:
 
-    /model_run_dir --> namelist.input file and other settings specific to that run
+    /working_dir --> namelist.input file and other settings specific to that run
         /wrfout      --> netcdf output from WRF
         /wrfpost     --> grib output from UPP
         /tseries     --> time series extracted at points
@@ -114,15 +114,14 @@ def create_logger(config):
     This allows a common logger instance to be used for all parts of forecast. 
     create_logger registers a file AND a console (screen) handler.  
     Settings are passed in via the config dictionary. The debug level specified by the 
-    debug_level entry, and file output is is directed to domain_dir/forecast.log.
+    log_level entry, and file output is is directed to domain_dir/forecast.log.
     
     Arguments:
     config -- a dictionary containing configuration settings
     
     """
     
-    debug_level   = config['debug_level']
-    domain_dir    = config['domain_dir']
+    debug_level   = config['log_level']
     log_file      = config['log_file']
     logger        = logging.getLogger(LOGGER)
     numeric_level = getattr(logging, debug_level.upper(), None)
@@ -143,7 +142,8 @@ def create_logger(config):
     fh.setLevel(numeric_level)
     ch.setLevel(numeric_level)
 
-    formatter = logging.Formatter('%(asctime)s %(levelname)s\t %(message)s')
+    formatter = logging.Formatter(config['log_fmt'])
+    #%(asctime)s %(levelname)s\t %(message)s')
     fh.setFormatter(formatter)
     ch.setFormatter(formatter)
     logger.addHandler(fh)
@@ -199,7 +199,7 @@ def mpirun(cmd, num_procs, hostfile, run_level, cmd_timing=False):
     logger.debug(cmd)
     
     t0          = time.time()
-    if run_level=='RUN':
+    if run_level.upper()=='RUN':
         ret = subprocess.call(cmd, shell=True)        
    
     telapsed = time.time() - t0
@@ -237,7 +237,7 @@ def run_cmd(cmd, config):
     
     logger = get_logger()
     
-    run_level   = config['run_level']
+    run_level   = config['run_level'].upper()
     cmd_timing  = config['cmd_timing']
     t0          = time.time()
     logger.debug(cmd)
@@ -454,19 +454,19 @@ def compress(config):
     
     logger.info("*** Done compressing wrfout files ***")        
 
-def add_metadata(nl):
+def add_metadata(config):
     """ Adds metadata tags into the wrfout files. Expects there to be one 
     wrfout file per init_time. If there are more, they will not have metadata added."""
 
     logger = get_logger()
     logger.info("*** Adding metadata to wrfout files ***")
 
-    config = nl.settings
+
     wrfout_dir = config['wrfout_dir']
     init_time  = config['init_time']
     max_dom    = config['max_dom']
     
-    metadata = nl.sections['metadata']
+    metadata = config['metadata']
     logger.debug(metadata)
     wrfout_files = ['%s/wrfout_d%02d_%s' %(wrfout_dir, d, init_time.strftime('%Y-%m-%d_%H:%M:%S')) for d in range(1,max_dom+1)]
     
@@ -497,7 +497,7 @@ def handle(e, fail_mode, full_trace=False):
     if full_trace:
         tb = traceback.format_exc()
         logger.error(tb)
-    if fail_mode=='EXIT':
+    if fail_mode.upper()=='EXIT':
         sys.exit()
 
 
@@ -526,23 +526,23 @@ def check_config(config):
 
 def prepare(config):
     """Removes files specified in pre_clean. Creates subdirectories specfied in create_dirs,
-    links files specified in wrf_links into wrf_model_run_dir."""
+    links files specified in wrf_links into wrf_working_dir."""
 
    
-    model_run_dir  = config['model_run_dir']
-    wrf_dir        = config['wrf_dir']
-    wrf_run_dir    = config['wrf_run_dir']
-    links          = config['link']
-    pre_clean      = config['pre_clean'] 
-    subdirs        = config['create_dirs']
+    working_dir    = config['working_dir']
+    
+    links          = config['prepare.link']
+    pre_clean      = config['prepare.remove'] 
+    subdirs        = config['prepare.create']
 
     logger           = get_logger()
-    logger.info('*** PREPARING DIRECTORIES ***')
-    logger.debug("check_directories called")
-    if not os.path.exists(model_run_dir):
-        os.makedirs(model_run_dir)
+    logger.info('*** PREPARING ***')
+
+    if not os.path.exists(working_dir):
+        os.makedirs(working_dir)
     
-    fulldirs = [ model_run_dir+'/'+d for d in subdirs ]
+    #fulldirs = [ working_dir+'/'+d for d in subdirs ]
+    fulldirs  = subdirs 
     for d in fulldirs:
         if not os.path.exists(d):
             logger.debug('creating directory %s ' %d)
@@ -560,17 +560,61 @@ def prepare(config):
         link(pattern)
     logger.info('*** DONE PREPARE ***')
 
+def finalise(config):
+    """Removes files, transfers etc."""
 
+
+   
+    working_dir    = config['working_dir']
+    
+    links       = config['finalise.link']
+    remove      = config['finalise.remove'] 
+    subdirs     = config['finalise.create']
+    copy        = config['finalise.copy'] 
+    move        = config['finalise.move']
+    
+    logger           = get_logger()
+    logger.info('*** FINALISING ***')
+
+    
+    fulldirs  = subdirs 
+    for d in fulldirs:
+        if not os.path.exists(d):
+            logger.debug('creating directory %s ' %d)
+            os.mkdir(d) 
+   
+    for pattern in remove:
+        flist = glob.glob(pattern)
+        for f in flist:
+            if os.path.exists(f):
+                logger.debug('removing file: %s' % f )
+                os.remove(f)
+    
+    for arg in move:
+        cmd = "mv %s" % arg
+        run_cmd(cmd, config)
+
+    for arg in copy:
+        cmd = "cp %s" % arg
+        run_cmd(cmd, config)        
+        
+    for pattern in links:
+        link(pattern)
+    
+    
+    logger.info('*** DONE FINALISE ***')
+
+    
+    
+    
 def link(pattern):
     """ Processes a link specified in the format
     source --> dest, and creates links.
     
     'source' and 'dest' will be passed directly to a sytem call to ln -sf """
     logger=get_logger()
-    parts = pattern.split('-->')
-    source = parts[0].strip()
-    dest   = parts[1].strip()
-    cmd = 'ln -sf %s %s' %(source, dest)
+    arg = pattern
+    cmd = 'ln -sf %s ' % arg
     logger.debug(cmd)
     subprocess.call(cmd, shell=True)
 
@@ -698,7 +742,7 @@ def get_operational_init_time(config):
     fcst_hours    = config['fcst_hours']
     operational   = config['operational']
     cycles        = config['cycles']
-    gm_delay      = config['gm_delay']
+    gm_delay      = int(config['delay'])
     
    
         
@@ -863,7 +907,7 @@ def run_gribmaster(config):
         # if we positively find the string BUMMER, we know we have failed
         if ret==0:
             logger.error('*** FAIL GRIBMASTER: Attempt %d of %d ***' % (attempt+1, gm_max_attempts))
-            logger.info('Sleeping for %s seconds' % gm_sleep) 
+            logger.info('Sleeping for %s minutes' % gm_sleep) 
             time.sleep(gm_sleep*60)
         
         # else we check for definite sucess
@@ -954,7 +998,7 @@ def ungrib_sst(config):
     tmp_dir      = config['tmp_dir']
     domain_dir   = config['domain_dir']
     model_run    = config['model_run']
-    model_run_dir = config['model_run_dir']
+    working_dir = config['working_dir']
     init_time    = config['init_time']
     max_dom      = config['max_dom']
     sst_local_dir = config['sst_local_dir']
@@ -966,8 +1010,8 @@ def ungrib_sst(config):
     queue        = config['queue']
     log_file     = '%s/ungrib.sst.log' % wps_run_dir
     namelist_wps  = wps_run_dir+'/namelist.wps'
-    namelist_dom  = '%s/namelist.wps' % model_run_dir
-    namelist_sst  = '%s/namelist.sst' % model_run_dir
+    namelist_dom  = '%s/namelist.wps' % working_dir
+    namelist_sst  = '%s/namelist.sst' % working_dir
     namelist      = read_namelist(namelist_dom)
 
     #
@@ -1055,7 +1099,7 @@ def link_namelist_wps(config):
     namelist_run = '%s/namelist.wps' % config['wps_run_dir']
     
     #
-    # Check if namelist exists in model_run_dir directory
+    # Check if namelist exists in working_dir directory
     #    
     if not os.path.exists(namelist_wps):
         raise IOError('could not find namelist.wps file: %s' % namelist_wps)
@@ -1090,7 +1134,7 @@ def prepare_wps(config):
     
     wps_dir       = config['wps_dir']          # the base installation of WPS
     wps_run_dir   = config['wps_run_dir']      # the directory to run WPS from
-    model_run_dir = config['model_run_dir']    # model run directory 
+    working_dir = config['working_dir']    # model run directory 
     met_em_dir    = config['met_em_dir']
     init_time     = config['init_time']
 
@@ -1138,8 +1182,6 @@ def prepare_wps(config):
 
    
     logger.debug('*** FINISHED PREPARING FILES FOR WPS ***')    
-    return 0
-
 
 
 
@@ -1314,7 +1356,7 @@ def run_ungrib(config):
     wps_dir       = config['wps_dir']
     wps_run_dir   = config['wps_run_dir']
     namelist_wps  = config['namelist_wps']
-    model_run_dir = config['model_run_dir']    # model run directory 
+    working_dir   = config['working_dir']    
     met_em_dir    = config['met_em_dir']
     init_time     = config['init_time']
     log_file      = '%s/ungrib.log' % wps_run_dir
@@ -1363,6 +1405,7 @@ def run_ungrib(config):
         fmt = grb_input_fmt[key]
         filelist = get_bdy_filenames(fmt, bdy_times)
         logger.debug('running link_grib.csh script to link grib files to GRIBFILE.AAA etc')
+        
         os.chdir(wps_run_dir)
         args = ' '.join(filelist)
         cmd = '%s/link_grib.csh %s' %(wps_run_dir,args)
@@ -1381,9 +1424,11 @@ def run_ungrib(config):
         cmd = 'ln -sf %s %s' %(vtab_path, vtab_wps)
         logger.debug(cmd)
         subprocess.call(cmd, shell=True)    
-
+        #logger.debug("changing directory to %s" % wps_run_dir)
+        #os.chdir(wps_run_dir)
         cmd     =  '%s/ungrib.exe' % wps_run_dir
         
+        logger.debug(cmd)
         if queue:
             run_cmd_queue(cmd, config, wps_run_dir, log_file)
         
@@ -1408,7 +1453,8 @@ def run_geogrid(config):
     logger = get_logger()
     logger.info("*** RUNINING GEOGRID ***")
     wps_run_dir    = config['wps_run_dir']
-    domain_dir     = config['domain_dir']
+    os.chdir(wps_run_dir)
+
     queue          = config['queue']
     log_file       = '%s/geogrid.log' % wps_run_dir
     
@@ -1508,10 +1554,8 @@ def prepare_wrf(config):
     logger.debug('*** PREPARING FILES FOR WRF ***')
     
     met_em_format      = "%Y-%m-%d_%H:%M:%S"
-    domain_dir   = config['domain_dir']
     
-    wrf_run_dir  = config['wrf_run_dir']
-    model_run_dir  = config['model_run_dir']
+
     max_dom      = config['max_dom']
     domains      = range(1,max_dom+1)
     init_time    = config['init_time']
@@ -1520,7 +1564,8 @@ def prepare_wrf(config):
     bdy_times    = get_bdy_times(config)
     met_em_dir   = sub_date(config['met_em_dir'], init_time=init_time)
     met_em_files = ['%s/met_em.d%02d.%s.nc' % (met_em_dir,d, t.strftime(met_em_format)) for d in domains for t in bdy_times] 
-    namelist_run    = '%s/namelist.input' % wrf_run_dir
+    wrf_run_dir    = config['wrf_run_dir']
+    namelist_run   = '%s/namelist.input' % wrf_run_dir
     namelist_input = config['namelist_input']
     
     
@@ -1568,14 +1613,15 @@ def update_namelist_input(config):
     logger = get_logger()        
     logger.debug('*** UPDATING namelist.input ***')
     
-    domain_dir    = config['domain_dir']
-    wrf_dir       = config['wrf_dir']
+
+    #wrf_dir       = config['wrf_dir']
+    working_dir   = config['working_dir']
     model         = config['model']
     model_run     = config['model_run']
-    model_run_dir = config['model_run_dir']
+    
     domain        = config['domain']
         
-    namelist_run  = '%s/namelist.input'  % model_run_dir
+    namelist_run  = '%s/namelist.input'  % working_dir
     namelist_input = config['namelist_input']
     namelist_wps   = config['namelist_wps']
     shutil.copyfile(namelist_input, namelist_input+'.backup')
@@ -1584,8 +1630,8 @@ def update_namelist_input(config):
     namelist        = read_namelist(namelist_input)   
 
     # read settings from domain-based namelist.wps
-    namelist_wps   = read_namelist(namelist_wps)   
-    wps_settings   = namelist_wps.settings
+    #namelist_wps   = read_namelist(namelist_wps)   
+    #wps_settings   = namelist_wps.settings
 
 
     #
@@ -1691,7 +1737,7 @@ def run_real(config):
     logger.info('*** RUNNING REAL ***')
     
     queue           = config['queue']
-    model_run_dir   = config['model_run_dir']
+    working_dir   = config['working_dir']
     wrf_run_dir     = config['wrf_run_dir']
     wps_dir         = config['wps_dir']
     domain          = config['domain']
@@ -1715,7 +1761,7 @@ def run_real(config):
         raise IOError('No log file found for real.exe')
 
     # now copy rsl file to a log directory
-    cmd = 'cp %s %s/rsl/rsl.error.%s.%s.%s' % (rsl, model_run_dir, domain, model_run, init_time.strftime('%y-%m-%d_%H') )
+    cmd = 'cp %s %s/rsl/rsl.error.%s.%s.%s' % (rsl, working_dir, domain, model_run, init_time.strftime('%y-%m-%d_%H') )
     run_cmd(cmd, config)
 
 
@@ -1770,7 +1816,7 @@ def move_wrfout_files(config):
     
     domain        = config['domain']
     model_run     = config['model_run']
-    model_run_dir = config['model_run_dir']
+    working_dir = config['working_dir']
     wrf_run_dir   = config['wrf_run_dir']
     init_time     = config['init_time']
     init_str      = init_time.strftime('%Y-%m-%d_%H')
@@ -1778,10 +1824,10 @@ def move_wrfout_files(config):
     namelist_input = config['namelist_input']
     namelist_wps   = config['namelist_wps']
     
-    wrfout_dir    = '%s/wrfout'   %(model_run_dir)
-    log_dir       = '%s/log'      % model_run_dir    
-    rsl_dir       = '%s/rsl'      % model_run_dir
-    namelist_dir  = '%s/namelist' % model_run_dir
+    wrfout_dir    = '%s/wrfout'   %(working_dir)
+    log_dir       = '%s/log'      % working_dir    
+    rsl_dir       = '%s/rsl'      % working_dir
+    namelist_dir  = '%s/namelist' % working_dir
     run_key       = '%s.%s'       %(domain, model_run)    # composite key  
 
     logger.debug('Moving wrfout files from %s to %s' %(wrf_run_dir, wrfout_dir) )
@@ -1797,7 +1843,7 @@ def move_wrfout_files(config):
     cmd = 'cp %s %s/namelist.input.%s.%s' % (namelist_input, namelist_dir, run_key, init_str)
     run_cmd(cmd, config)
     
-    cmd = 'cp %s/namelist.wps %s/namelist.wps.%s.%s' % (model_run_dir, namelist_dir, run_key, init_str)
+    cmd = 'cp %s/namelist.wps %s/namelist.wps.%s.%s' % (working_dir, namelist_dir, run_key, init_str)
     run_cmd(cmd, config)
 
 
@@ -1821,28 +1867,28 @@ def archive(config):
 
     domain        = config['domain']
     domain_dir    = config['domain_dir']
-    wrf_model_run_dir   = config['wrf_dir']+'/run'
+    wrf_working_dir   = config['wrf_dir']+'/run'
     model_run     = config['model_run']
     backup_base   = config['backup_dir']
     archive_mode   = config['archive_mode']
     backup_dirs   = config['backup_dirs']       # These are the directories to archive/backup
     
-    model_model_run_dir    = '%s/%s'      %(domain_dir, model_run)
+    model_working_dir    = '%s/%s'      %(domain_dir, model_run)
     model_run_backup = '%s/%s/%s'   %(backup_base, domain, model_run)
   
     
-    wrfout_dir    = '%s/wrfout'        % model_model_run_dir
-    wrfpost_dir   = '%s/wrfpost'       % model_model_run_dir
-    log_dir       = '%s/log'           % model_model_run_dir
-    rsl_dir       = '%s/rsl'           % model_model_run_dir
-    namelist_dir  = '%s/namelist'      % model_model_run_dir
+    wrfout_dir    = '%s/wrfout'        % model_working_dir
+    wrfpost_dir   = '%s/wrfpost'       % model_working_dir
+    log_dir       = '%s/log'           % model_working_dir
+    rsl_dir       = '%s/rsl'           % model_working_dir
+    namelist_dir  = '%s/namelist'      % model_working_dir
 
     for bd in backup_dirs:
         logger.debug('archiving files in %s' % bd)
         #
         # Remember the trailing slash!
         #
-        source = '%s/%s/' % (model_model_run_dir, bd)
+        source = '%s/%s/' % (model_working_dir, bd)
         target = '%s/%s' % (model_run_backup, bd)
         rsync(source, target, config)
     
@@ -1857,11 +1903,11 @@ def grb_to_backup(config):
     """Transfers all files in the archive domain to the backup directory """
     domain        = config['domain']
     domain_dir    = config['domain_dir']
-    wrf_model_run_dir   = config['wrf_dir']+'/run'
+    wrf_working_dir   = config['wrf_dir']+'/run'
     model_run     = config['model_run']
     backup_dir    = config['backup_dir']
     wrfout_dir    = '%s/%s/wrfout' %(domain_dir, model_run)
-    model_model_run_dir = '%s/%s'   %(domain_dir, model_run)
+    model_working_dir = '%s/%s'   %(domain_dir, model_run)
     log_dir       = '%s/logs' % domain_dir    
     archive_dir   = '%s/%s/archive' %(domain_dir,model_run)
     run_key       = '%s.%s'   %(domain, model_run)    # composite key      
@@ -1884,7 +1930,7 @@ def grb_from_backup(config):
     dom           = config['dom']
     model_run     = config['model_run']
     backup_base_dir    = config['backup_dir']
-    model_model_run_dir = '%s/%s'   %(domain_dir, model_run)
+    model_working_dir = '%s/%s'   %(domain_dir, model_run)
     archive_dir   = '%s/%s/archive' %(domain_dir,model_run)
     run_key       = '%s.%s'   %(domain, model_run)    # composite key      
     backup_dir    = '%s/%s/%s' % (backup_base_dir, domain, model_run)
@@ -1926,8 +1972,8 @@ def run_unipost(config):
     post_dir      = '%s/%s/postprd' % (domain_dir, model_run)
     wrf_cntrl     = post_dir+'/wrf_cntrl.parm'
     upp_dir       = config['upp_dir']
-    wrf_model_run_dir   = config['wrf_dir']+'/run'
-    namelist      = read_namelist(wrf_model_run_dir+'/namelist.input')
+    wrf_working_dir   = config['wrf_dir']+'/run'
+    namelist      = read_namelist(wrf_working_dir+'/namelist.input')
 
     fcst_times    = get_fcst_times(config)    
     init_time     = fcst_times[0]
@@ -1966,7 +2012,7 @@ def run_unipost(config):
     
     
     # Link Ferrier's microphysic's table and Unipost control file, 
-    cmd = 'ln -sf %s/ETAMPNEW_DATA ./eta_micro_lookup.dat' % wrf_model_run_dir
+    cmd = 'ln -sf %s/ETAMPNEW_DATA ./eta_micro_lookup.dat' % wrf_working_dir
     run_cmd(cmd, config)
     
     #
@@ -2191,7 +2237,7 @@ def timing(config):
 
     #
     # Where should we assume to find the rsl file?
-    # In the wrf_model_run_dir
+    # In the wrf_working_dir
     #
     logger = get_logger()
     logger.info('*** Computing timing information ***')

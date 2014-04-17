@@ -1,29 +1,29 @@
-"""config.py provides general configuration handling.
+"""confighelper.py provides general configuration handling.
 
 Dependencies: json or yaml, docopt
 
-config.py allows options to be specified in a json or yaml config file and overridden on the command line. 
-The range of valid options can be specified in the docstring as optional options i.e surrounded by
-square braces [--option], to make the usage pattern meaninful. 
+confighelper.py allows options to be specified in a json or yaml config file and overridden on the command line. 
+The range of valid options to a command-line tool can be specified in the docstring as optional options i.e surrounded by
+square braces as in [--option], to make the usage pattern meaninful. 
 
 To use this module within another python module, import and call the config function with the calling modules docstring
 and command line arguments:
     
     "modules docstring in docopt recognised format"
     
-    import config as conf
+    import confighelper as conf
     config = conf.config(__doc__, sys.argv[1:] )
 
 Potential gotcha is that any defaults specified in the docstring will override those specified in the config file. 
 Therefore it is preferrable not to specify defaults in the docstring, but place them in a defaults config file. 
 
-Another gotcha is that the options will come back stripped of preceding "--", this is to allow the equivalent 
+Another gotcha is that the options will come back stripped of preceding "--", to allow the equivalent 
 options to be specified in the config file without leading "--". 
 
 As an example, this module can be run from the command line:
 
 Usage: 
-    config.py [--config=<file>]
+    confighelper.py [--config=<file>]
               [--config-fmt=<fmt>]
                 [--option1=arg1]
                 [--option2=arg2]
@@ -44,7 +44,8 @@ import sys
 import os
 import re
 import docopt
-
+from collections import OrderedDict
+import pprint
 
 # Supported file format extentions
 JSON = ["json"]
@@ -53,6 +54,9 @@ YAML = ["yaml", "yml"]
 EVAR  = re.compile('\$\(.*?\)')                              # match rows containing environment vars
 LVAR  = re.compile('%\(.*?\)')                               # match rows containing local vars 
 CVAR = [re.compile('%\(.*\.'+e+'\)' ) for e in JSON + YAML]  # match rows containing config file specifiers
+
+
+
 
 
 class ConfigError(Exception):
@@ -71,7 +75,7 @@ def main():
     print json.dumps(c, indent=4, default=date_handler)
    
 
-def config(docstring, args, format="json"):
+def config(docstring, args, format="json", flatten=False):
     cargs  = docopt.docopt(docstring,args)
     
     if '--config-fmt' in cargs and cargs['--config-fmt']:
@@ -87,14 +91,17 @@ def config(docstring, args, format="json"):
     
     cargs = parse_cmd_args(cargs, format=format)
 
+    
     if 'config' in cargs and cargs['config']:
-        cfile = load(cargs['config'])
-        config = merge(cargs, cfile)
-        return config
+        cfile = load(cargs['config'], flatten=flatten)
+        merged = merge(cargs, cfile)
+        return merged
     else:
         return cargs
 
 
+       
+        
 def load(fname, evar=EVAR, lvar=LVAR, cvar=CVAR, flatten=False, format=None):
     """Loads a config file, and recursively opens any subsets specified 
         by a reference to another config file. Suppose in the parent we have:
@@ -140,6 +147,8 @@ def load(fname, evar=EVAR, lvar=LVAR, cvar=CVAR, flatten=False, format=None):
     else:
         raise ConfigError("config format not supported")
     
+    path, name = os.path.split(fname)
+    
     confstr = open(fname, 'r').read()
     confstr = expand_evar(confstr, os.environ, evar)
     
@@ -148,50 +157,99 @@ def load(fname, evar=EVAR, lvar=LVAR, cvar=CVAR, flatten=False, format=None):
     
     if format in YAML:
         parent = yaml.load(confstr)
-    
+
+        
     for key,value in parent.items():
         if isinstance(value, (str, unicode)) and any(regex.match(value) for regex in cvar):
             subfname = value[2:-1]
-            subconf = load(subfname,evar, lvar, cvar, flatten=flatten, format=format)
+            subconf = load(path+"/"+subfname,evar, lvar, cvar, flatten=flatten, format=format)
             if flatten:
                 parent.update(subconf)
                 del(parent[key])
             else:
                 parent[key] = subconf
 
-    expand_lvar(parent, lvar)
+
+    tree = parent.copy()
+    scope = parent.copy()
+    result = expand_tree(tree, scope, lvar)
     
-    return parent
+    return result
+        
+        
+def stringy(value):
+    return isinstance(value, (str, unicode))
+
+def listy(value):
+    return hasattr(value, "__getitem__") and not stringy(value)    
+
+
+def expand(string, scope, expr):
+    """ Replaces an expression in string by looking it up in scope"""
+    result = string
+
+    # if no local variable definitions in string
+    if not expr.search(result):
+        return result
+    
+    # loop through each local variable 
+    exprs = expr.findall(string)
+    for ex in exprs:
+        expanded = lookup(ex, scope)
+        
+        # if it hasn't changed,then we can stop 
+        if not expanded:
+            continue
+        
+        # otherwise we test whether there are still expressions in the string
+        elif expr.search(expanded):
+            expanded = expand(expanded, scope, expr)
+        result   = result.replace(ex, expanded)
+    return result
+
+def lookup(string, scope):
+    """ lookup a string within a dictionary and return result. If string not found, 
+    returns None """
+    
+    name = string[2:-1]
+    if name in scope:
+        result = scope[name]
+        if not stringy(result):
+            raise Exception("expressions must refer to strings defined elsewhere: %s resolves to type %s" %(string, type(result)))
+        return result
+
+
+def isnode(node):
+    return type(node)==type({})
+        
+        
+def isleaf(node):
+    return not isnode(node)
+    
+def expand_tree(tree, scope, expr):
+    for key, node in tree.items():
+        if isleaf(node):
+            new_node = expand_leaf(node, scope, expr)
+       
+        elif isnode:
+            new_node = expand_tree(node, scope, expr)
+        
+        tree[key] = new_node
+    return tree    
 
     
-def expand_lvar(dictionary, lvar):
-    return _expand_lvar({}, dictionary, lvar)
-    
-    
-def _expand_lvar(parent, current, lvar):
-    """ Replaces %(local_var) definitions with their original definition. Only searches 
-    in immediate parent scope, need to defined recursing up the tree"""
-    
-    search_next = []
-    for key,value in current.items():
-        if isinstance(value, (str, unicode)) and lvar.match(value):
-            lvars = lvar.findall(value)
-            for lv in lvars:
-                lvname = lv[2:-1]
-                if lvname in current:
-                    value = value.replace(lv, current[lvname])
-                elif lvname in parent:
-                    value = value.replace(lv, parent[lvname])
-            current[key] = value
-            
-        elif isinstance(value, dict):
-            search_next.append(key)
-    
-    for key in search_next:
-        _expand_lvar(current, current[key], lvar)
-    
+def expand_leaf(node, scope, expr):
+    if stringy(node):
+        return expand(node, scope, expr)
+    elif listy(node):
+        f = lambda n: expand_leaf(n, scope, expr)
+        return map(f, node)
+    else:
+        return node
+
 
 def expand_evar(s, env, expr):
+    print 'expand evars called'
     vars = expr.findall(s)
     for v in vars:
         vname = v[2:-1]
@@ -205,9 +263,20 @@ def merge(dict_1, dict_2):
     Values that evaluate to true take priority over falsy values.    
     `dict_1` takes priority over `dict_2`.    """    
     
+    # values that are None do not override
+    return dict((str(key), choose(key, dict_1, dict_2)) for key in set(dict_2) | set(dict_1))
+    
     return dict((str(key), dict_1.get(key) or dict_2.get(key))
             for key in set(dict_2) | set(dict_1))
 
+            
+def choose(key, dict1, dict2):
+    v1 = dict1.get(key)
+    v2 = dict2.get(key)
+    if v1!=None:
+        return v1
+    else:
+        return v2
 
 def parse_cmd_args(args, format="json"):
     """Parse command line arguments which look like lists as json/yaml
@@ -230,23 +299,24 @@ def parse_cmd_args(args, format="json"):
         import yaml
     else:
         raise ConfigError("configuration format: %s not understood, use json or yaml" % format)
-      
+    print format
     for (k,v) in args.items():
-        if v and type(v)==type("") and ( lexpr.match(v) or dexpr.match(v)):
+        #if v and type(v)==type("") and ( lexpr.match(v) or dexpr.match(v)):
+        if v and type(v)==type(""):
+            print v, type(v)
             if format in JSON:
                 jv = json.loads(v)
             elif format in YAML:
                 jv = yaml.load(v)
+                print jv, type(jv)
 
             jargs[k] = jv
         else:
             jargs[k] = v
-    
+    print jargs
     return jargs
-
-
-
-
+         
+  
     
 if __name__ == '__main__':
     main()

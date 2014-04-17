@@ -1,31 +1,170 @@
 """ Script for running a WRF forecast and all of the pre-processsing, 
 post-processing, visualization and verification which goes with it.
-The philosophy is to keep this script as simple and clean as possible 
-to represent the high-level progamme flow. 
 
-The first argument MUST BE a configuration file which sets most of the options.  
-These options can be overridden by speciying further arguments in the form: --key=value. 
-Each stage in the process should try and follow the same loop structure."""
+Config comes from a file, specified in an argument to the --config option.
+Configuation can also be given at the command lind, and these will override
+the configuration file. See example/forecast.yaml for an annotated list 
+of options. 
+
+Usage:
+    run_forecast.py [--config=<file>] [options]
+
+See examples/forecast.yaml for an annotated list of options
+    
+Options:
+    --archive_mode=<str>
+    --bdy_conditions=<str>
+    --bdy_interval=<int>
+    --cmd_timing=<bool>
+    --compress=<bool>
+    --compression_level=<int>
+    --config=<str>
+    --convert_grb=<bool>
+    --create_dirs=<list>
+    --cycles=<str>
+    --delay=<int>
+    --dispatch_json=<str>
+    --domain=<str>
+    --dstd=<float>
+    --end=<datetime.datetime>
+    --extract=<bool>
+    --extract.tseries=<bool>
+    --extract_hgts=<str>
+    --fail_mode=<str>
+    --fcst_hours=<int>
+    --fetch=<bool>
+    --fetch.gribmaster=<bool>
+    --fetch.sst=<bool>
+    --finalise=<bool>
+    --finalise.link=<list>
+    --finalise.move=<list>
+    --finalise.remove=<list>
+    --full_trace=<bool>
+    --geo_em_dir=<str>
+    --gm_dataset=<str>
+    --gm_delay=<int>
+    --gm_dir=<str>
+    --gm_log=<str>
+    --gm_max_attempts=<int>
+    --gm_sleep=<int>
+    --gm_transfer=<str>
+    --grb_dir=<str>
+    --grb_fmt=<str>
+    --grb_input_fmt=<str>
+    --history_interval=<int>
+    --host_file=<str>
+    --init_interval=<int>
+    --job_script=<str>
+    --job_template=<str>
+    --json_dir=<str>
+    --json_web_dir=<str>
+    --link=<list>
+    --locations_file=<str>
+    --log_file=<str>
+    --log_fmt=<str>
+    --log_level=<str>
+    --mail_buffer=<int>
+    --mail_level=<str>
+    --mail_subject=<str>
+    --mailto=<str>
+    --max_dom=<int>
+    --max_job_time=<dict>
+    --met_em_dir=<str>
+    --metadata=<bool>
+    --model=<str>
+    --model_run=<str>
+    --namelist_input=<str>
+    --namelist_wps=<str>
+    --ncdump=<str>
+    --ncl_code=<str>
+    --ncl_code_dir=<str>
+    --ncl_log=<str>
+    --ncl_ol_code=<str>
+    --ncl_ol_out_dir=<str>
+    --ncl_ol_web_dir=<str>
+    --ncl_opt_file=<str>
+    --ncl_out_dir=<str>
+    --ncl_out_type=<str>
+    --ncl_web_dir=<str>
+    --num_procs=<dict>
+    --operational=<bool>
+    --pcurve_dir=<str>
+    --pdist=<int>
+    --pnorm=<bool>
+    --poll_interval=<dict>
+    --post=<bool>
+    --post.upp=<bool>
+    --post.compress=<bool>
+    --post.metadata=<bool>
+    --power=<bool>
+    --power_file=<str>
+    --pquants=<str>
+    --pre_clean=<list>
+    --prepare=<bool>
+    --queue=<bool>
+    --queue_name=<dict>
+    --run_level=<str>
+    --simulate=<bool>
+    --simulate.geogrid=<bool>
+    --simulate.metgrid=<bool>
+    --simulate.ndown=<bool>
+    --simulate.real=<bool>
+    --simulate.status=<bool>
+    --simulate.timing=<bool>
+    --simulate.ungrib=<bool>
+    --simulate.wps=<bool>
+    --simulate.wrf=<bool>
+    --sst=<bool>
+    --sst_delay=<int>
+    --sst_filename=<str>
+    --sst_local_dir=<str>
+    --sst_server=<str>
+    --sst_server_dir=<str>
+    --sst_vtable=<str>
+    --sstd=<float>
+    --start=<datetime.datetime>
+    --status_file=<str>
+    --tansfer.dispatch=<bool>
+    --tmp_dir=<str>
+    --transfer=<bool>
+    --transfer.archive=<bool>
+    --transfer_files=<list>
+    --tseries_code=<str>
+    --tseries_dir=<str>
+    --tseries_fmt=<str>
+    --upp_dir=<str>
+    --visualise=<bool>
+    --visualise.ol=<bool>
+    --visualise.ncl=<bool>
+    --vtable=<dict>
+    --web_dir=<str>
+    --working_dir=<str>
+    --wps_dir=<str>
+    --wps_run_dir=<str>
+    --wrf_dir=<str>
+    --wrf_run_dir=<str>
+    --wrfout_dir=<str>
+    --wrftools_dir=<str>"""
 
 
 import sys
 import time, datetime
-import wrftools
+from wrftools import wrftools
 import logging
+from wrftools import confighelper as conf
+import pprint
 
-nl      = wrftools.read_namelist(sys.argv[1])
-config  = nl.settings
+config = conf.config(__doc__, sys.argv[1:], flatten=True, format="yaml")
+pp = pprint.PrettyPrinter(indent=4)
+pp.pprint(config)
 
-#************************************************
-# Allow command-line arguments to override those in the namelist file
-# no checking is done here, we just assume the arguments 
-# are given in the correct order. They should be specified like this
-#
-# --option=value 
-#************************************************
-if len(sys.argv)>2:
-    cmd_args = sys.argv[2:]
-    wrftools.add_cmd_args(config, cmd_args)
+#sys.exit()
+
+#for key in sorted(config.keys()):
+#    t = str(type(config[key]))
+#    t = t.lstrip("'<type ").rstrip("'>")
+#    print '%s=<%s>' % (key, t)
+
 
 #************************************************
 # Logging
@@ -38,21 +177,9 @@ logger = wrftools.create_logger(config)
 # Get some required settings
 #************************************************
 fcst_hours   = config['fcst_hours']               # forecast length
-base_dir     = config['base_dir']
 domain       = config['domain']
 max_dom      = config['max_dom']                  # number of nested domains
 fail_mode    = config['fail_mode']                # what to do on failure
-
-
-
-#***********************************************
-# Initial checks
-#***********************************************
-try:
-    wrftools.check_config(config)
-except KeyError:
-    logger.error('required setting missing')
-    sys.exit()
 
 
 
@@ -67,30 +194,30 @@ config['simulation_start'] = datetime.datetime.now()
 run_level           = config['run_level']
 fail_mode           = config['fail_mode']
 full_trace          = config['full_trace']
-gribmaster          = config['gribmaster']
-sst                 = config['sst']
-wps                 = config['wps']
-ungrib              = config['ungrib']
-geogrid             = config['geogrid']
-metgrid             = config['metgrid']
-ndown               = config['ndown']
-real                = config['real']
-wrf                 = config['wrf']
-upp                 = config['upp']
-post                = config['post']
-time_series         = config['tseries']
-compress            = config['compress']
-metadata            = config['metadata']
-power               = config['power']
-ncl                 = config['ncl']
-scripts             = config['scripts']
-met                 = config['met']
+fetch               = config['fetch']
+gribmaster          = config['fetch.gribmaster']
 convert_grb         = config['convert_grb']
-timing              = config['timing'] # produce timing information
-web                 = config['web']
+sst                 = config['fetch.sst']
+simulate            = config['simulate']
+wps                 = config['simulate.wps']
+ungrib              = config['simulate.ungrib']
+geogrid             = config['simulate.geogrid']
+metgrid             = config['simulate.metgrid']
+ndown               = config['simulate.ndown']
+real                = config['simulate.real']
+wrf                 = config['simulate.wrf']
+timing              = config['simulate.timing']
+post                = config['post']
+met                 = config['post.met']
+compress            = config['post.compress']
+metadata            = config['post.metadata']
+upp                 = config['post.upp']
+extract             = config['extract']
+time_series         = config['extract.tseries']
+power               = config['power']
+visualise           = config['visualise']
 dispatch            = config['dispatch']
-archive             = config['archive']
-cleanup             = config['cleanup']
+finalise            = config['finalise']
 
 
 #**********************************************************
@@ -119,22 +246,25 @@ for init_time in init_times:
     logger.info('Running forecast from initial time: %s' %init_time) 
 
     #
-    # Gribmaster
+    # Fetch
     #
-    if gribmaster:
-        try:
-            wrftools.run_gribmaster(config)
-        except IOError, e:
-            logger.error('gribmaster failed for initial time %s' % init_time)
-            wrftools.handle(e, fail_mode, full_trace)
-    if sst:
-        wrftools.get_sst(config)
+    if fetch:
+        if gribmaster:
+            try:
+                wrftools.run_gribmaster(config)
+            except IOError, e:
+                logger.error('gribmaster failed for initial time %s' % init_time)
+                wrftools.handle(e, fail_mode, full_trace)
+        if sst:
+            wrftools.get_sst(config)
 
 
+            
+            
     #
     # WPS
     #
-    if wps:
+    if simulate and wps:
         #try:
         #    wrftools.prepare_wps(config)
         #except IOError, e:
@@ -170,24 +300,13 @@ for init_time in init_times:
             except Exception, e:
                 wrftools.handle(e, fail_mode, full_trace)
 
-    #
-    # ndown
-    #
-    if ndown:
-        try:
-            if real:
-                wrftools.run_real(config)
-            wrftools.prepare_ndown(config)
-            wrftools.run_ndown(config)
-        except Exception, e:
-            wrftools.handle(e, fail_mode, full_trace)
 
-    
+   
     
     #
     # WRF standard preparation
     #           
-    if wrf and not ndown:
+    if simulate and wrf and not ndown:
         try:
             wrftools.prepare_wrf(config)
             wrftools.update_namelist_input(config)
@@ -203,7 +322,7 @@ for init_time in init_times:
     #
     # WRF runs
     #
-    if wrf:
+    if simulate and wrf:
         try:
             wrftools.run_wrf(config)
         except Exception, e:
@@ -220,7 +339,7 @@ for init_time in init_times:
             wrftools.handle(e, fail_mode, full_trace)
     
     
-    if 'status' in config and config['status']:
+    if simulate and 'status' in config and config['status']:
         logger.debug("writing status file")
         try:
             config['simulation_complete'] = datetime.datetime.now()
@@ -244,7 +363,7 @@ for init_time in init_times:
         
         if metadata:
             try:
-                wrftools.add_metadata(nl)
+                wrftools.add_metadata(config)
             except Exception, e:
                 wrftools.handle(e, fail_mode, full_trace)
         
@@ -286,18 +405,19 @@ for init_time in init_times:
     #
     # Visualisation
     #
-    if ncl:
-        for d in range(1,max_dom+1):
-            try:
-                logger.debug('Processing domain d%02d' %d)
-                config['dom'] = d
-                wrftools.produce_ncl_plots(config)
-            except Exception, e:
-                logger.error('*** FAIL NCL ***')
-                wrftools.handle(e, fail_mode, full_trace)
+    if visualise:
+        if config['visualise.ncl']:
+            for d in range(1,max_dom+1):
+                try:
+                    logger.debug('Processing domain d%02d' %d)
+                    config['dom'] = d
+                    wrftools.produce_ncl_plots(config)
+                except Exception, e:
+                    logger.error('*** FAIL VISUALISE ***')
+                    wrftools.handle(e, fail_mode, full_trace)
     
         
-        if config['openlayers']:
+        if config['visualise.ol']:
             for d in range(1,max_dom+1):
                 try:
                     logger.debug('Processing domain d%02d' %d)
@@ -307,9 +427,6 @@ for init_time in init_times:
                     logger.error('*** FAIL NCL ***')
                     wrftools.handle(e, fail_mode, full_trace)
     
-        if web:
-            wrftools.transfer_to_web_dir(config)
-
     if time_series:
         for d in range(1,max_dom+1):
             try:

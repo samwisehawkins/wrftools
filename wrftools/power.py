@@ -1,43 +1,171 @@
-#-------------------------------------------------------------------------------
-# Name:    power
-# Purpose: Provides a PowerCurve class which can convert wind speed and direction 
-#          into power.  Power curves are specified by direction. 
-#          Uses 2D linear interpolation  between speed and direction points. 
-#
-# Author:    sam.hawkins@vattenfall.com
-#
-# TODO: Deal with wind speed/direction distribution.  Either we could deal 
-#       with this in the construction of the power curve, or we could
-#       deal with it in the computation of the power.
-#
-#       A simple but slow way of doing it will just be to loop through each 
-#       (speed,direction) pair in the input, compute a distribution around 
-#       those points, and then average over that.  
-#
-#       This raises the other question, how to deal with wind direction 
-#       distibutions? A simple way would be to extend the power curve along
-#       the direction axis, or to mod the direction by 360 before interpolating.
-#
-#       work out the behaviour of the bivariate spline, the shape of arrays
-#       it returns are unusual.
-#
-#       Remove scipy depdendency? We only use it to do 2D interpolation
-#       which we could probably code in numpy only fairly easily
-#
-#       write some descriptive headers
-#       probably something along the lines of a dictionary: self.info
-#       write out self.info with # header tags?
-#
-# Created:     12/07/2012
-# Copyright:   (c) slha 2012
-# Licence:     <your licence>
-#-------------------------------------------------------------------------------
+""" power.py creates power output from wind speed and direction times series 
+
+Usage:
+    power.py [--config=<file>]
+        [--log_level=<level>]
+        
+Options:
+    [--log_level=<level>]"""
+
+
+
 import numpy as np
 import os
 import scipy
 from scipy import interpolate
-import wrftools
+#import wrftools
+import loghelper as log
+import sys
+import confighelper as conf
 
+LOGGER="power"
+
+def main():
+    config = conf.config(__doc__, sys.argv[1:], flatten=True)
+    print config
+    power(config)
+
+def power(config):
+    """Reads 'time series' from netcdf time series file, and adds power as a variable. """
+    
+    from netCDF4 import Dataset
+    from netCDF4 import netcdftime
+    
+    #
+    # How to output power? We could output to a simple CSV format.
+    # We could output to a netcdf file, by for example adding power
+    # as a variable in the netcdf file. Or we could go directly to json format. 
+    # Advantage of going to netCDF is we can dump the resulting file to JSON format
+    # once. Advantage of going straight to JSON is that it is simpler.  
+    # In fact, I could recreate the old technique of writing individual files,
+    # one per series. Could make some json tools. One to cat series together,
+    # which would be remove 
+    #
+    # series to JSON files, e.g. 
+    #{ wind_10
+    # model_run  = 'test',
+    # grid_id    = 3,
+    # time_units = 'milliseconds since 1900'
+    # data = {timestamp, }
+    #}
+
+    logger          = log.create(LOGGER, config['log_level'], config['log_fmt'], config['log_file'])
+    
+
+    #domain          = config['domain']
+    #domain_dir      = config['domain_dir']
+    #model           = config['model']
+    #model_run       = config['model_run']
+    
+    # Number of samples to use should be in here
+    # Whether to normalise power should be in here    
+    pnorm           = config['pnorm']
+    pdist           = config['pdist']
+    sstd            = config['sstd']
+    dstd            = config['dstd']
+    pquants         = config['pquants']
+    quantiles       = np.array(pquants)
+    
+    logger.debug(quantiles)
+    
+    if pdist:
+        n=pdist
+            
+    dom             = config['dom']
+    init_time       = config['init_time']
+    locations_file  = config['locations_file']
+    pcurve_dir      = config['pcurve_dir']
+    ts_dir          = config['tseries_dir']
+    tseries_file    = '%s/tseries_d%02d_%s.nc' % (ts_dir, dom, init_time.strftime('%Y-%m-%d_%H'))
+    
+    logger.info('*** Estimating power from time series: %s ' % tseries_file)
+    dataset = Dataset(tseries_file, 'a')
+
+    # Get dimensions
+    dims    = dataset.dimensions
+    ntime   = len(dims['time'])
+    nloc    = len(dims['location'])
+    nheight = len(dims['height'])
+    
+    # Get coordinate variables
+    nctime    = dataset.variables['time']
+    datetimes = netcdftime.num2date(nctime, nctime.units)
+    location = [''.join(l.filled(' ')).strip() for l in dataset.variables['location']]
+    height   = dataset.variables['height']
+
+    # Get attributes
+    domain = dataset.getncattr('DOMAIN')
+    domain = dataset.getncattr('MODEL_RUN')
+    model  = dataset.getncattr('MODEL')
+
+    # Get number of quantiles
+    nq    = len(quantiles)
+    pdata = np.ma.zeros((ntime,nloc,nheight,nq+1), np.float) # mean will be 1st value
+   
+    for l,loc in enumerate(location):
+        logger.info('Predicting power output for %s' % loc )
+        pcurve_file = '%s/%s.csv' %(pcurve_dir, loc)
+        
+        # mask power data if no power curve found for this park
+        if not os.path.exists(pcurve_file):
+            logger.debug("Power curve: %s not found, skipping" % pcurve_file)
+            pdata[:,l,:,:] = np.ma.masked
+            continue
+
+        #
+        # Open power curve
+        #
+        pcurve = from_file(pcurve_file)
+
+        # we could eliminate this loop by applying 
+        # pcurve to all the speed, direction values over all heights
+        # and reshaping the arrays. DO THAT! 
+        for h in range(nheight):
+            speed     = dataset.variables['SPEED'][:,l,h]
+            direction = dataset.variables['DIRECTION'][:,l,h]
+            
+            #pwr = pcurve.power(speed,direction)
+    
+            # pdist will create a distribution for each timetep based on sampling
+            # n times from a normal distribution. 
+            pdist   = pcurve.power_dist(speed, direction, sstd=sstd,dstd=dstd,n=n, normalise=pnorm)
+            pmean   = np.mean(pdist, axis=1)
+            pquants = scipy.stats.mstats.mquantiles(pdist, prob=quantiles/100.0,axis=1, alphap=0.5, betap=0.5)
+            
+            print 'raw quantile values from mquantiles'
+            pdata[:,l,h,0]  = pmean
+            pdata[:,l,h,1:] = pquants[:,:]
+
+        logger.info('finished %s' % loc)            
+
+    # UTH is location 7
+    #print pdata[:,7,0,0]  # should be mean
+    #print pdata[:,7,0,1]  # P10
+    #print pdata[:,7,0,2]  # P90  
+    
+    pavg    = dataset.createVariable('POWER','f',('time','location','height'))
+    pavg.units = 'kW'
+    pavg.description = 'forecast power output'
+    pavg[:] = pdata[:,:,:,0]
+
+    
+    for q, qval in enumerate(quantiles):
+
+        varname = 'POWER.Q%02d' % qval
+        logger.debug("creating variable %s" % varname)
+        var  = dataset.createVariable(varname,'f',('time','location','height'))
+        if pnorm:
+            var.units = 'ratio'
+        else:
+            var.units = 'kW'
+        var.description = 'forecast power output'
+        print pdata[:,:,:,q+1]
+        var[:] = pdata[:,:,:,q+1]
+    
+            
+
+    
+    dataset.close()
 
 class PowerCurve(object):
     """Represents a power curve, provides power(speed, direction) method to convert
@@ -191,152 +319,11 @@ def example_interpolation():
 
 
 
-def power(config):
-    """Reads 'time series' from netcdf time series file, and adds power as a variable. """
-    
-    from netCDF4 import Dataset
-    from netCDF4 import netcdftime
-    
-    #
-    # How to output power? We could output to a simple CSV format.
-    # We could output to a netcdf file, by for example adding power
-    # as a variable in the netcdf file. Or we could go directly to json format. 
-    # Advantage of going to netCDF is we can dump the resulting file to JSON format
-    # once. Advantage of going straight to JSON is that it is simpler.  
-    # In fact, I could recreate the old technique of writing individual files,
-    # one per series. Could make some json tools. One to cat series together,
-    # which would be remove 
-    #
-    # series to JSON files, e.g. 
-    #{ wind_10
-    # model_run  = 'test',
-    # grid_id    = 3,
-    # time_units = 'milliseconds since 1900'
-    # data = {timestamp, }
-    #}
-
-    logger          = wrftools.get_logger()
-    
-
-    #domain          = config['domain']
-    #domain_dir      = config['domain_dir']
-    #model           = config['model']
-    #model_run       = config['model_run']
-    
-    # Number of samples to use should be in here
-    # Whether to normalise power should be in here    
-    pnorm           = config['pnorm']
-    pdist           = config['pdist']
-    sstd            = config['sstd']
-    dstd            = config['dstd']
-    pquants         = config['pquants']
-    quantiles       = np.array(pquants)
-    
-    logger.debug(quantiles)
-    
-    if pdist:
-        n=pdist
-            
-    dom             = config['dom']
-    init_time       = config['init_time']
-    locations_file  = config['locations_file']
-    pcurve_dir      = config['pcurve_dir']
-    ts_dir          = config['tseries_dir']
-    tseries_file    = '%s/tseries_d%02d_%s.nc' % (ts_dir, dom, init_time.strftime('%Y-%m-%d_%H'))
-    
-    logger.info('*** Estimating power from time series: %s ' % tseries_file)
-    dataset = Dataset(tseries_file, 'a')
-
-    # Get dimensions
-    dims    = dataset.dimensions
-    ntime   = len(dims['time'])
-    nloc    = len(dims['location'])
-    nheight = len(dims['height'])
-    
-    # Get coordinate variables
-    nctime    = dataset.variables['time']
-    datetimes = netcdftime.num2date(nctime, nctime.units)
-    location = [''.join(l.filled(' ')).strip() for l in dataset.variables['location']]
-    height   = dataset.variables['height']
-
-    # Get attributes
-    domain = dataset.getncattr('DOMAIN')
-    domain = dataset.getncattr('MODEL_RUN')
-    model  = dataset.getncattr('MODEL')
-
-    # Get number of quantiles
-    nq    = len(quantiles)
-    pdata = np.ma.zeros((ntime,nloc,nheight,nq+1), np.float) # mean will be 1st value
-   
-    for l,loc in enumerate(location):
-        logger.info('Predicting power output for %s' % loc )
-        pcurve_file = '%s/%s.csv' %(pcurve_dir, loc)
-        
-        # mask power data if no power curve found for this park
-        if not os.path.exists(pcurve_file):
-            logger.debug("Power curve: %s not found, skipping" % pcurve_file)
-            pdata[:,l,:,:] = np.ma.masked
-            continue
-
-        #
-        # Open power curve
-        #
-        pcurve = from_file(pcurve_file)
-
-        # we could eliminate this loop by applying 
-        # pcurve to all the speed, direction values over all heights
-        # and reshaping the arrays. DO THAT! 
-        for h in range(nheight):
-            speed     = dataset.variables['SPEED'][:,l,h]
-            direction = dataset.variables['DIRECTION'][:,l,h]
-            
-            #pwr = pcurve.power(speed,direction)
-    
-            # pdist will create a distribution for each timetep based on sampling
-            # n times from a normal distribution. 
-            pdist   = pcurve.power_dist(speed, direction, sstd=sstd,dstd=dstd,n=n, normalise=pnorm)
-            pmean   = np.mean(pdist, axis=1)
-            pquants = scipy.stats.mstats.mquantiles(pdist, prob=quantiles/100.0,axis=1, alphap=0.5, betap=0.5)
-            
-            print 'raw quantile values from mquantiles'
-            pdata[:,l,h,0]  = pmean
-            pdata[:,l,h,1:] = pquants[:,:]
-
-        logger.info('finished %s' % loc)            
-
-    # UTH is location 7
-    #print pdata[:,7,0,0]  # should be mean
-    #print pdata[:,7,0,1]  # P10
-    #print pdata[:,7,0,2]  # P90  
-    
-    pavg    = dataset.createVariable('POWER','f',('time','location','height'))
-    pavg.units = 'kW'
-    pavg.description = 'forecast power output'
-    pavg[:] = pdata[:,:,:,0]
-
-    
-    for q, qval in enumerate(quantiles):
-
-        varname = 'POWER.Q%02d' % qval
-        logger.debug("creating variable %s" % varname)
-        var  = dataset.createVariable(varname,'f',('time','location','height'))
-        if pnorm:
-            var.units = 'ratio'
-        else:
-            var.units = 'kW'
-        var.description = 'forecast power output'
-        print pdata[:,:,:,q+1]
-        var[:] = pdata[:,:,:,q+1]
-    
-            
-
-    
-    dataset.close()
 
 
 
     
-def main():
+def test():
 
 ##    example_interpolation()
 ##    plt.close()
@@ -391,4 +378,6 @@ def main():
     zpoints2 = pcurve2.power(xpoints, ypoints)[:,0]
     ax.scatter(xpoints, ypoints, zpoints2, 's')
     plt.show()
-            
+
+if __name__ == "__main__":
+    main()
