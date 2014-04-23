@@ -34,7 +34,7 @@ python installation. These are:
  2. Create a local working directory 
  3. Link the run_forecast.py into working directory
  4. Copy `examples/forecast.yaml` into working directory
- 5. Edit the new forecast.yaml file
+ 5. Edit the new `forecast.yaml` file
  6. `$> python run_forecast.py --config=forecast.yaml`
 
 
@@ -49,7 +49,7 @@ those in the config file e.g.
 
     $> python run_forecast.py --config=<config_file> --log_level=debug
 
-See examples/forecast.yaml for an explanation of options
+See [examples/forecast.yaml](examples/forecast.yaml) for an explanation of options
 
 ## Modularity
 
