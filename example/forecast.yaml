@@ -26,8 +26,14 @@
 operational        : true                    # If true, start time is based on system time
 delay              : 3                       # delay in hours to apply to system time
 cycles             : [00, 12]                # round to the nearest one of these hours
-start              : 2013-06-14 00:00:00
-end                : 2013-06-14 00:00:00
+start              : 2013-06-14 00:00:00     # first initial time 
+end                : 2013-06-14 00:00:00     # final *inital time*, not forecast end time
+init_interval      : 24                      # period between inital times
+max_dom            : 1                       # maximum number of nests
+fcst_hours         : 3                       # length of forecast
+
+
+
 
 #************************************************
 # Components to run
@@ -50,8 +56,8 @@ simulate.timing   : true
 simulate.status   : true     # write json status file specifying time of last update etc
 post              : true     # run post-processing steps, see section post
 post.upp          : false    # Universal Post Processor
-post.metadata     : false    # add metadata as attributes to netcdf files
-post.compress     : false    # compress wrfout files using NCO
+post.metadata     : true     # add metadata as attributes to netcdf files
+post.compress     : true     # compress wrfout files using NCO
 power             : true     # calculate power production at points
 visualise         : true     # see visualise section
 visualise.ol      : true     # run openlayers visualisation (requiress VAPOR, ImageMagik)
@@ -72,7 +78,7 @@ model             : WRF
 model_run         : development
 bdy_conditions    : GFS
 
-metadata          :
+metadata          :                        # everything within this will be copied into attributes
     domain        : "%(domain)"
     model         : "%(model)"
     model_run     : "%(model_run)"
@@ -85,22 +91,24 @@ base_dir          : $(HOME)/forecasting/domains
 wrftools_dir      : $(HOME)/code/wrftools/devel                 # location of local wrftools repository
 working_dir       : "%(base_dir)/%(domain)/%(model_run)"        # this should replace the (confusing) working_dir
 tmp_dir           : $(HOME)/forecasting/tmp                     # temporary directory
-cmd_timing        : false
+web_dir           : $(HOME)/web2/forecast                       # convenience for copying plots
 
 #************************************************
 # Logging
 #************************************************
+log_name          : wrf_forecast                           # name of logger object
 log_level         : DEBUG                                  # log level to write to file   
 log_file          : "%(working_dir)/operational.log"       #
 log_fmt           : "%(message)s"                          # see logging module for format codes
 mail_level        : INFO                                   # log level for email
-#mailto            : sam.hawkins@vattenfall.com             # send log email here
+#mailto            : sam.hawkins@vattenfall.com            # send log email here
 mail_buffer       : 10000                                  # how many messages to collate in one email
 mail_subject      : "Operational WRF log"                  # subject to use in email 
 
 #************************************************
 # Running/exception handling
 #************************************************
+dry_run           : false
 full_trace        : true                                   # log a full stack trace of exceptions
 fail_mode         : exit           # CONTINUE, EXIT
 run_level         : run            # RUN, DUMMY
@@ -167,11 +175,8 @@ namelist_wps      : "%(working_dir)/namelist.wps"               # location of na
 namelist_input    : "%(working_dir)/namelist.input"             # location of namelist.input file to use
 grb_dir           : $(HOME)/forecasting/domains/GFS/operational # location of boundary conditions once downloaded
 grb_input_fmt     : "%(grb_dir)/GFS_Global_0p5deg_%iy%im%id_%iH%iM_fh%fH.grb"
-max_dom           : 1
-fcst_hours        : 72
 history_interval  : 60
-init_interval     : 24
-bdy_interval      : 3
+bdy_interval      : 3                                           # hours between boundary conditions
 vtable            :                                             # Vtables to use in the form prefix: vtable
     GFS: Vtable.GFS
 wrfout_dir        : "%(working_dir)/wrfout"                     # move wrfout files here after WRF has completed 
@@ -207,31 +212,12 @@ prepare.link      :                                                          # l
 prepare.copy      : []       # list of arguments to consecutive linux cp commands
 
 
-
-#************************************************
-# Extract
-#************************************************
-tseries_dir       : "%(working_dir)/tseries"                  # extract time-series here 
-locations_file    : $(HOME)/forecasting/locations/locations.csv
-
-#************************************************
-# Power
-#************************************************
-upp_dir           : $(HOME)/UPPV1.0
-geo_em_dir        : "%(working_dir)/geo_em"
-met_em_dir        : "%(working_dir)/met_em/%iY-%im-%id_%iH"
-locations_file    : $(HOME)/forecasting/locations/locations.csv
-pcurve_dir        : $(HOME)/forecasting/pcurves/fuga
-
-
 #************************************************
 # Post
 #************************************************
 upp_dir                 : $(HOME)/UPPV1.0
 compression_level       : 9                # Compresion level passed to -L flag
 post.met                : false            # MET verification tool
-
-
 
 
 #************************************************
@@ -244,9 +230,8 @@ gm_log            : "%(working_dir)/gribmaster.log"
 gm_dataset        : gfs004grb2
 gm_transfer       : http
 grb_fmt           : grib2
-gm_delay          : 0          
 gm_sleep          : 10         # number of minutes to wait after failure
-gm_max_attempts   : 3
+gm_max_attempts   : 6
 convert_grb       : false
 
 #*****************************************************
@@ -290,26 +275,74 @@ ncl_log        : "%(working_dir)/ncl.log"
 gwarp          : "%(wrftools_dir)/wrftools/shellscripts/gwarp"                          # location of gdalwarp script
 
 
-
 #**************************************************************
 # Extaction/time series
 #***************************************************************
-#tseries
+tseries_dir    : "%(working_dir)/tseries"                                              # extract time-series here 
+tseries_file   : "%(tseries_dir)/tseries_d%dd_%iY-%im-%id_%iH.nc"
+locations_file : $(HOME)/forecasting/locations/locations.csv
 tseries_code   : ["%(wrftools_dir)/ncl/extract_time_series.ncl"]                       # location of NCL code to extract time series
 ncl_opt_file   : "%(working_dir)/ncl_options.ncl"                                      # NCL file specfifying which variables get extracted
 extract_hgts   : [20,50,60,70,80,90,100,110,150,200]                                   # heights to extract time series at
-ncdump         : "%(working_dir)/ncdump.json"                                          # options for dumping time series to other formats
+
+ncdump:
+    met:
+        tseries_file  : "%(tseries_dir)/tseries_d%dd_%iY-%im-%id_%iH.nc"
+        tseries_vars  : [SPEED,DIRECTION,T2,TD2,SST,RIB,RAIN,SWDOWN,CLDFRAAVG,CLDFRAMAX]
+        coord_vars    : [time,location,height]
+        global_atts   : [GRID_ID,DOMAIN,MODEL_RUN,DX,DY]
+        var_atts      : [units,description]
+        dir           : /home/slha/forecasting/development/json
+        fname         : fcst_data_d%dd_%iHZ.json
+        format        : json
+        float_format  : "%0.3f"
+        dimspec       : 
+            height        : ["2D",60,80,100]
+        drop          : [DOMAIN,MODEL_RUN]
+        group-by      : ["init_time", "location", "variable", "height"]
+        sort-by       : ["init_time", "valid_time", "location"]
+        na-rep        : "null"
+        rename        : null
+    
+    power:
+        tseries_file  : "%(tseries_dir)/power_d%dd_%iY-%im-%id_%iH.nc"
+        tseries_vars  : [POWER]
+        coord_vars    : [time,location,height]
+        global_atts   : [GRID_ID,DOMAIN,MODEL_RUN,DX,DY]
+        var_atts      : [units,description]
+        dir           : /home/slha/forecasting/development/json
+        fname         : power_d%dd_%iHZ.json
+        format        : json
+        float_format  : "%0.3f"
+        dimspec       : 
+            height        : [60,80,100]
+        drop          : [DOMAIN,MODEL_RUN]
+        group-by      : ["init_time", "location", "variable", "height"]
+        sort-by       : ["init_time", "valid_time", "location"]
+        na-rep        : "null"
+        rename        : null
+    
+    aot:
+        tseries_file  : "%(tseries_dir)/tseries_d%dd_%iY-%im-%id_%iH.nc"
+        tseries_vars  : [SPEED,DIRECTION,T2,TD2,SST,RIB,RAIN,SWDOWN,CLDFRAAVG,CLDFRAMAX]
+        global_atts   : [GRID_ID,DOMAIN,MODEL_RUN,DX,DY]
+        var_atts      : [units,description]
+        coord_vars    : [time,location,height]
+        dir           : /home/slha/forecasting/development/aot
+        format        : aot
+
+
 
 
 #**************************************************************
 # Power
 #***************************************************************
-#power
-power_file      : "%(tseries_dir)/power_d%(grid_id)_%iY-%im-%id_%iH.nc"
+power_file      : "%(tseries_dir)/power_d%dd_%iY-%im-%id_%iH.nc"
+pcurve_dir      : $(HOME)/forecasting/pcurves/fuga
 pdist           : 100          # False or N, where N is the number of sample points to generate for each (speed,direction) pair
 sstd            : 1.0          # Standard deviation to apply to wind speed at each timestep
 dstd            : 3.5          # Standard deviation to apply to wind direction at each timestep
-pquants         : 10,25,75,90, # power quantiles to generate, using N sample values
+pquants         : [10,30,70,90] # power quantiles to generate, using N sample values
 pnorm           : true         # Normalise power outputs by capacity
 
 
@@ -317,8 +350,14 @@ pnorm           : true         # Normalise power outputs by capacity
 #**************************************************************
 # Dispatch
 #***************************************************************
-#dispatch
-dispatch_json   : "%(working_dir)/dispatch_%iHZ.json"
+dispatch.list:
+  aot : 
+    mailto     : "sam.hawkins@vattenfall.com"
+    from       : "sam.hawkins@vattenfall.com"
+    subject    : "WRF plots"
+    body       : "%(working_dir)/body.txt"
+    attach     : [ "%(working_dir)/plots/%iHZ/pp_d01_01.png"]
+
 
 
 
@@ -326,9 +365,11 @@ dispatch_json   : "%(working_dir)/dispatch_%iHZ.json"
 # Finalise
 #************************************************
 
+finalise.create : []
+
 finalise.copy:
-  - "%(working_dir)/plots/%fHZ/*.png %(web_dir)/img/lowres/%fHZ"
-  - "%(working_dir)/ol/%fHZ/*.png    %(web_dir)/img/ol/%fHZ"
+  - "%(working_dir)/plots/%iHZ/*.png %(web_dir)/img/lowres/%iHZ"
+  - "%(working_dir)/ol/%iHZ/*.png    %(web_dir)/img/ol/%iHZ"
   - "%(working_dir)/data/*.json      %(web_dir)/data"
   
 finalise.link: []
@@ -336,5 +377,5 @@ finalise.move: []
 finalise.remove: 
   - "%(wps_run_dir)/GFS*"
   - "-r %(met_em_dir)"
-  - "%(working_dir)/ol/%fHZ/*.xml"
-  - "%(working_dir)/ol/%fHZ/*.tiff"
+  - "%(working_dir)/ol/%iHZ/*.xml"
+  - "%(working_dir)/ol/%iHZ/*.tiff"

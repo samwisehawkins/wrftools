@@ -1,5 +1,36 @@
 #**************************************************************
 # Dispatch
 #***************************************************************
-#dispatch
-dispatch_json   : "%(model_run_dir)/dispatch_%iHZ.json"
+
+#************************************************
+# Shared - comment out if including in parent which defines   
+#************************************************
+#base_dir          : $(HOME)/forecasting/domains                
+#working_dir       : "%(base_dir)/baseline_europe/development"        # this should replace the (confusing) working_dir
+#tmp_dir           : $(HOME)/forecasting/tmp                          # temporary directory
+#web_dir           : $(HOME)/web/forecast                             # convenience for copying plots
+
+#************************************************
+# Logging
+#************************************************
+#log_name          : wrf_forecast                           # name of logger object
+#log_level         : DEBUG                                  # log level to write to file   
+#log_file          : "%(working_dir)/operational.log"       #
+#log_fmt           : "%(message)s"                          # see logging module for format codes
+#mail_level        : INFO                                   # log level for email
+##mailto           : sam.hawkins@vattenfall.com            # send log email here
+#mail_buffer       : 10000                                  # how many messages to collate in one email
+#mail_subject      : "Operational WRF log"                  # subject to use in email 
+
+
+dispatch.list:
+  aot : 
+    mailto     : "sam.hawkins@vattenfall.com"
+    from       : "sam.hawkins@vattenfall.com"
+    subject    : "WRF plots"
+    body       : "%(working_dir)/body.txt"
+    attach     : [ "%(working_dir)/plots/%iHZ/pp_d01_01.png"]
+
+
+
+

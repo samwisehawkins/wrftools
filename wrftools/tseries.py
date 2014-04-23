@@ -91,19 +91,6 @@ def tseries_to_json(config):
   
     logger.info('*** WRITTEN JSON DATA ***')
 
-def json_to_web(config):
-    logger = wrftools.get_logger()
-
-    model_run_dir = config['model_run_dir']
-    init_time   = config['init_time']
-    json_dir    = '%s/json' % model_run_dir
-    json_files   =  glob.glob('%s/*.json' % json_dir)
-    json_web_dir     = wrftools.sub_date(config['json_web_dir'], init_time)
-    
-    logger.info('*** COPYING JSON TO WEB DIR ***')
-    
-    wrftools.transfer(json_files,json_web_dir, mode='copy', debug_level='NONE')
-    logger.info('*** COPIED JSON DATA ***')
 
 
 def extract_tseries(config):
@@ -151,8 +138,8 @@ def extract_tseries(config):
     for script in ncl_code:
         cmd  = "ncl 'extract_heights=%s'  %s >> %s 2>&1" % (ncl_hgts,script, ncl_log)
         wrftools.run_cmd(cmd, config)
-
-    ncdump.ncdump_wrftools(config)
+    logger.debug(config['ncdump'])
+    ncdump.ncdump(config)
     
     #if 'aot' in tseries_fmt:
     #    ncdump.write_aot_files([tseries_file], tseries_dir)

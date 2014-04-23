@@ -172,6 +172,25 @@ post processing and visualisation.  In this way, file archiving and cleanup can 
 Some of the commands rely on underlying linux system call, and therefore may not work on macs. In future they should
 be replaced by python equivalents to ensure better compatibility.
  
+
+## Visualisation
+
+NCL is used as the primary visualisation tool. Communication with NCL is done through environment variables, as well as attributes
+within the wrfout netcdf files. The following environment variables are set:
+
+* FCST_FILE      netcdf file to use
+* NCL_OUT_DIR    directory to write outputs to, used if multiple files get written, e.g. one plot per hour
+* NCL_OUT_FILE   filename to write output to, used if only one output file
+* LOCATIONS_FILE text file with a list of location names, latitudes and longitudes
+* NCL_OPT_FILE   NCL options file. This is a fragment of ncl code which can be imported into an ncl script.
+
+
+## Time series extraction
+
+
+
+
+
  
 ----------
 Author 

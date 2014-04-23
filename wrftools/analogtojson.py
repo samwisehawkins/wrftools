@@ -1,19 +1,8 @@
 """ analogtojson.py creates json series power output from wind speed and direction times series 
 
 Usage:
-    analogtojson.py [--config=<file>]
-        [--log_name=<name>]
-        [--log_level=<level>]
-        [--log_file=<file>]
-        [--log_fmt=<fmt>]
-        [--init_time=<datetime>]
-        [--operational=<bool>]
-        [--cycles=<cyles>]
-        [--delay=<hours>]
-        [--analog_in_dir=<dir>]
-        [--analog_out_dir=<dir>]
-
-        
+    analogtojson.py [--config=<file>] [options]
+       
         
 Options:
         --config=<file>           file specifiying configuration options
@@ -52,8 +41,8 @@ def strptime(str):
 def analogtojson(config):
     """Reads output from analog text files and writes JSON """
 
-    logger       = log.create(config['log_name'], config['log_level'], config['log_fmt'], config['log_file'])
-    log_name     = config['log_name']
+    #logger       = log.create(config['log_name'], config['log_level'], config['log_fmt'], config['log_file'])
+    logger   = log.create_logger(config)
     
     out_dir  = config['analog_out_dir']
     out_name = 'analogs.json' 
@@ -80,7 +69,7 @@ def analogtojson(config):
 
     frame = pd.read_csv(input_file, parse_dates=['init', 'valid'])
     
-    frame.columns = ['init', 'valid', 'POWER', 'SPEED', 'POWER.P10', 'POWER.P25', 'POWER.P50', 'POWER.P75', 'POWER.P90', 'SPEED2']
+    frame.columns = ['init', 'valid', 'POWER.An', 'SPEED.An', 'POWER.An.P10', 'POWER.An.P30', 'POWER.An.P50', 'POWER.An.P75', 'POWER.An.P90', 'SPEED.NWP']
     
     logger.debug(frame)
     

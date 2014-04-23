@@ -12,7 +12,6 @@
           "from"       : "sam.hawkins@vattenfall.com",
           "subject"    : "WRF time series",
           "body"       : "/home/slha/forecasting/operational/body.txt",
-          "attachments" : ["/home/slha/forecasting/operational/tseries/Thanet.csv"]
+          "attachments" : ["/home/slha/forecasting/development/tseries/Thanet.csv"]
     }
-
 }

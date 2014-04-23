@@ -3,12 +3,18 @@
 #***************************************************************
 domain            : baseline_europe 
 model             : WRF
-model_run         : operational
+model_run         : development
 bdy_conditions    : GFS
+metadata          :
+    domain            : "%(domain)"
+    model             : "%(model)"
+    model_run         : "%(model_run)"
+    bdy_conditions    : "%(bdy_conditions)"
+    
 base_dir          : $(HOME)/forecasting/domains
-domain_dir        : "%(base_dir)/%(domain)" 
-tseries_dir       : "%(model_run_dir)/tseries"
-host_file         : "%(model_run_dir)/hostfile"
+working_dir       : "%(base_dir)/%(domain)/%(model_run)"
+tseries_dir       : "%(working_dir)/tseries"
+tseries_file      : "%(tseries_dir)/tseries_d%dd_%iY-%im-%id_%iH.nc"
 wrftools_dir      : $(HOME)/code/wrftools/master
 
 
@@ -16,23 +22,24 @@ wrftools_dir      : $(HOME)/code/wrftools/master
 #**************************************************************
 # Power
 #***************************************************************
-power_file      : "%(tseries_dir)/power_d%dom_%iY-%im-%id_%iH.nc"
-pdist           : 100          # False or N, where N is the number of sample points to generate for each (speed,direction) pair
-sstd            : 1.0          # Standard deviation to apply to wind speed at each timestep
-dstd            : 3.5          # Standard deviation to apply to wind direction at each timestep
-pquants         : 10,25,75,90, # power quantiles to generate, using N sample values
-pnorm           : true         # Normalise power outputs by capacity
+power_file      : "%(tseries_dir)/power_d%dd_%iY-%im-%id_%iH.nc"
+pcurve_dir      : $(HOME)/forecasting/pcurves/fuga
+pdist           : 100            # False or N, where N is the number of sample points to generate for each (speed,direction) pair
+sstd            : 1.0            # Standard deviation to apply to wind speed at each timestep
+dstd            : 3.5            # Standard deviation to apply to wind direction at each timestep
+pquants         : [10,30,70,90]  # power quantiles to generate, using N sample values
+pnorm           : true           # Normalise power outputs by capacity
 
 
 #************************************************
 # Logging
 #************************************************
-#logging
+log_name          : power
 log_level         : DEBUG
 log_fmt           : "%(message)s"
 log_file          : $(HOME)/forecasting/power.log
-full_trace        : true         # whether to print a stack trace of exceptions
+full_trace        : true                             # whether to print a stack trace of exceptions
 mail_level        : INFO 
 mailto            : sam.hawkins@vattenfall.com
-mail_buffer       : 10000            # how many messages to collate in one email
+mail_buffer       : 10000                            # how many messages to collate in one email
 mail_subject      : "WRF Power Predictions"

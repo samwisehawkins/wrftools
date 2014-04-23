@@ -1,19 +1,20 @@
 """ncdump.py dumps data from a netcdf file to text file
 
 Usage: 
-    ncdump.py <file>... [--config=<json>]
-        [--output=<dict>]
-        [--dimspec=<dict>]
-        [--log-level=<level>]
-        [-h | --help]
+    ncdump.py [--config=<file>] [<files>] [options]
 
 Options:
-    <file>                  input files
-    [--config=<json>]       config file specifying these options
-    [--output=<dict>]       output dictionary mapping output directories to formats
-    [--dimspec=<dict>]      dimension specification for subsetting
-    [--log-level==<level>]  info, debug or warn
-    -h |--help              show this message
+    <files>                input files to operate on
+    --config=<file>        config file specifying options
+    --init_time=<datetime> inital time
+    --tseries_file=<str>   file pattern to become time series
+    --grid_id=<int>        nest id number
+    --log_level=<level>    info, debug or warn
+    --mail_level=<level>   info, debug or warn
+    --mailto=<level>       sam.hawkins@vattenfall.com             # send log email here
+    --mail_buffer          10000                                  # how many messages to collate in one email
+    --mail_subject         "Operational WRF log"                  # subject to use in email 
+    -h |--help             show this message
 
 
    
@@ -22,8 +23,7 @@ Examples:
 
 import os
 import sys
-import docopt
-import logging
+import glob
 import string
 import time
 import datetime
@@ -34,7 +34,9 @@ import numpy as np
 import scipy.stats as stats
 from netCDF4 import Dataset
 from netCDF4 import num2date, date2num
-import scripting as sc
+import loghelper
+import confighelper as conf
+from substitute import expand
 
 
 RESERVED_ATTS = ['_index']
@@ -44,73 +46,64 @@ HGT2DSTR      = "2D"   # how 2D vars are specified in config file (can be string
 
 
 FORMATS         = ['csv','txt','json','aot'] # supported output formats
-#COORD_VARS      = ['time', 'height', 'location', 'lat', 'lon', 'location_id']
 FILE_DATE_FMT   = '%Y-%m-%d_%H%M'  # Date format for file name
 DATE_FMT        = '%Y-%m-%d %H:%M' # Date format within files
 GLOBAL_ATTS     = ['GRID_ID']  # which global attributes to copy from ncfile to json
 VAR_ATTS        = ['units', 'description']  # which variables attributes to include in json series
 FULL_SLICE      = {'time': (0,None), 'location': (0,None), 'height':(0,None)} # this represents no slicing
-#CSV_NAME        = 'tseries.csv'       
-#JSON_NAME       = 'fcst_data.json'
-LOGGER          = 'ncdump'
 
-
+class UnknownFormat(Exception):
+    pass
 
 def main():
     
-    args  = docopt.docopt(__doc__, sys.argv[1:])
-
-    # since command-line args are not parsed as json unlike the config file,
-    # any lists come back as single strings, e.g. "[arg1, arg2]"
-    # this ensures they are parsed as json, and become lists.
-    # not sure how dictionaries are treated!
-    args = sc.expand_cmd_args(args)
-
-    # load config file or defaults
-    cfile = sc.load_config(args['--config'])
+    config = conf.config(__doc__, sys.argv[1:], flatten=True)
+    logger = loghelper.create_logger(config)
+    logger.debug(config)
+    ncdump(config)
     
-    # merge, with command-line args taking precendence
-    # note, if an argument is not specified in either source, its value will be None
-    config = sc.merge(args, cfile)
-
-    # create a logging instance
-    logger = sc.create_logger(LOGGER, config['--log-level'], config['--log-format'])
-
-    logger.debug(json.dumps(config, indent=4))
-    
-    output = config['--output'] 
-
-    ncdump(config['<file>'],config['--vars'],config['--global-atts'],config['--var-atts'], config['--coord-vars'],output, LOGGER)
     
 
-def ncdump_wrftools(config):
+def ncdump(config):
+    
+    logger = loghelper.get_logger(config['log_name'])
+    
+    # subset of config to be used for expanding filenames
+    scope = {'init_time' : config['init_time'],
+             'grid_id'   : config['grid_id']}
+             
 
-    """ Designed to be called from run_forecast.py"""
-    import wrftools
     
-    init_time = config['init_time']
-    dom = config['dom']
-    
-    cstring = open(config['ncdump'], 'r').read()
-    filled  = wrftools.sub_date(cstring, init_time=init_time)
-    
-    ncconfig = json.loads(filled)
-    for key,val in ncconfig.items():
-        print key,val
-    
-    
-    tseries_dir = wrftools.sub_date(config['tseries_dir'], init_time=init_time)
-    tseries_file = '%s/tseries_d%02d_%s.nc' % (tseries_dir, dom, init_time.strftime('%Y-%m-%d_%H'))
-    files = [tseries_file]
-    ncdump(files, ncconfig['--vars'],ncconfig['--global-atts'],ncconfig['--var-atts'], ncconfig['--coord-vars'],ncconfig['--output'], 'wrf_forecast')
-    
+    for name, entry in config['ncdump'].items():
+        logger.debug("procesing entry %s " % name)
+        
+        if config.get('<files>'):
+            files = config['<files>']
+            if type(files)!=type([]):
+                files = [files]
+        else:
+            tseries_files = expand(entry['tseries_file'], config)
+            logger.debug("expanding file list from pattern and init time")
+            logger.debug(tseries_files)
+            
+            files = glob.glob(tseries_files)
+            logger.debug("found %d files" % len(files))
+
+        dump(files, entry, scope, log_name=config['log_name'])
     
     
     
-def ncdump(files,vars,global_atts,var_atts,coord_vars,output,log_name):
     
-    logger = logging.getLogger(log_name)
-    logger.warn("subsetting at read time is not implemented")
+def dump(files,entry,scope,log_name=LOGGER):
+    
+    logger = loghelper.get_logger(log_name)
+    vars        = entry['tseries_vars']
+    global_atts = entry['global_atts']
+    var_atts    = entry['var_atts']
+    coord_vars  = entry['coord_vars']
+    format      = entry['format'].strip()
+   
+    #logger.warn("subsetting at read time is not implemented")
     # Read all data into memory as pandas Series objects
     logger.debug("ncdump called with arguments")
     logger.debug("\t files: %s"       % str(files))
@@ -118,41 +111,29 @@ def ncdump(files,vars,global_atts,var_atts,coord_vars,output,log_name):
     logger.debug("\t global_atts: %s" % str(global_atts))
     logger.debug("\t var_atts: %s"    % str(var_atts))
     logger.debug("\t coord_vars: %s"  % str(coord_vars))
-    logger.debug("\t output: %s"      % str(output))
     logger.debug("\t log_name: %s"    % str(log_name))
     
     
     for file in files:
+        logger.debug(file)
         frame = frame_from_nc([file], vars, global_atts, var_atts, coord_vars,log_name)
-    
-        new_name = file.replace('.nc', '.csv')
-    
-        # if we are only given out output directive, pack it in list
-        # to simplify the code below
-        if type(output)!=type([]): 
-            output = [output]
-        
-        # For each output directive
-        for entry in output:
-            format = entry['format']
-            format = format.strip()
             
-            if format not in FORMATS:
-                logger.error("format %s not understood" % format)
-                continue
+        if format not in FORMATS:
+            logger.error("format %s not understood" % format)
+            raise UnknownFormat("format not understood")
         
-            if format=='txt' :
-                pass
-                #write_txt_files(frame, entry['dir'], entry['dimspec'], log_name)
+        if format=='txt' :
+            pass
+            #write_txt_files(frame, entry['dir'], entry['dimspec'], log_name)
             
-            elif format=='json':
-                write_json_files(frame, entry['dir'], entry['fname'], entry['vars'], entry['dimspec'], entry['drop'], entry['rename'], entry['float-format'], log_name)
+        elif format=='json':
+            write_json_files(frame, entry['dir'], expand(entry['fname'], scope), entry['tseries_vars'], entry['dimspec'], entry['drop'], entry['rename'], entry['float_format'], log_name)
 
-            elif format=='csv':
-                write_csv_files(frame, entry['dir'], new_name, entry['vars'],entry['dimspec'], entry['drop'], values='value', rows=entry['rows'],cols=entry['cols'],sort_by=entry['sort-by'],rename=entry['rename'],float_format=entry['float-format'], na_rep=entry['na-rep'], log_name=log_name)
+        elif format=='csv':
+            write_csv_files(frame, entry['dir'], expand(entry['fname'], scope), entry['tseries_vars'],entry['dimspec'], entry['drop'], values='value', rows=entry['rows'],cols=entry['cols'],sort_by=entry['sort_by'],rename=entry['rename'],float_format=entry['float_format'], na_rep=entry['na_rep'], log_name=log_name)
                 
-            elif format=='aot':
-                write_aot_files(frame, entry['dir'])
+        elif format=='aot':
+            write_aot_files(frame, entry['dir'])
 
 
         
@@ -160,14 +141,14 @@ def frame_from_nc(ncfiles, vars, global_atts, var_atts, coord_vars,log_name):
 
     """ Build a Pandas DataFrame from a series of netcdf files"""
 
-    logger = logging.getLogger(log_name)
+    logger = loghelper.get_logger(log_name)
     frames = []
     
     # Open files one-by-one
     for f in ncfiles:
         logger.debug("reading:  %s" % f)
         dataset = Dataset(f, 'r')
-                
+        logger.debug(dataset)
         variables = dataset.variables
         # lookup global attributes in dataset
         # shouldn't really use this, but it works
@@ -193,7 +174,8 @@ def frame_from_nc(ncfiles, vars, global_atts, var_atts, coord_vars,log_name):
             
         # Unmask string and strip, convert from unicode to string
         nloc        = location.shape[0]
-        loc_id_raw  = [''.join(location[l,:].filled('')) for l in range(nloc)]
+        loc_masked  = np.ma.array(location)
+        loc_id_raw  = [''.join(loc_masked[l,:].filled('')) for l in range(nloc)]
         location    = map(string.strip, loc_id_raw)
         location    = map(str,location)
         
@@ -255,7 +237,7 @@ def frame_from_nc(ncfiles, vars, global_atts, var_atts, coord_vars,log_name):
 
 def _filter(frame, variables=None, dimspec=None, log_name=LOGGER):
     
-    logger = logging.getLogger(log_name)
+    logger = loghelper.get_logger(log_name)
     
     # filter by variables
     if variables:
@@ -300,7 +282,7 @@ def write_csv_files(frame, out_dir, out_name, variables, dimspec, drop, values, 
     
     Takes as input a DataFrame in a record based format, e.g. init_time, valid_time, height, location, variable, units, value."""
     
-    logger = logging.getLogger(log_name)
+    logger = loghelper.get_logger(log_name)
 
     if not os.path.exists(out_dir):
         os.makedirs(out_dir)
@@ -340,7 +322,7 @@ def write_csv_files(frame, out_dir, out_name, variables, dimspec, drop, values, 
 def write_json_files(frame, out_dir, out_name, variables, dimspec, drop, rename=None, float_format="%0.3f",log_name=LOGGER ):
     """ Writes each variable and init_time series into one json file. If vars is None, then all export all variables"""
 
-    logger = logging.getLogger(log_name)
+    logger = loghelper.get_logger(log_name)
 
     logger.info("*** outputting data as json ***")
     # drop columns by subsetting to create a view
@@ -370,7 +352,7 @@ def write_json_files(frame, out_dir, out_name, variables, dimspec, drop, rename=
     
     series = []
     for name, group in gb:
-        logger.debug("processing %s" % str(name))
+        #logger.debug("processing %s" % str(name))
         # create a dictionary from all the fields except valid time and value
         d = dict(zip(group_by,list(name)))
         
@@ -416,7 +398,7 @@ def write_aot_files(frame, out_dir, log_name=LOGGER):
         @out_dir directory to write output to
         @dimspec use this to restrict dimensions"""
     
-    logger = logging.getLogger(log_name)
+    logger = loghelper.get_logger(log_name)
     
     # Format is too bespoke, just hard code it all here!
     
@@ -635,7 +617,7 @@ def frame_from_nc_old(ncfiles, vars, dimspec, global_atts, var_atts, log_name):
     
     Unstacking a coordinate, e.g. height would have to be implemented somehow."""
 
-    logger = logging.getLogger(log_name)
+    logger = loghelper.get_logger(log_name)
     logger.debug(vars)
     logger.debug(dimspec)
     logger.debug(global_atts)

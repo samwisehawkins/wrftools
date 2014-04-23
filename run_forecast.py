@@ -427,11 +427,12 @@ for init_time in init_times:
                     logger.error('*** FAIL NCL ***')
                     wrftools.handle(e, fail_mode, full_trace)
     
-    if time_series:
+    if extract and time_series:
         for d in range(1,max_dom+1):
             try:
                 logger.debug('Processing domain d%02d' %d)
                 config['dom'] = d
+                config['grid_id'] = d
                 wrftools.extract_tseries(config)
             except Exception, e:
                 logger.error('*** FAIL NCL TIME SERIES ***')
@@ -453,13 +454,14 @@ for init_time in init_times:
         for d in range(1,max_dom+1):
             try:
                 config['dom'] = d
+                config['grid_id'] = d
                 wrftools.power(config)
             except Exception, e:
                 logger.error('*** FAIL POWER CONVERSION ***')
                 wrftools.handle(e, fail_mode, full_trace)
 
 
-    if time_series:
+    if extract and time_series:
         for d in range(1,max_dom+1):
             try:
                 config['dom'] = d
@@ -468,26 +470,20 @@ for init_time in init_times:
                 logger.error('*** FAIL TIME SERIES DUMPING  ***')
                 wrftools.handle(e, fail_mode, full_trace)
 
-    if web:
-        logger.info('*** TRANSFERRING JSON TO WEB DIR ***')
+    if finalise:
+        logger.info('*** FINALISE ***')
+        
         try:
-            wrftools.json_to_web(config)
+            wrftools.finalise(config)
         except Exception,e:
-            logger.error('*** FAIL TRANSFERRING JSON ***')
+            logger.error('*** FAIL FINALISE ***')
             wrftools.handle(e, fail_mode, full_trace)
 
             
     if dispatch:
         dry_run = run_level=='DUMMY'
-        wrftools.dispatch.dispatch_all(config['dispatch_json'], init_time, dry_run, log_name=wrftools.LOGGER)
+        wrftools.dispatch(config)
 
-    if archive:
-        logger.debug("moving files to longbackup")
-        wrftools.archive(config)
-
-    if cleanup:
-        logger.debug("cleaning up files")
-        wrftools.cleanup(config)
 
 
 # Final code to get executed

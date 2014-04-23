@@ -1,61 +1,38 @@
 """ power.py creates power output from wind speed and direction times series 
 
 Usage:
-    power.py [--config=<file>]
-        [--log_level=<level>]
+    power.py [--config=<file>] [options]
+
         
 Options:
-    [--log_level=<level>]"""
+    --log_level=<level>       debug, info or warn
+    --grid_id=<int>           numeric grid id
+    --init_time=<datetime>    initial time"""
 
-
-
-import numpy as np
 import os
+import sys
+import numpy as np
 import scipy
 from scipy import interpolate
-#import wrftools
-import loghelper as log
-import sys
+import loghelper
 import confighelper as conf
+import netCDF4
+from netCDF4 import Dataset
+from netCDF4 import netcdftime
+from substitute import expand
+
 
 LOGGER="power"
 
 def main():
     config = conf.config(__doc__, sys.argv[1:], flatten=True)
-    print config
     power(config)
 
 def power(config):
     """Reads 'time series' from netcdf time series file, and adds power as a variable. """
     
-    from netCDF4 import Dataset
-    from netCDF4 import netcdftime
+    logger          = loghelper.create_logger(config)
     
-    #
-    # How to output power? We could output to a simple CSV format.
-    # We could output to a netcdf file, by for example adding power
-    # as a variable in the netcdf file. Or we could go directly to json format. 
-    # Advantage of going to netCDF is we can dump the resulting file to JSON format
-    # once. Advantage of going straight to JSON is that it is simpler.  
-    # In fact, I could recreate the old technique of writing individual files,
-    # one per series. Could make some json tools. One to cat series together,
-    # which would be remove 
-    #
-    # series to JSON files, e.g. 
-    #{ wind_10
-    # model_run  = 'test',
-    # grid_id    = 3,
-    # time_units = 'milliseconds since 1900'
-    # data = {timestamp, }
-    #}
-
-    logger          = log.create(LOGGER, config['log_level'], config['log_fmt'], config['log_file'])
-    
-
-    #domain          = config['domain']
-    #domain_dir      = config['domain_dir']
-    #model           = config['model']
-    #model_run       = config['model_run']
     
     # Number of samples to use should be in here
     # Whether to normalise power should be in here    
@@ -66,63 +43,72 @@ def power(config):
     pquants         = config['pquants']
     quantiles       = np.array(pquants)
     
-    logger.debug(quantiles)
-    
     if pdist:
         n=pdist
             
-    dom             = config['dom']
+    grid_id         = config['grid_id']
     init_time       = config['init_time']
-    locations_file  = config['locations_file']
     pcurve_dir      = config['pcurve_dir']
     ts_dir          = config['tseries_dir']
-    tseries_file    = '%s/tseries_d%02d_%s.nc' % (ts_dir, dom, init_time.strftime('%Y-%m-%d_%H'))
     
-    logger.info('*** Estimating power from time series: %s ' % tseries_file)
-    dataset = Dataset(tseries_file, 'a')
+    tseries_file    = expand(config['tseries_file'], config)
+    power_file      = expand(config['power_file'], config)
 
+    logger.info('Estimating power from time series: %s ' % tseries_file)
+    logger.info('Writing power time series to: %s ' % power_file)
+    
+    dataset_in = Dataset(tseries_file, 'a')
+
+            
+        
     # Get dimensions
-    dims    = dataset.dimensions
+    dims    = dataset_in.dimensions
     ntime   = len(dims['time'])
     nloc    = len(dims['location'])
     nheight = len(dims['height'])
+    loc_str_len = len(dims['loc_str_length'])
     
     # Get coordinate variables
-    nctime    = dataset.variables['time']
+    nctime    = dataset_in.variables['time']
     datetimes = netcdftime.num2date(nctime, nctime.units)
-    location = [''.join(l.filled(' ')).strip() for l in dataset.variables['location']]
-    height   = dataset.variables['height']
+    location = [''.join(l.filled(' ')).strip() for l in dataset_in.variables['location']]
+    height   = dataset_in.variables['height']
 
     # Get attributes
-    domain = dataset.getncattr('DOMAIN')
-    domain = dataset.getncattr('MODEL_RUN')
-    model  = dataset.getncattr('MODEL')
+    metadata = config['metadata']
 
+    
+    if power_file == tseries_file:
+        dataset_out = dataset_in
+    else:
+        dataset_out = Dataset(power_file, 'w')
+
+        
     # Get number of quantiles
     nq    = len(quantiles)
     pdata = np.ma.zeros((ntime,nloc,nheight,nq+1), np.float) # mean will be 1st value
-   
+    
+    use_locs = []
     for l,loc in enumerate(location):
         logger.info('Predicting power output for %s' % loc )
         pcurve_file = '%s/%s.csv' %(pcurve_dir, loc)
         
         # mask power data if no power curve found for this park
         if not os.path.exists(pcurve_file):
-            logger.debug("Power curve: %s not found, skipping" % pcurve_file)
+            #logger.debug("Power curve: %s not found, skipping" % pcurve_file)
             pdata[:,l,:,:] = np.ma.masked
             continue
 
         #
         # Open power curve
         #
+        use_locs.append(l)
         pcurve = from_file(pcurve_file)
 
-        # we could eliminate this loop by applying 
-        # pcurve to all the speed, direction values over all heights
-        # and reshaping the arrays. DO THAT! 
+    
         for h in range(nheight):
-            speed     = dataset.variables['SPEED'][:,l,h]
-            direction = dataset.variables['DIRECTION'][:,l,h]
+            speed     = dataset_in.variables['SPEED'][:,l,h]
+            direction = dataset_in.variables['DIRECTION'][:,l,h]
             
             #pwr = pcurve.power(speed,direction)
     
@@ -132,18 +118,57 @@ def power(config):
             pmean   = np.mean(pdist, axis=1)
             pquants = scipy.stats.mstats.mquantiles(pdist, prob=quantiles/100.0,axis=1, alphap=0.5, betap=0.5)
             
-            print 'raw quantile values from mquantiles'
+
             pdata[:,l,h,0]  = pmean
             pdata[:,l,h,1:] = pquants[:,:]
 
         logger.info('finished %s' % loc)            
 
-    # UTH is location 7
-    #print pdata[:,7,0,0]  # should be mean
-    #print pdata[:,7,0,1]  # P10
-    #print pdata[:,7,0,2]  # P90  
+
+
+    use_inds = np.array(use_locs)
+    logger.debug(use_inds)
+    logger.debug(pdata.shape)
+    logger.debug(pdata[:,use_inds,:,:].shape)
+
+    if dataset_out != dataset_in:
+
+        dataset_out.createDimension('time', None)
+        dataset_out.createVariable('time', 'float', ('time',))
+        dataset_out.variables['time'][:] = nctime[:]
+        dataset_out.variables['time'].units = nctime.units
+        dataset_out.variables['time'].calendar = nctime.calendar
+        
+        
+        dataset_out.createDimension('location', len(use_locs))
+        dataset_out.createDimension('loc_str_length', loc_str_len)
+        
+        loc_data =np.array([list(l.ljust(loc_str_len, ' ')) for l in location])
+        dataset_out.createVariable('location', 'c', ('location', 'loc_str_length'))
+        dataset_out.variables['location'][:] = loc_data[use_inds,:]
+        
+        dataset_out.createDimension('height', nheight)        
+        dataset_out.createVariable('height', 'i', ('height',))
+        dataset_out.variables['height'][:] = height[:]
+        dataset_out.GRID_ID = dataset_in.GRID_ID
+        dataset_out.DX = dataset_in.DX
+        dataset_out.DY = dataset_in.DY
+        
+        try:
+            dataset_out.variables['height'].units = height.units
+        except Exception:
+            logger.warn("height units missing")
+        
+        
+        pdata = pdata[:, use_inds, :, :]
+        for key in metadata.keys():
+            key = key.upper()
+            logger.debug(key)
+            dataset_out.setncattr(key,dataset_in.getncattr(key))
+            
+        
     
-    pavg    = dataset.createVariable('POWER','f',('time','location','height'))
+    pavg    = dataset_out.createVariable('POWER','f',('time','location','height'))
     pavg.units = 'kW'
     pavg.description = 'forecast power output'
     pavg[:] = pdata[:,:,:,0]
@@ -151,9 +176,9 @@ def power(config):
     
     for q, qval in enumerate(quantiles):
 
-        varname = 'POWER.Q%02d' % qval
+        varname = 'POWER.P%02d' % qval
         logger.debug("creating variable %s" % varname)
-        var  = dataset.createVariable(varname,'f',('time','location','height'))
+        var  = dataset_out.createVariable(varname,'f',('time','location','height'))
         if pnorm:
             var.units = 'ratio'
         else:
@@ -165,8 +190,11 @@ def power(config):
             
 
     
-    dataset.close()
+    dataset_in.close()
+    if dataset_out!=dataset_in:
+        dataset_out.close()
 
+    
 class PowerCurve(object):
     """Represents a power curve, provides power(speed, direction) method to convert
     wind speed and direction into power """

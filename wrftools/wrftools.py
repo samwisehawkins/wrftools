@@ -85,13 +85,18 @@ from collections import OrderedDict
 from namelist import Namelist, read_namelist, add_cmd_args
 from dispatch import dispatch
 import glob
+import loghelper
+from loghelper import create_logger
+
+
+from substitute import sub_date, expand
 
 from visualisation import *
 from customexceptions import *
-import logging
 
-from tseries import extract_tseries, json_to_web
-from ncdump import ncdump_wrftools as ncdump
+
+from tseries import extract_tseries
+from ncdump import ncdump
 from power import power, PowerCurve
 from queue import fill_template, qsub, qstat
 
@@ -108,66 +113,10 @@ HOUR = datetime.timedelta(0, 60*60)
 # Logging
 #*****************************************************************
 
-def create_logger(config):
-    """ Creates and returns logger instance called wrf_forecast.
-    
-    This allows a common logger instance to be used for all parts of forecast. 
-    create_logger registers a file AND a console (screen) handler.  
-    Settings are passed in via the config dictionary. The debug level specified by the 
-    log_level entry, and file output is is directed to domain_dir/forecast.log.
-    
-    Arguments:
-    config -- a dictionary containing configuration settings
-    
-    """
-    
-    debug_level   = config['log_level']
-    log_file      = config['log_file']
-    logger        = logging.getLogger(LOGGER)
-    numeric_level = getattr(logging, debug_level.upper(), None)
-
-
-    if not isinstance(numeric_level, int):
-        raise ValueError('Invalid log level: %s' % loglevel)
-    #
-    # Determines what messages get passed to the handlers
-    #
-    logger.setLevel(numeric_level)
-    
-    #
-    # Log to the screen and to a file
-    #
-    fh = logging.FileHandler(log_file,mode='w')
-    ch = logging.StreamHandler()
-    fh.setLevel(numeric_level)
-    ch.setLevel(numeric_level)
-
-    formatter = logging.Formatter(config['log_fmt'])
-    #%(asctime)s %(levelname)s\t %(message)s')
-    fh.setFormatter(formatter)
-    ch.setFormatter(formatter)
-    logger.addHandler(fh)
-    logger.addHandler(ch)
-    
-    if 'mailto' in config:
-        from customloggers import BufferingSendmailHandler
-        mailto  = config['mailto']
-        subject = config['mail_subject']
-        buffer  = config['mail_buffer']
-        mail_level = getattr(logging, config['mail_level'].upper(), None)
-        eh = BufferingSendmailHandler(mailto, subject, buffer)
-    
-        eh.setLevel(mail_level)
-        eh.setFormatter(formatter)
-        logger.addHandler(eh)
-    logger.debug('logging object created')
-    return logger
-
-
 def get_logger():
-    return logging.getLogger(LOGGER)    
-    
-    
+    return loghelper.get_logger(LOGGER)
+
+
 #******************************************************************************
 # Running shell commands
 #******************************************************************************
@@ -563,19 +512,28 @@ def prepare(config):
 def finalise(config):
     """Removes files, transfers etc."""
 
+    logger = get_logger()
 
-   
+    logger.info('*** FINALISING ***')
+    
     working_dir    = config['working_dir']
     
-    links       = config['finalise.link']
-    remove      = config['finalise.remove'] 
-    subdirs     = config['finalise.create']
-    copy        = config['finalise.copy'] 
-    move        = config['finalise.move']
     
-    logger           = get_logger()
-    logger.info('*** FINALISING ***')
+    links       = [expand(x, config) for x in config['finalise.link']]
+    remove      = [expand(x, config) for x in config['finalise.remove']]
+    subdirs     = [expand(x, config) for x in config['finalise.create']]
+    copy        = [expand(x, config) for x in config['finalise.copy']]
+    move        = [expand(x, config) for x in config['finalise.move']]
 
+    logger.debug(links)
+    logger.debug(remove)
+    logger.debug(subdirs)
+    logger.debug(copy)
+    logger.debug(move)
+    
+    
+    
+    
     
     fulldirs  = subdirs 
     for d in fulldirs:
@@ -620,69 +578,6 @@ def link(pattern):
 
 
 
-#*****************************************************************
-# Date/time functions
-#*****************************************************************
-
-def sub_date(s, init_time=None, valid_time=None):
-    """Substitues a date into a string following standard format codes.
-    Syntax of original string s:
-    i  -- initial time
-    v  -- valid time
-    %y -- 2-digit year
-    %Y -- 4-digit year
-    %m -- 2 digit month
-    %d -- 2-digit day
-    %H -- 2 digit hour
-    %M -- 2-digit minute
-    %S -- 2-digit second 
-    
-    Returns: string with codes expanded"""
-    
-    if init_time:
-    
-        yi  = str(init_time.year)[2:]
-        Yi  = str(init_time.year)
-        mi  = '%02d' % init_time.month
-        di  = '%02d' % init_time.day
-        Hi  = '%02d' % init_time.hour
-        Mi  = '%02d' % init_time.minute
-        Si  = '%02d' % init_time.second
-
-        #s = s.replace('%iY', Yi).replace('%iy',yi).replace('%im',mi).replace('%id', di).replace('%iH', Hi).replace('%iM', Mi).replace('%iS', Si)
-
-        s = s.replace('%iY', Yi)
-        s = s.replace('%iy', yi)
-        s = s.replace('%im', mi)
-        s = s.replace('%id', di) 
-        s = s.replace('%iH', Hi)
-        s = s.replace('%iM', Mi)
-        s = s.replace('%iS', Si)
-
-    if valid_time:
-        yv  = str(init_time.year)[2:]
-        Yv  = str(init_time.year)
-        mv  = '%02d' % valid_time.month
-        dv  = '%02d' % valid_time.day
-        Hv  = '%02d' % valid_time.hour
-        Mv  = '%02d' % valid_time.minute
-        Sv  = '%02d' % valid_time.second
-        
-        s = s.replace('%vY', Yv)
-        s = s.replace('%vy',yv)
-        s = s.replace('%vm',mv)
-        s = s.replace('%vd', dv) 
-        s = s.replace('%vH', Hv)
-        s = s.replace('%vM', Mv)
-        s = s.replace('%vS', Sv)
-
-    if init_time and valid_time:
-        delta = valid_time - init_time
-        fhr   = delta.days * 24 + int(delta.seconds / (60*60))
-        fH    = '%02d' % fhr
-        s = s.replace('%fH', fH)
-    
-    return s
 
 
 

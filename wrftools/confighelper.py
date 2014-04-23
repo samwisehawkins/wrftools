@@ -77,9 +77,14 @@ def main():
 
 def config(docstring, args, format="json", flatten=False):
     cargs  = docopt.docopt(docstring,args)
-    
+        
     if '--config-fmt' in cargs and cargs['--config-fmt']:
         format = cargs['--config-fmt']
+    
+    elif '--config' in cargs:
+        format = cargs['--config'].split('.')[-1]
+    
+    
     
     if format in JSON:
         import json

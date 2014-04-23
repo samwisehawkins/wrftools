@@ -1,0 +1,57 @@
+log_name      : wrf_forecast
+log_file      : ncdump.log
+log_level     : debug
+log_fmt       : "%(message)s"
+log_mail      : false
+mail_level    : INFO                                   # log level for email
+mailto        : null
+mail_buffer   : 10000                                  # how many messages to collate in one email
+mail_subject  : "ncdump log"                  # subject to use in email 
+tseries_dir   : $(HOME)/forecasting/development/tseries
+tseries_file  : "%(tseries_dir)/tseries_d%dd_%iY-%im-%id_%iH.nc"
+
+ncdump:
+    met:
+        tseries_file  : "%(tseries_dir)/tseries_d%dd_%iY-%im-%id_%iH.nc"
+        tseries_vars  : [SPEED,DIRECTION,T2,TD2,SST,RIB,RAIN,SWDOWN,CLDFRAAVG,CLDFRAMAX]
+        coord_vars    : [time,location,height]
+        global_atts   : [GRID_ID,DOMAIN,MODEL_RUN,DX,DY]
+        var_atts      : [units,description]
+        dir           : /home/slha/forecasting/development/json
+        fname         : fcst_data_d%dd_%iHZ.json
+        format        : json
+        float_format  : "%0.3f"
+        dimspec       : 
+            height        : ["2D",60,80,100]
+        drop          : [DOMAIN,MODEL_RUN]
+        group-by      : ["init_time", "location", "variable", "height"]
+        sort-by       : ["init_time", "valid_time", "location"]
+        na-rep        : "null"
+        rename        : null
+    
+    power:
+        tseries_file  : "%(tseries_dir)/power_d%dd_%iY-%im-%id_%iH.nc"
+        tseries_vars  : [POWER,SPEED,DIRECTION]
+        coord_vars    : [time,location,height]
+        global_atts   : [GRID_ID,DOMAIN,MODEL_RUN,DX,DY]
+        var_atts      : [units,description]
+        dir           : /home/slha/forecasting/development/json
+        fname         : power_d%dd_%iHZ.json
+        format        : json
+        float_format  : "%0.3f"
+        dimspec       : 
+            height        : [60,80,100]
+        drop          : [DOMAIN,MODEL_RUN]
+        group-by      : ["init_time", "location", "variable", "height"]
+        sort-by       : ["init_time", "valid_time", "location"]
+        na-rep        : "null"
+        rename        : null
+    
+    aot:
+        tseries_file  : "%(tseries_dir)/tseries_d%dd_%iY-%im-%id_%iH.nc"
+        tseries_vars  : [SPEED,DIRECTION,T2,TD2,SST,RIB,RAIN,SWDOWN,CLDFRAAVG,CLDFRAMAX]
+        global_atts   : [GRID_ID,DOMAIN,MODEL_RUN,DX,DY]
+        var_atts      : [units,description]
+        coord_vars    : [time,location,height]
+        dir           : /home/slha/forecasting/development/aot
+        format        : aot
