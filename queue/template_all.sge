@@ -1,0 +1,35 @@
+#!/bin/bash
+
+#
+# Active comments for SGE 
+#
+#$ -S /bin/bash
+#$ -N <jobname>
+#$ -v MPI_HOME
+#$ -v LD_LIBRARY_PATH
+#$ -cwd
+#$ -q <qname>
+#$ -pe openmpi <nprocs>
+#$ -j yes
+#$ -o <logfile>
+
+. /etc/profile.d/modules.sh
+
+# Module stuff
+module add gcc
+# Load one of these
+module add openmpi/gcc
+# module add openmpi/psc
+# module add openmpi/pgi
+# module add openmpi/intel 
+  
+
+
+# Does not require the -machinefile flag
+
+CMD="$MPI_HOME/bin/mpirun -np $NSLOTS <executable>"
+ 
+echo $CMD
+ 
+$CMD
+
