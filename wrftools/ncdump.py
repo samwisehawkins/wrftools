@@ -84,7 +84,7 @@ def ncdump(config):
         else:
             tseries_files = expand(entry['tseries_file'], config)
             logger.debug("expanding file list from pattern and init time")
-            logger.debug(tseries_files)
+            #logger.debug(tseries_files)
             
             files = glob.glob(tseries_files)
             logger.debug("found %d files" % len(files))
@@ -148,7 +148,7 @@ def frame_from_nc(ncfiles, vars, global_atts, var_atts, coord_vars,log_name):
     for f in ncfiles:
         logger.debug("reading:  %s" % f)
         dataset = Dataset(f, 'r')
-        logger.debug(dataset)
+        #logger.debug(dataset)
         variables = dataset.variables
         # lookup global attributes in dataset
         # shouldn't really use this, but it works

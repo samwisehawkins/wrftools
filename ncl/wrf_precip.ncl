@@ -11,23 +11,27 @@ load "$NCARG_ROOT/lib/ncarg/nclscripts/wrf/WRFUserARW.ncl"
 
 begin
 
-;
-;  The WRF ARW input file.  
-;
-  File    = getenv("FCST_FILE")
-  type    = getenv("NCL_OUT_TYPE")
-  diro    = getenv("NCL_OUT_DIR")
-  ;web_dir = getenv("WEB_DIR")
-  domain  = getenv("NEST_ID")    
-  run_hour = getenv("RUN_HOUR")
 
-  print("File: "+ File)
-  print("diro: " + diro)
-  print("domain: " + domain)
+  ; NCL expects some or all of the following to be defined on 
+  ; the command-line
+  ; ncl_in_file
+  ; ncl_out_dir
+  ; ncl_out_file
+  ; ncl_out_type
+  ; ncl_loc_file
+  ; ncl_opt_file
+    
+  if isdefined("ncl_opt_file") then 
+    loadscript(opt_file)
+  end if
+    
 
-  a = addfile(File,"r")
-  print("reading file "+File)
-
+  printVarSummary(ncl_in_file)
+  print(ncl_in_file)
+  print("reading file "+ncl_in_file)
+  a = addfile(ncl_in_file,"r")
+  
+  
   res = True
   res@MainTitle = "REAL-TIME WRF"
   res@Footer = False
@@ -58,7 +62,7 @@ begin
   print("times:"+Times)
   ntimes = dimsizes(Times) 
  
- mpres@mpDataBaseVersion     = "Ncarg4_1"          ; higher res data base
+  mpres@mpDataBaseVersion     = "Ncarg4_1"          ; higher res data base
   if (a@GRID_ID .eq. 3) then
     mpres@mpDataBaseVersion  = "HighRes"
   end if
@@ -67,9 +71,9 @@ begin
 
     ff = floattointeger(a->XTIME/60.)
 
-    PlotName = diro+"/pp_d"+domain+"_"+sprinti("%0.2i",ff(it))
+    PlotName = ncl_out_dir+"/pp_d"+sprinti("%0.2i",a@GRID_ID)+"_"+sprinti("%0.2i",ff(it))
     print("PlotName: "+PlotName)
-    wks = gsn_open_wks(type,PlotName)
+    wks = gsn_open_wks(ncl_out_type,PlotName)
     colors = (/"white","black","white","yellow","orange","DarkOrange",\
              "OrangeRed","Red1","Red2","Red4","DarkOrchid1","purple",\
              "MediumPurple3","Blue2","Blue4","DarkOliveGreen3"/)
@@ -126,8 +130,7 @@ begin
 
   end do        ; END OF TIME LOOP
  
- ;updated = systemfunc("cp "+diro+"/*.png "+web_dir)
- ;clean = systemfunc("rm "+diro+"/*.png")
+
 ;********************************************
 
 end

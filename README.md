@@ -49,7 +49,7 @@ those in the config file e.g.
 
     $> python run_forecast.py --config=<config_file> --log_level=debug
 
-See [examples/forecast.yaml](examples/forecast.yaml) for an explanation of options
+See [example/forecast.yaml](example/forecast.yaml) for an explanation of options
 
 ## Modularity
 
@@ -59,7 +59,7 @@ I will call these modules components, to distinguish them from pure python modul
 * fetch          - a thin wrapper around gribmaster
 * prepare        - ensures correct files present, does some linking, updates namelist files
 * simulate       - runs WPS and WRF
-* post (process) - adds metadata, compresses files
+* post           - adds metadata, compresses files
 * visualise      - calls NCL with specified scripts. Note the English (i.e. correct ;) spelling
 * extract        - extracts time-series of variables at specified locations
 * finalise       - removes files, transfer locally, archive etc. 
@@ -67,11 +67,11 @@ I will call these modules components, to distinguish them from pure python modul
 
 
 Each component can be run stand-alone, with a configuration file. Alternatively the
-run_forecast.py script will run all components specified.
+[run_forecast.py](run_forecast.py) script will run all components specified.
 
 ## Configuration
 
-For explanation of configuration options, see examples/forecast.yaml.
+For explanation of configuration options, see [example/forecast.yaml](example/forecast.yaml).
 
 Some options in the configution. e.g. start time, maximum number of nests, 
 ** will override settings in the namelist.input and namelist.wps files **
@@ -173,9 +173,10 @@ Some of the commands rely on underlying linux system call, and therefore may not
 be replaced by python equivalents to ensure better compatibility.
  
 
-## Visualisation
+## Visualisation / interface with NCL
 
-NCL is used as the primary visualisation tool. Communication with NCL is done through environment variables, as well as attributes
+NCL is used as the primary visualisation tool, and also for extacting time-series at locations and heights. 
+Communication with NCL is done through environment variables, as well as attributes
 within the wrfout netcdf files. The following environment variables are set:
 
 * FCST_FILE      netcdf file to use
@@ -183,6 +184,19 @@ within the wrfout netcdf files. The following environment variables are set:
 * NCL_OUT_FILE   filename to write output to, used if only one output file
 * LOCATIONS_FILE text file with a list of location names, latitudes and longitudes
 * NCL_OPT_FILE   NCL options file. This is a fragment of ncl code which can be imported into an ncl script.
+
+Note, this is gradually being replaced with command line arguments, since environment variables are not very robust
+and tend to dissapear, e.g. when logging into other nodes. Ncl will be executed with the following pseudo command-line
+arguments:
+
+ * ncl_in_file   - the input file to work on
+ * ncl_out_dir   - directory for output, used if the rest of filename is coded in the ncl script
+ * ncl_out_file  - file name, used if none of the filename is coded in the ncl script
+ * ncl_out_type  - workstation type, png, pdf etc
+ * ncl_loc_file  - location file with names, latitudes, longitudes of points of interest
+ * ncl_opt_file  - additional options. If defined, NCL will load this using `loadscript(ncl_opt_file)`
+ * ncl_extract_heights - heights to interpolate to
+
 
 
 ## Time series extraction

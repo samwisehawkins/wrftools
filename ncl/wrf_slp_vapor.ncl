@@ -26,8 +26,8 @@ begin
 ; ncl_opt_file
 ;**************************************************************
 
+  prefix = "slp_ol"
 
-  prefix = "pp_ol"
   fcst_file = ncl_in_file
   a  = addfile(fcst_file,"r")
   grid_id = a@GRID_ID
@@ -53,10 +53,6 @@ begin
   ; Since these are for map overlays, don't draw boundaries or grid
   ; You probably want to draw these at first to check your data
   ; is projected correctly.
-  ;mpres@mpFillOn               = True
-  ;mpres@mpFillDrawOrder        = "PreDraw"
-  ;mpres@mpLandFillColor        = "DarkOliveGreen3"
-  
   mpres@mpOutlineBoundarySets = "NoBoundaries"
   mpres@mpGridAndLimbOn = False
   ;mpres@mpGeophysicalLineColor = "Black"
@@ -70,8 +66,8 @@ begin
              "OrangeRed","Red1","Red2","Red4","DarkOrchid1","purple",\
              "MediumPurple3","Blue2","Blue4","DarkOliveGreen3"/)
   
-;***************************************************************
-;***************************************************************
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ; What times and how many time steps are in the data set?
     FirstTime = True
@@ -79,7 +75,7 @@ begin
     times  = wrf_user_list_times(a)  ; get times in the file
     ntimes = dimsizes(times)         ; number of times in the file
 
-;***************************************************************
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ; Loop over all the times, not just the odd times:
 ; do it = 0,ntimes-1,2 ; TIME LOOP
@@ -104,52 +100,15 @@ begin
     ; wrf2geotiff_open() creates the opaque pointer wrf2gtiff:
       wrf2gtiff = wrf2geotiff_open(wks)
 
-
-      if (FirstTime) then            ; Save some times for tracking tendencies
-        times_sav = times(it)
-      end if
       res@TimeLabel = times(it)   ; Set Valid time to use on plots
 
-;***************************************************************
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; First get the variables we will need        
 
     slp = wrf_user_getvar(a,"slp",it)  ; slp
     wrf_smooth_2d( slp, 3 )            ; smooth slp
 
-  ; Get non-convective, convective and total precipitation
-  ; Calculate tendency values                               
-      rain_exp = wrf_user_getvar(a,"RAINNC",it)
-      rain_con = wrf_user_getvar(a,"RAINC",it)
-      rain_tot = rain_exp + rain_con
-      rain_tot@description = "Total Precipitation"
-
-      if( FirstTime ) then
-        if ( it .eq. 0 ) then
-          rain_exp_save = rain_exp
-          rain_con_save = rain_con
-          rain_tot_save = rain_tot
-        else
-          rain_exp_save = wrf_user_getvar(a,"RAINNC",it-1)
-          rain_con_save = wrf_user_getvar(a,"RAINC",it-1)
-          rain_tot_save = rain_exp_save + rain_con_save
-          FirstTime = False
-          times_sav = times(it-1)
-        end if
-      end if
-
-      rain_exp_tend = rain_exp - rain_exp_save
-      rain_con_tend = rain_con - rain_con_save
-      rain_tot_tend = rain_tot - rain_tot_save
-      rain_exp_tend@description = "Explicit Precipitation Tendency"
-      rain_con_tend@description = "Param  Precipitation Tendency"
-      rain_tot_tend@description = "Precipitation Tendency"
-
-  ; Bookkeeping, just to allow the tendency at the next time step
-      rain_exp_save = rain_exp
-      rain_con_save = rain_con
-      rain_tot_save = rain_tot
-
-;***************************************************************
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ; Don't skip the first time: we need an image at each time stamp
 ; This will result in a warning message on the first plot
@@ -158,45 +117,17 @@ begin
       ; Plotting options for Sea Level Pressure
         opts_psl = res          
         opts_psl@ContourParameters = (/ 900., 1100., 2. /)
-        opts_psl@cnLineColor       = "Blue"
+        opts_psl@cnLineColor       = "Black"
         opts_psl@cnInfoLabelOn     = False
         opts_psl@cnLineLabelFontHeightF = 0.01
         opts_psl@cnLineLabelPerimOn = False
-        opts_psl@gsnContourLineThicknessesScale = 1.5
-        ;contour_psl = wrf_contour(a,wks,slp,opts_psl)
+        opts_psl@cnLineThicknessF = 5.0     ; line thickness
+        opts_psl@cnLineColor      = "Black"   ; color of contour lines
+        ;opts_psl@gsnContourLineThicknessesScale = 2.5
+        contour_psl = wrf_contour(a,wks,slp,opts_psl)
         delete(opts_psl)
-    
 
-      ; Plotting options for Precipitation
-
-        opts_r = res                        
-        opts_r@UnitLabel            = "mm"
-        opts_r@cnLevelSelectionMode = "ExplicitLevels"
-        opts_r@cnLevels             = (/ .1, .5, 1., 2., 3., 4. /)
-        opts_r@cnFillColors         = (/"transparent","Yellow","orange",\
-                                        "DarkOrange","OrangeRed","Red1","Violet"/)
-
-        opts_r@cnInfoLabelOn        = False
-        opts_r@cnConstFLabelOn      = False
-        opts_r@cnFillOn             = True
-
-        ; Total Precipitation (color fill)
-        ;contour_tot = wrf_contour(a,wks, rain_tot, opts_r)
-    
-        ; Precipitation Tendencies 
-        opts_r@SubFieldTitle = "from " + times_sav + " to " + times(it)
-    
-        contour_tend = wrf_contour(a,wks, rain_tot_tend,opts_r) ; total (color)
-        contour_tend = setColorContourClear(contour_tend,0,0.1) 
-        ;contour_res = wrf_contour(a,wks,rain_exp_tend,opts_r)   ; exp (color)
-        opts_r@cnFillOn = False
-        opts_r@cnLineColor = "Red4"
-        ;contour_prm = wrf_contour(a,wks,rain_con_tend,opts_r)   ; con (red lines)
-        delete(opts_r)
-
-
-
-      ; MAKE PLOTS                                       
+        ; MAKE PLOTS                                       
 
         ; Total Precipitation 
         ; Don’t do this plot for geotiff:
@@ -204,7 +135,7 @@ begin
 
         ; Total Precipitation Tendency + SLP
         ; Do just this one plot:
-        plot = wrf_map_overlays(a,wks,(/contour_tend/),pltres,mpres)
+        plot = wrf_map_overlays(a,wks,(/contour_psl/),pltres,mpres)
 
         ; Then put it in geotiff
         ; Do crop the image to the domain bounds
@@ -214,15 +145,11 @@ begin
         wrf2geotiff_close(wrf2gtiff,wks)
         delete(wks)
         delete(wrf2gtiff)
-        ; Non-Convective and Convective Precipiation Tendencies
-        ; plot = wrf_map_overlays(a,wks,(/contour_res,contour_prm/),pltres,mpres)
 
 ;     end if    ; END IF FOR SKIPPING FIRST TIME
 
-;***************************************************************
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-      times_sav = times(it)
-      FirstTime = False
     end do        ; END OF TIME LOOP
 
 

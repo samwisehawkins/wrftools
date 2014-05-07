@@ -7,14 +7,27 @@ load "$NCARG_ROOT/lib/ncarg/nclscripts/wrf/WRFUserARW.ncl"
 begin
 ; The WRF ARW input file.  
 ; This needs to have a ".nc" appended, so just do it.
-    type="png"
     
-    fname   = getenv("FCST_FILE")
+;******************************************************
+; 
+; NCL expects some or all of the following to be defined on 
+; the command-line
+; ncl_in_file
+; ncl_out_dir
+; ncl_out_file
+; ncl_out_type
+; ncl_loc_file
+; ncl_opt_file
+;**************************************************************
+    
+    type=ncl_out_type
+    
+    fname   = ncl_in_file
     a       = addfile(fname,"r")
     grid_id = a@GRID_ID
     d = grid_id
-    run_hour = getenv("RUN_HOUR")
-    diro     = getenv("NCL_OUT_DIR")
+
+    diro     = ncl_out_dir
     web_dir = diro   
     print ("writing to "+web_dir)
 

@@ -4,7 +4,7 @@ import io
 import glob
 
 
-__all__ = ['produce_ncl_plots', 'transfer_to_web_dir', 'produce_ncl_ol_plots']
+__all__ = ['produce_ncl_plots', 'produce_ncl_ol_plots']
 
 
 def _fix_ncarg_env():
@@ -40,16 +40,18 @@ def produce_ncl_plots(config):
 
     domain         = config['domain']
     model_run      = config['model_run']
+    working_dir    = config['working_dir']
     ncl_code_dir   = config['ncl_code_dir']
     ncl_files      = config['ncl_code']
-    #ncl_code       = ['%s/%s' % (ncl_code_dir, f) for f in ncl_files]
+    #ncl_code      = ['%s/%s' % (ncl_code_dir, f) for f in ncl_files]
     ncl_code       =  ncl_files
     ncl_log        = config['ncl_log']
     wrfout_dir     = config['wrfout_dir']
     init_time      = config['init_time']
     dom            = config['dom']
     fcst_file      = '%s/wrfout_d%02d_%s:00:00.nc' %(wrfout_dir, dom, init_time.strftime("%Y-%m-%d_%H"))
-    loc_file       = config['locations_file']
+    ncl_in_file    = fcst_file
+    ncl_loc_file   = config['locations_file']
     ncl_out_dir    = wrftools.sub_date(config['ncl_out_dir'], init_time=init_time)
     ncl_out_type   = config['ncl_out_type']
     nest_id        =  '%02d' % dom
@@ -71,32 +73,37 @@ def produce_ncl_plots(config):
     # Try escaping : in fcst_file
     #
     #fcst_file = fcst_file.replace(':', r'\:')
-    os.environ['FCST_FILE']      = fcst_file
-    os.environ['LOCATIONS_FILE'] = loc_file
-    os.environ['NCL_OUT_DIR']    = ncl_out_dir
-    os.environ['NCL_OUT_TYPE']   = ncl_out_type
-    os.environ['NEST_ID']        = nest_id
-    os.environ['DOMAIN']         = domain
-    os.environ['MODEL_RUN']      = model_run
+    #os.environ['FCST_FILE']      = fcst_file
+    #os.environ['LOCATIONS_FILE'] = loc_file
+    #os.environ['NCL_OUT_DIR']    = ncl_out_dir
+    #os.environ['NCL_OUT_TYPE']   = ncl_out_type
+    #os.environ['NEST_ID']        = nest_id
+    #os.environ['DOMAIN']         = domain
+    #os.environ['MODEL_RUN']      = model_run
 
+    logger.debug('ncl_in_file  ----> %s' % ncl_in_file)
+    logger.debug('ncl_out_dir  ----> %s' % ncl_out_dir)
+    logger.debug('ncl_out_type ----> %s' % ncl_out_type)
+    logger.debug('ncl_loc_file ----> %s' % ncl_loc_file)
 
-
-    logger.debug('Setting environment variables')
-    logger.debug('FCST_FILE    ----> %s' % fcst_file)
-    logger.debug('NCL_OUT_DIR  ----> %s' % ncl_out_dir)
-    logger.debug('NCL_OUT_TYPE ----> %s' % ncl_out_type)
-    logger.debug('NEST_ID      ----> %s' % nest_id)
-    logger.debug('DOMAIN       ----> %s' % domain)
-    logger.debug('MODEL_RUN    ----> %s' % model_run)
-
-
+    if not ncl_in_file.endswith('.nc'):
+        ncl_in_file = ncl_in_file + '.nc' 
+    
+    
     for script in ncl_code:
         #
         # mem_total forces the use postprocessing node
         #
-        cmd  = "ncl %s >> %s 2>&1" % (script, ncl_log)
-        qcmd = 'qrsh -cwd -l mem_total=36G "%s"' % cmd
-        ret = wrftools.run_cmd(cmd, config)
+        #cmd  = "ncl %s >> %s 2>&1" % (script, ncl_log)
+        #qcmd = 'qrsh -cwd -l mem_total=36G "%s"' % cmd
+        
+        queue = config['queue']
+        if queue['ncl']:
+            cmd  = """ncl ncl_in_file="%s" ncl_out_dir="%s" ncl_out_type="%s" ncl_loc_file="%s" %s""" % (ncl_in_file,ncl_out_dir, ncl_out_type, ncl_loc_file, script)
+        else:
+            cmd  = """ncl 'ncl_in_file="%s"' 'ncl_out_dir="%s"' 'ncl_out_type="%s"' 'ncl_loc_file="%s"' %s 2>&1 >> %s/ncl.log""" % (ncl_in_file,ncl_out_dir, ncl_out_type, ncl_loc_file, script, working_dir)
+        
+        ret = wrftools.run(cmd, config)
 
 
 def produce_ncl_ol_plots(config):
@@ -124,7 +131,7 @@ def produce_ncl_ol_plots(config):
     logger = wrftools.get_logger()    
     logger.info('*** RUNNING NCL SCRIPTS ***')
      
-
+    working_dir  = config['working_dir']
 
     ncl_code_dir   = config['ncl_code_dir']
     ncl_files      = config['ncl_ol_code']
@@ -139,6 +146,13 @@ def produce_ncl_ol_plots(config):
     ncl_out_dir    = wrftools.sub_date(config['ncl_ol_out_dir'], init_time=init_time)
     ncl_out_type   = config['ncl_out_type']
     nest_id        =  '%02d' % dom
+    
+
+    ncl_in_file    = fcst_file
+    ncl_loc_file   = config['locations_file']
+    ncl_out_dir    = wrftools.sub_date(config['ncl_out_dir'], init_time=init_time)
+    ncl_out_type   = config['ncl_out_type']
+
 
     if not os.path.exists(ncl_out_dir):
         os.makedirs(ncl_out_dir)
@@ -157,34 +171,45 @@ def produce_ncl_ol_plots(config):
     # Try escaping : in fcst_file
     #
     #fcst_file = fcst_file.replace(':', r'\:')
-    os.environ['FCST_FILE']      = fcst_file
-    os.environ['NCL_OUT_DIR']    = ncl_out_dir
-    os.environ['NCL_OUT_TYPE']   = ncl_out_type
-    os.environ['NEST_ID']        = nest_id
+    #os.environ['FCST_FILE']      = fcst_file
+    #os.environ['NCL_OUT_DIR']    = ncl_out_dir
+    #os.environ['NCL_OUT_TYPE']   = ncl_out_type
+    #os.environ['NEST_ID']        = nest_id
     #os.environ['DOMAIN']         = domain
     #os.environ['MODEL_RUN']      = model_run
 
 
 
-    logger.debug('Setting environment variables')
+    #logger.debug('Setting environment variables')
     logger.debug('FCST_FILE    ----> %s' % fcst_file)
     logger.debug('NCL_OUT_DIR  ----> %s' % ncl_out_dir)
     logger.debug('NCL_OUT_TYPE ----> %s' % ncl_out_type)
     logger.debug('NEST_ID      ----> %s' % nest_id)
+    logger.debug('PATH')
+    logger.debug(os.environ['PATH'])
     #logger.debug('DOMAIN       ----> %s' % domain)
     #logger.debug('MODEL_RUN    ----> %s' % model_run)
 
 
     for script in ncl_code:
-        #
-        # mem_total forces the use postprocessing node
-        #
-        cmd  = "ncl %s >> %s 2>&1" % (script, ncl_log)
+        #cmd  = "ncl %s >> %s 2>&1" % (script, ncl_log)
+        cmd  = "ncl %s " % script
         #qcmd = 'qrsh -cwd -l mem_total=36G "%s"' % cmd
+        
+        logger.warn("NCL to produce GEOTIFFS does not work on post-processing queue, runnign on head node")
+
+        
+
+        cmd  = """ncl 'ncl_in_file="%s"' 'ncl_out_dir="%s"' 'ncl_out_type="%s"' 'ncl_loc_file="%s"' %s 2>&1 >> %s/ncl.log""" % (ncl_in_file,ncl_out_dir, ncl_out_type, ncl_loc_file, script, working_dir)
+
         ret = wrftools.run_cmd(cmd, config)
+        
+        
         gwarp = config['gwarp']
         os.chdir(ncl_out_dir)
+        
         cmd = "%s %s/*.tiff" %(gwarp, ncl_out_dir)
+        logger.debug(cmd)
         wrftools.run_cmd(cmd, config)
 
         

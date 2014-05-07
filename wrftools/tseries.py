@@ -33,7 +33,6 @@ def to_json(frame):
     """ convert a pandas dataframe to json representation """
     frame = frame.set_index(['location_id','nest_id', 'variable', 'height'])
     logger=wrftools.get_logger()
-    logger.debug(frame)
     groupby = frame.index.names
     grouped = frame.groupby(level=groupby)
     ngroups = grouped.ngroups

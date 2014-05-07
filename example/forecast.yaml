@@ -30,9 +30,7 @@ start              : 2013-06-14 00:00:00     # first initial time
 end                : 2013-06-14 00:00:00     # final *inital time*, not forecast end time
 init_interval      : 24                      # period between inital times
 max_dom            : 1                       # maximum number of nests
-fcst_hours         : 3                       # length of forecast
-
-
+fcst_hours         : 12                      # length of forecast
 
 
 #************************************************
@@ -98,12 +96,21 @@ web_dir           : $(HOME)/web2/forecast                       # convenience fo
 #************************************************
 log_name          : wrf_forecast                           # name of logger object
 log_level         : DEBUG                                  # log level to write to file   
-log_file          : "%(working_dir)/operational.log"       #
+log_file          : "%(working_dir)/forecast.log"          #
 log_fmt           : "%(message)s"                          # see logging module for format codes
 mail_level        : INFO                                   # log level for email
 #mailto            : sam.hawkins@vattenfall.com            # send log email here
 mail_buffer       : 10000                                  # how many messages to collate in one email
 mail_subject      : "Operational WRF log"                  # subject to use in email 
+
+
+#************************************************
+# Status file
+#************************************************
+status_file       : "%(working_dir)/json/status.json"           # write various status fields such as time completed etc
+
+
+
 
 #************************************************
 # Running/exception handling
@@ -117,10 +124,25 @@ cmd_timing        : false
 #************************************************
 # Processors, job submission, queuing
 #************************************************
-queue             : false                                    # submit jobs via SGE/PBS
-host_file         : "%(working_dir)/hostfile"                # host file to use for mpirun
-job_template      : "%(wrftools_dir)/queue/template.sge"     # template to expand for SGE/PBS
-job_script        : "%(wrf_run_dir)/job.sge"                 # expanded template gets written here
+queue:                                                          # queue to use. use false to submit directly using mpirun
+  ungrib.exe  : false                                           # use a named queue to submit via SGE
+  geogrid.exe : false
+  metgrid.exe : false
+  real.exe    : false
+  ndown.exe   : false
+  wrf.exe     : false
+  ncl         : false
+  nccopy      : post.q
+
+host_file         : "%(working_dir)/hostfile"                # host file to use for mpirun, not needed if using SGE submission
+
+job_template:
+    all.q         : "%(wrftools_dir)/queue/template_all.sge"
+    post.q        : "%(wrftools_dir)/queue/template_post.sge"
+
+
+job_script        : "%(working_dir)/job.sge"                 # expanded template gets written here
+
 
 num_procs: 
   ungrib.exe  : 1
@@ -132,14 +154,7 @@ num_procs:
   ncl         : 1
 
 
-queue_name:                                              # queue to use
-  ungrib.exe  : null
-  geogrid.exe : all.q
-  metgrid.exe : all.q
-  real.exe    : all.q
-  ndown.exe   : all.q
-  wrf.exe     : all.q
-  ncl         : post.q
+
 
 
 poll_interval: 
@@ -149,7 +164,8 @@ poll_interval:
   real.exe     : 1
   ndown.exe    : 1
   wrf.exe      : 10
-
+  ncl          : 1
+  nccopy       : 1
 
 max_job_time: 
   ungrib.exe  : 10
@@ -158,8 +174,18 @@ max_job_time:
   real.exe    : 5
   ndown.exe   : 5
   wrf.exe     : 60
+  ncl         : 10
+  nccopy      : 10
 
-  
+queue_log:
+  ungrib.exe  : ungrib.log
+  geogrid.exe : geogrid.log
+  metgrid.exe : metgrid.log
+  real.exe    : real.log
+  ndown.exe   : ndown.log
+  wrf.exe     : wrf.log
+  nccopy      : nccopy.log
+  ncl         : ncl.log
 
   
 #************************************************
@@ -199,6 +225,8 @@ prepare.remove    :                                                          # l
     - "%(wps_run_dir)/ungrib.log*"
     - "%(wps_run_dir)/metgrid.log*"
     - "%(wps_run_dir)/geogrid.log*"
+    - "%(working_dir)/plots/%iHZ/*.*"
+    - "%(working_dir)/plots/%iHZ/*.*"
 
 prepare.link      :                                                          # list of arguments to consecutive linux ln -sf commands
   - "%(wrf_dir)/run/*.exe           %(wrf_run_dir)"
@@ -255,10 +283,9 @@ sst_vtable          : Vtable.SST
 # NEST_ID         - 2-digit integer indentifiying nest
 #********************************************************
 visualise.ncl  : true
-ncl_out_type   : png                                                                        # png, pdf etc
-ncl_code_dir   : "%(wrftools_dir)/wrftools/ncl" 
-ncl_out_dir    : "%(working_dir)/plots/%iHZ"                                                # inital time will be substitued in
-ncl_web_dir    : "%(web_dir)/img/lowres/%iHZ" 
+ncl_out_type   : png                                                                   # png, pdf etc
+ncl_code_dir   : "%(wrftools_dir)/ncl" 
+ncl_out_dir    : "%(working_dir)/plots/%iHZ"                                           # inital time will be substitued in
 ncl_code       : 
     - "%(ncl_code_dir)/wrf_surface.ncl"
     - "%(ncl_code_dir)/wrf_time_series.ncl"
@@ -267,12 +294,15 @@ ncl_code       :
     - "%(ncl_code_dir)/wrf_sst.ncl"
     - "%(ncl_code_dir)/wrf_w10.ncl"
 
-ncl_ol_code    : 
+ncl_ol_code    :                                                                      # code for producing plots for openlayers 
     - "%(ncl_code_dir)/wrf_precip_vapor.ncl"
-ncl_ol_out_dir : "%(working_dir)/ol/%iHZ"
-ncl_ol_web_dir : "%(web_dir)/img/ol/%iHZ"
+    - "%(ncl_code_dir)/wrf_slp_vapor.ncl"
+    - "%(ncl_code_dir)/wrf_w10_vapor.ncl"
+    - "%(ncl_code_dir)/wrf_wspd_vapor.ncl"
+
+ncl_ol_out_dir : "%(working_dir)/ol/%iHZ"                                              # location to put openlayers compatible plots
 ncl_log        : "%(working_dir)/ncl.log"
-gwarp          : "%(wrftools_dir)/wrftools/shellscripts/gwarp"                          # location of gdalwarp script
+gwarp          : "%(wrftools_dir)/shellscripts/gwarp"                                  # location of gdalwarp script
 
 
 #**************************************************************
@@ -369,13 +399,12 @@ finalise.create : []
 
 finalise.copy:
   - "%(working_dir)/plots/%iHZ/*.png %(web_dir)/img/lowres/%iHZ"
-  - "%(working_dir)/ol/%iHZ/*.png    %(web_dir)/img/ol/%iHZ"
-  - "%(working_dir)/data/*.json      %(web_dir)/data"
+  - "%(working_dir)/json/*.json      %(web_dir)/data"
   
 finalise.link: []
 finalise.move: []
 finalise.remove: 
   - "%(wps_run_dir)/GFS*"
   - "-r %(met_em_dir)"
-  - "%(working_dir)/ol/%iHZ/*.xml"
-  - "%(working_dir)/ol/%iHZ/*.tiff"
+  - "%(working_dir)/plots/%iHZ/*.xml"
+  - "%(working_dir)/plots/%iHZ/*.ps"

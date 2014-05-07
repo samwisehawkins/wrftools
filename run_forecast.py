@@ -23,6 +23,7 @@ Options:
     --create_dirs=<list>
     --cycles=<str>
     --delay=<int>
+    --dispatch=<bool>
     --dispatch_json=<str>
     --domain=<str>
     --dstd=<float>
@@ -339,7 +340,7 @@ for init_time in init_times:
             wrftools.handle(e, fail_mode, full_trace)
     
     
-    if simulate and 'status' in config and config['status']:
+    if simulate and 'simulate.status' in config and config['simulate.status']:
         logger.debug("writing status file")
         try:
             config['simulation_complete'] = datetime.datetime.now()

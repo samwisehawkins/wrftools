@@ -4,7 +4,7 @@
 
 import os
 import time
-import wrftools
+import loghelper
 import subprocess
 from customexceptions import QueueError
 
@@ -34,11 +34,11 @@ def qsub(job_script):
     Returns:
         @job_id -- the job id returned by the PBS system """
  
-    logger = wrftools.get_logger()
+    logger = loghelper.get_logger('wrf_forecast')
     logger.debug('submitting job %s' % job_script)
     
     cmd  = 'qsub %s ' % job_script
-
+    logger.debug(cmd)
     
     #
     # The output from PBS is of the format
@@ -47,6 +47,7 @@ def qsub(job_script):
     proc = subprocess.Popen([cmd], stdout=subprocess.PIPE, shell=True)
     output = proc.stdout.read()
     job_id = output.split(' ')[2]
+    logger.debug("job submitted with ID: %s" % job_id)
     return job_id
     
     
@@ -67,7 +68,7 @@ def qstat(job_id):
 
 
 def test():
-    logger = wrftools.get_logger()
+    loghelper.get_logger('wrf_forecast')
     print('running test')
     #logger.debug('running test')
     

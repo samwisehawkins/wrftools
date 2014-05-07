@@ -69,7 +69,7 @@ def analogtojson(config):
 
     frame = pd.read_csv(input_file, parse_dates=['init', 'valid'])
     
-    frame.columns = ['init', 'valid', 'POWER.An', 'SPEED.An', 'POWER.An.P10', 'POWER.An.P30', 'POWER.An.P50', 'POWER.An.P75', 'POWER.An.P90', 'SPEED.NWP']
+    frame.columns = ['init', 'valid', 'POWER.An', 'SPEED.An', 'POWER.An.P10', 'POWER.An.P30', 'POWER.An.P50', 'POWER.An.P70', 'POWER.An.P90', 'SPEED.NWP']
     
     logger.debug(frame)
     

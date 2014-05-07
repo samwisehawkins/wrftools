@@ -11,7 +11,6 @@ Assumed domains directory structure:
 
     /working_dir --> namelist.input file and other settings specific to that run
         /wrfout      --> netcdf output from WRF
-        /wrfpost     --> grib output from UPP
         /tseries     --> time series extracted at points
         /plots       --> graphical output from NCL
 
@@ -121,6 +120,46 @@ def get_logger():
 # Running shell commands
 #******************************************************************************
 
+def get_exe_name(cmd):
+    """returns the executable name stripped of any path and arguments"""
+
+    #
+    # Either cmd, or cmd args other_stuff
+    #
+    parts = cmd.split()
+    if len(parts)==0:
+        executable = cmd
+    else:
+        executable = parts[0]
+
+    exe = os.path.split(executable)[-1]
+    return exe
+
+    
+def run(cmd, config, from_dir=None):
+    
+    exec_name  = get_exe_name(cmd)
+    queue      = config['queue']
+    num_procs  = config['num_procs']
+    queue_log  = config['queue_log']
+    
+    
+    n = num_procs[exec_name] if exec_name in num_procs else 1
+    
+    from_dir = from_dir if from_dir else config['working_dir']
+    
+    # if a queue name is specified and is not false
+    if exec_name in queue and queue[exec_name]:
+        run_cmd_queue(cmd,config,from_dir,queue_log[exec_name])
+        
+    elif n>1:
+        mpirun(cmd, n, config['host_file'], config['run_level'],config['cmd_timing'])
+    
+    else:
+        run_cmd(cmd, config)
+
+
+
 def mpirun(cmd, num_procs, hostfile, run_level, cmd_timing=False):
     """Wrapper around the system mpirun command.
     
@@ -155,29 +194,29 @@ def mpirun(cmd, num_procs, hostfile, run_level, cmd_timing=False):
     if cmd_timing:
         logger.debug("done in %0.1f seconds" %telapsed)
 
-def run(cmd, run_level='RUN', timing=False):
-    """Executes and logs a shell command. If config['run_level']=='DUMMY', then
-    the command is logged but not executed."""
+# def run(cmd, run_level='RUN', timing=False):
+    # """Executes and logs a shell command. If config['run_level']=='DUMMY', then
+    # the command is logged but not executed."""
     
-    logger = get_logger()
+    # logger = get_logger()
     
-    t0          = time.time()
-    logger.debug(cmd)
+    # t0          = time.time()
+    # logger.debug(cmd)
     
-    #
-    # Only execute command if run level is 'RUN', 
-    # otherwise return a non-error 0. 
-    #
-    if run_level=='RUN':
-        ret = subprocess.call(cmd, shell=True)
-    else:
-        ret = 0
+    # #
+    # # Only execute command if run level is 'RUN', 
+    # # otherwise return a non-error 0. 
+    # #
+    # if run_level=='RUN':
+        # ret = subprocess.call(cmd, shell=True)
+    # else:
+        # ret = 0
     
-    telapsed = time.time() - t0
-    if timing:
-        logger.debug("done in %0.1f seconds" %telapsed)
+    # telapsed = time.time() - t0
+    # if timing:
+        # logger.debug("done in %0.1f seconds" %telapsed)
     
-    return ret
+    # return ret
         
 
 def run_cmd(cmd, config):
@@ -212,8 +251,8 @@ def run_cmd_queue(cmd,config, run_from_dir, log_file):
     command is expected to finish.
     
     Arguments:
-        @executable -- full path of the executable
-        @config     -- all the other settings!
+        @xmd            -- full path of the executable
+        @config         -- all the other settings!
         @run_from_dir   -- directory to run from 
         @log_file       -- redirect to different log file"""
     
@@ -223,21 +262,11 @@ def run_cmd_queue(cmd,config, run_from_dir, log_file):
     num_procs       = config['num_procs']
     job_template    = config['job_template']
     job_script      = config['job_script']
-    queue_name      = config['queue_name']
+    queue           = config['queue']
     poll_interval   = config['poll_interval']
     max_job_time    = config['max_job_time']
 
-
-    #
-    # Either cmd, or cmd args other_stuff
-    #
-    parts = cmd.split()
-    if len(parts)==0:
-        executable = cmd
-    else:
-        executable = parts[0]
-
-    exe = os.path.split(executable)[-1]
+    exe = get_exe_name(cmd)
     
 
     if log_file:
@@ -245,49 +274,44 @@ def run_cmd_queue(cmd,config, run_from_dir, log_file):
     else:
         log = exe
 
+        
+
     try:
-        if type(queue_name)==type({}):
-            qname = queue_name[exe]
-        else:
-            qname = queue_name
-    
-        if type(num_procs)==type({}):
-            nprocs = num_procs[exe]
-        else:
-            nprocs = num_procs
-    
-        if type(max_job_time)==type({}):
-            mjt = max_job_time[exe]
-        else:
-            mjt = max_job_time
-            
-        if type(poll_interval)==type({}):
-            pint = poll_interval[exe]        
-        else:        
-            pint = poll_interval
+        qname = queue[exe]
+        template = job_template[qname]
+        nprocs =  num_procs[exe] if exe in num_procs else 1
+        mjt = max_job_time[exe]
+        pint = poll_interval[exe]        
 
     except KeyError, e:
         tb = traceback.format_exc()
         raise ConfigError(tb)    
     
-    if qname=='None':
+    # If no queue is specified, then we run directly via mpirun
+    if not qname:
         mpirun(cmd, config['num_procs'], config['host_file'], config['run_level'], config['cmd_timing']) 
         return
     
+    # Otherwise we want to run via SGE
+    logger.debug(mjt)
+    logger.debug(pint)
     attempts = mjt / pint
     
     logger.debug('Submitting %s to %d slots on %s, polling every %s minutes for %d attempts' %(exe, nprocs, qname, pint, attempts ))
-    replacements = {'<executable>': executable,
+    #logger.debug('Running from dir: %s ' % run_from_dir)
+    replacements = {'<executable>': cmd,
                 '<jobname>': exe,
                 '<qname>'  : qname,
                 '<nprocs>' : nprocs,
                 '<logfile>': log}
 
-    fill_template(job_template,job_script,replacements)
+    fill_template(template,job_script,replacements)
+    job_script      = config['job_script']
+    #logger.debug("job_template: %s " % job_template)
+    #logger.debug("job_script: %s "   % job_script)
     os.chdir(run_from_dir)
-    logger.debug(job_script)
     
-    if run_level!='RUN':
+    if run_level.upper()!='RUN':
         return
 
 
@@ -389,12 +413,12 @@ def compress(config):
     
     wrfout_files = ['%s/wrfout_d%02d_%s' %(wrfout_dir, d, init_time.strftime('%Y-%m-%d_%H:%M:%S')) for d in range(1,max_dom+1)]
     for f in wrfout_files:
-        logger.debug("compressing %s" % f)
         if not os.path.exists(f):
             raise MissingFile("could not find %s" % f)
         tmp_name = f + '.tmp'
+        logger.debug("compressing %s to temporary file: %s" % (f, tmp_name))
         cmd = 'nccopy -k4 -d %s %s %s' %(comp_level, f, tmp_name)
-        run_cmd(cmd, config)
+        run(cmd, config)
         if not os.path.exists(tmp_name):
             raise IOError("compression failed for %s" % f)
         
@@ -962,11 +986,7 @@ def ungrib_sst(config):
 
     logger.info('*** RUNNING UNGRIB FOR SST ***')
     cmd     =  '%s/ungrib.exe' % wps_run_dir
-    if queue:
-        run_cmd_queue(cmd, config, wps_run_dir,log_file )
-    else:
-        mpirun(cmd, config['num_procs'], config['host_file'], config['run_level'], config['cmd_timing']) 
-
+    run(cmd, config, wps_run_dir)
 
     cmd = 'grep "Successful completion" ./ungrib.log*' # check for success
     ret = run_cmd(cmd, config)
@@ -1218,13 +1238,8 @@ def run_ndown(config):
     logger.debug(nprocs)
     logger.debug(nprocs['ndown.exe'])
     
-    if queue:
-        run_cmd_queue(cmd, config, wrf_run_dir, log_file)
+    run(cmd, config, wrf_run_dir)
         
-    else:
-        mpirun(cmd, nprocs, config['host_file'], config['run_level'], config['cmd_timing'])
-
-
     cmd = 'grep "Successful completion" %s' % log_file # check for success
     ret = run_cmd(cmd,config)
     if ret!=0:
@@ -1247,7 +1262,6 @@ def run_ungrib(config):
     
     """
     logger        = get_logger()
-    queue         = config['queue']
     wps_dir       = config['wps_dir']
     wps_run_dir   = config['wps_run_dir']
     namelist_wps  = config['namelist_wps']
@@ -1324,12 +1338,7 @@ def run_ungrib(config):
         cmd     =  '%s/ungrib.exe' % wps_run_dir
         
         logger.debug(cmd)
-        if queue:
-            run_cmd_queue(cmd, config, wps_run_dir, log_file)
-        
-        else:
-            mpirun(cmd, config['num_procs'], config['host_file'], config['run_level'], config['cmd_timing'])
-
+        run(cmd, config, wps_run_dir)
 
         cmd = 'grep "Successful completion" %s/ungrib.log*' % wps_run_dir # check for success
         ret = run_cmd(cmd,config)
@@ -1361,12 +1370,7 @@ def run_geogrid(config):
 
     cmd       =  '%s/geogrid.exe' % wps_run_dir
     
-    if queue:        
-        run_cmd_queue(cmd, config, wps_run_dir, log_file)
-    
-    else:
-        mpirun(cmd, config['num_procs'], config['host_file'], config['run_level'], config['cmd_timing'])
-
+    run(cmd, config, wps_run_dir)
     
     cmd = 'grep "Successful completion" %s/geogrid.log*' %(wps_run_dir)
     ret = run_cmd(cmd, config)
@@ -1423,12 +1427,7 @@ def run_metgrid(config):
     os.chdir(wps_run_dir)
     cmd      =  "%s/metgrid.exe" % wps_run_dir
     
-    if queue:
-        run_cmd_queue(cmd, config, wps_run_dir, log_file)
-    
-    else:
-        mpirun(cmd, config['num_procs'], config['host_file'], config['run_level'], config['cmd_timing'])
-
+    run(cmd, config, wps_run_dir)
 
     cmd = 'grep "Successful completion" %s/metgrid.log*' % wps_run_dir
     ret = run_cmd(cmd, config)
@@ -1645,10 +1644,7 @@ def run_real(config):
     # so we need to change directory first.
     os.chdir(wrf_run_dir)
     cmd     =  "%s/real.exe" % wrf_run_dir
-    if queue:
-        run_cmd_queue(cmd, config, wrf_run_dir, log_file)
-    else:
-        mpirun(cmd, 1, config['host_file'], config['run_level'], config['cmd_timing'])
+    run(cmd, config, wrf_run_dir)
     
     
     rsl = '%s/rsl.error.0000' % wrf_run_dir
@@ -1686,11 +1682,8 @@ def run_wrf(config):
     log_file      = '%s/wrf.log' % wrf_run_dir
     
     executable  = '%s/wrf.exe' % wrf_run_dir
-    if queue:
-        run_cmd_queue(executable, config, wrf_run_dir, log_file)
+    run(executable, config, wrf_run_dir)
     
-    else:
-        mpirun(executable, config['num_procs'], config['host_file'], config['run_level'], config['cmd_timing'])
 
     #
     # Check for success
