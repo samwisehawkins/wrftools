@@ -299,6 +299,7 @@ ncl_ol_code    :                                                                
     - "%(ncl_code_dir)/wrf_slp_vapor.ncl"
     - "%(ncl_code_dir)/wrf_w10_vapor.ncl"
     - "%(ncl_code_dir)/wrf_wspd_vapor.ncl"
+    - "%(ncl_code_dir)/wrf_sst_vapor.ncl"
 
 ncl_ol_out_dir : "%(working_dir)/ol/%iHZ"                                              # location to put openlayers compatible plots
 ncl_log        : "%(working_dir)/ncl.log"
@@ -408,3 +409,4 @@ finalise.remove:
   - "-r %(met_em_dir)"
   - "%(working_dir)/plots/%iHZ/*.xml"
   - "%(working_dir)/plots/%iHZ/*.ps"
+  - "%(working_dir)/plots/%iHZ/*.tiff"
