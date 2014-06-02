@@ -447,7 +447,8 @@ def write_aot_files(frame, out_dir, log_name=LOGGER):
                     "UKF":	"Europe/London",
                     "UTH":	"Europe/London",
                     "UKR":	"Europe/London",
-                    "EDB":	"Europe/London"}
+                    "UEB":	"Europe/London",
+                    "WHM":  "Europe/Amsterdam"}
 
     name_map = {"FRE" : "Fredericia",
                 "EDI" : "Edinburgh",
@@ -457,11 +458,11 @@ def write_aot_files(frame, out_dir, log_name=LOGGER):
                 "AMS" : "Amsterdam",
                 "UKF" : "Kentish Flats",
                 "UTH" : "Thanet",
-                "UKR" : "Ormonde",
+                "UOR" : "Ormonde",
                 "SLG" : "Lillgrund",
                 "DTK" : "Dan Tysk",
                 "SNB" : "Sand Bank",
-                "EDB" : "Edinbane",
+                "UEB" : "Edinbane",
                 "NEZ" : "Egmonde an Zee",
                 "ZDB" : "Zuidlob",
                 "AVS" : "Alpha Ventus",
@@ -482,7 +483,8 @@ def write_aot_files(frame, out_dir, log_name=LOGGER):
                 "EA1" : "East Anglia 1B",
                 "EAZ" : "East Anglia ZE",
                 "YTS" : "Yttre Stengrund",
-                "UTG" : "Utgrunded"}
+                "UTG" : "Utgrunded",
+                "WHM" : "Hagesholm"}
 
     inv_name_map = {v:k for k, v in name_map.items()}
     

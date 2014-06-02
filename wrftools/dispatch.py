@@ -30,18 +30,17 @@ LOGGER = "dispatch"
     
 def main():
     config = conf.config(__doc__, sys.argv[1:], flatten=True, format="yaml")
-    import pprint
-    pp = pprint.PrettyPrinter(indent=4)
-    pp.pprint(config)
-    pp.pprint(config['dispatch.list'])
     dispatch(config)
 
 
 def dispatch(config):
 
-    logger = loghelper.create_logger(config)
+    if __name__ == "__main__":
+        logger = loghelper.create_logger(config)
+    else:
+        logger = loghelper.get_logger(config['log_name'])
+
     dist = config['dispatch.list']
-    logger.debug(dist)
     logger.info("dispatch.py sending files via email")
     dry_run=config['dry_run']
     
@@ -63,7 +62,6 @@ def dispatch_entry(config, entry, dry_run=None, log_name=LOGGER):
     attachments = [expand(a, config) for a in entry['attach']]
 
     logger.debug('dispatch_entry() called')
-    logger.debug(attachments)
     
     if type(attachments)==type([]):
         a_arg = ' '.join(['-a %s' % a for a in attachments])

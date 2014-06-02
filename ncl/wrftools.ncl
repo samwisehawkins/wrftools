@@ -259,10 +259,8 @@ begin
     ; Print some information
     ;******************************************************
     print("Interpolating WRF variables to locations and heights")
-    print(hgt_out)
-    print(file_out)
-    print(vars)
-    print(opts)
+    ;print(vars)
+    ;print(opts)
 
 
     ;******************************************************
@@ -294,7 +292,9 @@ begin
         return
     end if
     end if
-
+    
+    
+    
     ;******************************************************
     ; Unpack input args so they are literals, not Variables
     t          = time_in(0)
@@ -420,13 +420,25 @@ begin
     ;******************************************************    
     ; create global attributes of the file
     ;******************************************************    
-    fileattdef(fout, nc_file )           ; copies global attributes to the tseries file
+    atts =  getvaratts(nc_file);
+    print("setting global attributes - hard-coded as copy did not work")
+    
+    
+    
     fAtt               = True            ; assign file attributes
-    fAtt@title         = "WRF time series interpolated to locations"  
+    fAtt@title         = "WRF time series interpolated to locations"  ; hack to change title in output
     fAtt@Conventions   = "None"   
     fAtt@creation_date = systemfunc ("date")        
-    fileattdef( fout, fAtt )            ; copy file attributes    
-
+    fAtt@GRID_ID       = nc_file@GRID_ID
+    fAtt@DOMAIN        = nc_file@DOMAIN
+    fAtt@MODEL_RUN     = nc_file@MODEL_RUN
+    fAtt@DX            = nc_file@DX
+    fAtt@DY             = nc_file@DY
+    fAtt@BDY_CONDITIONS = nc_file@BDY_CONDITIONS
+    fAtt@MODEL          = nc_file@MODEL
+    
+    fileattdef(fout, fAtt )           ; copies global attributes to the tseries file
+    
     
     ;******************************************************    
     ; predefine the coordinate variables and their dimensionality

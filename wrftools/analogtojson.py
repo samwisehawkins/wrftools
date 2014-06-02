@@ -6,6 +6,7 @@ Usage:
         
 Options:
         --config=<file>           file specifiying configuration options
+        --config-fmt=<str>        config file format, json or yaml
         --log_name=<name>         name of logger, allows shared loggers between modules
         --log_level=<level>       log level, debug, info or warn
         --log_file=<file>         write log output to file as well as stdout
@@ -15,7 +16,10 @@ Options:
         --cycles=<cycles>         list of cycle hours to consider, e.g. 00,06,12,18
         --delay=<hours>           if operational=true, subtract hours from now
         --analog_in_dir=<dir>     location of analog text files
-        --analog_out_dir=<dir>    location of output json files"""
+        --analog_out_dir=<dir>    location of output json files
+        --file_in=<pattern>       filename of input file to process  
+        --file_out=<pattern>      filename of output file
+        --num_files=<int>         number of files to process -1=most recent, not present=all"""
 
 
 import os
@@ -28,6 +32,10 @@ import dateutil
 import json
 import datetime
 import time
+import substitute
+import glob
+
+
 LOGGER="analogstojson"
 
 def main():
@@ -41,100 +49,118 @@ def strptime(str):
 def analogtojson(config):
     """Reads output from analog text files and writes JSON """
 
-    #logger       = log.create(config['log_name'], config['log_level'], config['log_fmt'], config['log_file'])
+    #
+    # Rules: if init_time specified, work out filename from that
+    #        else use last file in sorted list with prefix
+    #
     logger   = log.create_logger(config)
     
-    out_dir  = config['analog_out_dir']
-    out_name = 'analogs.json' 
+    if config['init_time']:
+        input_files  = [substitute.sub_date(config['file_in'], config['init_time'])]
+        output_files = [substitute.sub_date(config['file_out'], config['init_time'])]
     
-    
-    if config['operational']:
-        now = datetime.datetime.today()
-        if config['delay']:
-            delay = int(config['delay'])
-            hour = datetime.timedelta(0, 60*60)        
-            now = now - delay * hour
-        
-        cycles = config['cycles']
-        init_time = get_operational_init_time(now, cycles)
-        logger.debug(init_time)
-        
+
     else:
-        init_time = config['init_time']
-        
-    input_file = '%s/UTH_%s' % (config['analog_in_dir'], init_time.strftime('%Y-%m-%d_%H'))
-    logger.debug(input_file)
-    if not os.path.exists(input_file):
-        raise Exception("File not found %s" % input_file)
+        # append a wildcard to pattern
 
-    frame = pd.read_csv(input_file, parse_dates=['init', 'valid'])
-    
-    frame.columns = ['init', 'valid', 'POWER.An', 'SPEED.An', 'POWER.An.P10', 'POWER.An.P30', 'POWER.An.P50', 'POWER.An.P70', 'POWER.An.P90', 'SPEED.NWP']
-    
-    logger.debug(frame)
-    
-    logger.debug(frame['valid'].to_string())
-    # Bit of a hack to ease output formatting, convert init_time to string
-    #frame['init'] = frame['init'].apply(str)
-    frame['init'] = frame['init'].apply(str)
-    frame['valid'] = frame['valid'].apply(strptime)
-    
-    # we need to group by everything except valid time and value
-    #group_by = [c for c in frame.columns if c not in ["valid_time", "value"]]
-    #gb = frame.groupby(group_by)
-
+        pattern = config['file_in'] + '*'
+        logger.debug(pattern)
+        all_files = sorted(glob.glob(pattern))
         
-    # Convert time to milliseconds since epoc
-    convert = lambda t: time.mktime(t.timetuple())*1000        
-    
-    series = []
-    
-    for name in frame.columns:
-
-        if name=='init' or name=='valid':
-            continue
+        if not config['num_files']:
+            input_files = all_files
         
-        d = {}
-        d['location'] = 'UTH'
-        d['variable'] = name
-        d['GRID_ID'] = 1
-        d['init_time'] = str(init_time)
-        d['height']    = 80
-        d['model_run'] = 'analogs'
+        # if number of files has been specified
+        else:
+            num_files = config['num_files']
+            
+            # if negative number, count backwards through list
+            if num_files<0:
+                input_files = all_files[-1:num_files-1:-1]
+            else:
+                input_files = all_files[0:num_files]
 
-        logger.debug("processing %s" % str(name))
-        # create a dictionary from all the fields except valid time and value
+            if len(input_files)==0:
+                raise IOError("no input files found")
+      
+        
+    for n,input_file in enumerate(input_files):
+    
+       
+        if not os.path.exists(input_file):
+            raise IOError("File not found %s" % input_file)
 
-        
-        timestamp = map(convert, frame['valid'])
-        values  = frame[name]
-        mvals = np.ma.masked_invalid(np.array(values))
-        data    = [ (timestamp[n],mvals[n]) for n in range(len(timestamp))]
-        ldata   = map(list, data)
-        d['data'] = ldata
-        s = str(d)
-    
-        # this is an ugly hack which could potentially lead to errors if " u'" occurs at the end of a string
-        s =  s.replace(" u'", " '")
-                
-        # change single quotes to double
-        s = s.replace("'", '"')
-        
-        # replace masked values. Again, ugly
-        s = s.replace('masked', 'null')
-        
-        series.append(s)
+        path, name = os.path.split(input_file)
+        location = name[0:3]
+        #init_time = strptime(name[4:]+":00:00")
+        output_file = input_file.replace(config['file_in'], config['file_out'])+".json"
+        logger.debug(input_file)
+        logger.debug(output_file)
 
-    json_str = ','.join(series)
-    
-    if not os.path.exists(out_dir):
-        os.makedirs(out_dir)
-    
-    fout = open('%s/%s' % (out_dir, out_name), 'w')
-    fout.write('[')
-    fout.write(json_str)
-    fout.write(']')
-    fout.close()
+        frame = pd.read_csv(input_file, parse_dates=['init', 'valid'])
+        
+        frame.columns = ['init', 'valid', 'POWER.An', 'SPEED.An', 'POWER.An.P10', 'POWER.An.P30', 'POWER.An.P50', 'POWER.An.P70', 'POWER.An.P90', 'SPEED.NWP']
+        init_time = frame.init[0]
+     
+        # Bit of a hack to ease output formatting, convert init_time to string
+        #frame['init'] = frame['init'].apply(str)
+        frame['init'] = frame['init'].apply(str)
+        frame['valid'] = frame['valid'].apply(strptime)
+        
+        # we need to group by everything except valid time and value
+        #group_by = [c for c in frame.columns if c not in ["valid_time", "value"]]
+        #gb = frame.groupby(group_by)
+
+            
+        # Convert time to milliseconds since epoc
+        convert = lambda t: time.mktime(t.timetuple())*1000        
+        
+        series = []
+        
+        for name in frame.columns:
+
+            if name=='init' or name=='valid':
+                continue
+            
+            d = {}
+            d['location']  = location
+            d['variable']  = name
+            d['GRID_ID']   = 1
+            d['init_time'] = str(init_time)
+            d['height']    = 80
+            d['model_run'] = 'analogs'
+
+            logger.debug("processing %s" % str(name))
+            # create a dictionary from all the fields except valid time and value
+
+            
+            timestamp = map(convert, frame['valid'])
+            values  = frame[name]
+            mvals = np.ma.masked_invalid(np.array(values))
+            data    = [ (timestamp[n],mvals[n]) for n in range(len(timestamp))]
+            ldata   = map(list, data)
+            d['data'] = ldata
+            s = str(d)
+        
+            # this is an ugly hack which could potentially lead to errors if " u'" occurs at the end of a string
+            s =  s.replace(" u'", " '")
+                    
+            # change single quotes to double
+            s = s.replace("'", '"')
+            
+            # replace masked values. Again, ugly
+            s = s.replace('masked', 'null')
+            
+            series.append(s)
+
+        json_str = ','.join(series)
+        
+        
+        fout = open(output_file, 'w')
+        fout.write('[')
+        fout.write(json_str)
+        fout.write(']')
+        fout.close()
 
     
     

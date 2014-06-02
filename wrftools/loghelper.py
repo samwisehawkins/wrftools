@@ -34,8 +34,13 @@ def create(name, log_level, log_fmt, log_file=None, log_mail=None, mailto=None, 
 
     if log_mail:
         from customloggers import BufferingSendmailHandler
-
-        mail_level = getattr(logging, mail_level.upper(), None)
+        
+        if mail_level:
+            level=mail_level.upper()
+        else:
+            level='INFO'
+        
+        mail_level = getattr(logging, level, None)
         eh = BufferingSendmailHandler(mailto, subject, buffer)
     
         eh.setLevel(mail_level)

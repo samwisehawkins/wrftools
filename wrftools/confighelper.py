@@ -81,7 +81,7 @@ def config(docstring, args, format="json", flatten=False):
     if '--config-fmt' in cargs and cargs['--config-fmt']:
         format = cargs['--config-fmt']
     
-    elif '--config' in cargs:
+    elif '--config' in cargs and cargs['--config']:
         format = cargs['--config'].split('.')[-1]
     
     
@@ -94,7 +94,8 @@ def config(docstring, args, format="json", flatten=False):
         
     cargs = {key.lstrip("--"): cargs[key] for key in cargs.keys()}
     
-    cargs = parse_cmd_args(cargs, format=format)
+    # always parse command-line arguments as yaml, as this saves having to put quotes around arguments
+    cargs = parse_cmd_args(cargs, format="yaml")
 
     
     if 'config' in cargs and cargs['config']:

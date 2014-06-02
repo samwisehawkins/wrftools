@@ -52,10 +52,12 @@ simulate.real     : true
 simulate.ndown    : false
 simulate.timing   : true 
 simulate.status   : true     # write json status file specifying time of last update etc
+
 post              : true     # run post-processing steps, see section post
 post.upp          : false    # Universal Post Processor
 post.metadata     : true     # add metadata as attributes to netcdf files
 post.compress     : true     # compress wrfout files using NCO
+post.hyperslab    : true     # hyperslab files via ncks operator
 power             : true     # calculate power production at points
 visualise         : true     # see visualise section
 visualise.ol      : true     # run openlayers visualisation (requiress VAPOR, ImageMagik)
@@ -246,6 +248,7 @@ prepare.copy      : []       # list of arguments to consecutive linux cp command
 upp_dir                 : $(HOME)/UPPV1.0
 compression_level       : 9                # Compresion level passed to -L flag
 post.met                : false            # MET verification tool
+post.hyperslab.dimspec  : "-d bottom_top,0,20 -d bottom_top_stag,0,21"  # dimspec argument passed to NetCDF operators
 
 
 #************************************************
@@ -399,7 +402,7 @@ dispatch.list:
 finalise.create : []
 
 finalise.copy:
-  - "%(working_dir)/plots/%iHZ/*.png %(web_dir)/img/lowres/%iHZ"
+  - "%(working_dir)/plots/%iHZ/*.png %(web_dir)/img/%iHZ"
   - "%(working_dir)/json/*.json      %(web_dir)/data"
   
 finalise.link: []
@@ -410,3 +413,10 @@ finalise.remove:
   - "%(working_dir)/plots/%iHZ/*.xml"
   - "%(working_dir)/plots/%iHZ/*.ps"
   - "%(working_dir)/plots/%iHZ/*.tiff"
+  - "%(working_dir)/plots/%iHZ/*.png"
+  
+finalise.run:
+  - "zip -r %(web_dir)/img/%iHZ.zip %(web_dir)/img/%iHZ"
+  
+  
+  

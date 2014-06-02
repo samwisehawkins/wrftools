@@ -1,0 +1,6 @@
+#!/bin/bash
+
+for ARG in "$@"
+do
+    sed "s/^.*[//" 
+done

@@ -75,6 +75,9 @@ def main():
             path,name = os.path.split(f)
             out_file = out_dir+'/'+name.replace('wrfout', 'tseries')
 
+            if os.path.exists(out_file):
+                os.rm(out_file)
+            
             # Create NCL file array
             in_file = f
             #cmd = """FCST_FILE=%s  NCL_OUT_FILE=%s LOCATIONS_FILE=%s NCL_OPT_FILE=%s ncl %s/%s 'extract_heights=%s' """ %(in_file, out_file, loc,opt, ncl_code_dir, NCL_SCRIPT, hgts)
@@ -89,7 +92,11 @@ def main():
         f = nc_files[0]
         path,name = os.path.split(f)
         out_file = out_dir+'/'+name.replace('wrfout', 'tseries')
+        if os.path.exists(out_file):
+            os.rm(out_file)
 
+        
+        
         # Create NCL file array
         files = '","'.join(sorted(nc_files))
         in_file = '(/"%s"/)' % files

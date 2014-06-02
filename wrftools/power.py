@@ -31,8 +31,10 @@ def main():
 def power(config):
     """Reads 'time series' from netcdf time series file, and adds power as a variable. """
     
-    logger          = loghelper.create_logger(config)
-    
+    if __name__ == "__main__":
+        logger = loghelper.create_logger(config)
+    else:
+        logger = loghelper.get_logger(config['log_name'])
     
     # Number of samples to use should be in here
     # Whether to normalise power should be in here    

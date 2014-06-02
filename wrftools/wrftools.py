@@ -427,6 +427,39 @@ def compress(config):
     
     logger.info("*** Done compressing wrfout files ***")        
 
+    
+def hyperslab(config):
+    
+    logger=get_logger()
+    logger.info("*** Hyperslabbing wrfout files ***")
+    wrfout_dir = config['wrfout_dir']
+    init_time  = config['init_time']
+    max_dom    = config['max_dom']
+    dimspec    = config['post.hyperslab.dimspec']
+    
+    
+    wrfout_files = ['%s/wrfout_d%02d_%s' %(wrfout_dir, d, init_time.strftime('%Y-%m-%d_%H:%M:%S')) for d in range(1,max_dom+1)]
+    for f in wrfout_files:
+        if not os.path.exists(f):
+            raise MissingFile("could not find %s" % f)
+        tmp_name = f + '.tmp'
+        logger.debug("compressing %s to temporary file: %s" % (f, tmp_name))
+        cmd = 'ncks -4 -O %s %s %s' % (dimspec, f, tmp_name)
+        run(cmd, config)
+        if not os.path.exists(tmp_name):
+            raise IOError("compression failed for %s" % f)
+        
+        os.remove('%s' %f)
+        os.rename(f+'.tmp', f) 
+    
+    logger.info("*** Done hyperslabbing wrfout files ***")       
+    
+    
+    
+    
+    
+    
+    
 def add_metadata(config):
     """ Adds metadata tags into the wrfout files. Expects there to be one 
     wrfout file per init_time. If there are more, they will not have metadata added."""
@@ -548,29 +581,15 @@ def finalise(config):
     subdirs     = [expand(x, config) for x in config['finalise.create']]
     copy        = [expand(x, config) for x in config['finalise.copy']]
     move        = [expand(x, config) for x in config['finalise.move']]
-
-    logger.debug(links)
-    logger.debug(remove)
-    logger.debug(subdirs)
-    logger.debug(copy)
-    logger.debug(move)
+    run         = [expand(x, config) for x in config['finalise.run']]
     
-    
-    
-    
-    
+        
     fulldirs  = subdirs 
     for d in fulldirs:
         if not os.path.exists(d):
             logger.debug('creating directory %s ' %d)
             os.mkdir(d) 
    
-    for pattern in remove:
-        flist = glob.glob(pattern)
-        for f in flist:
-            if os.path.exists(f):
-                logger.debug('removing file: %s' % f )
-                os.remove(f)
     
     for arg in move:
         cmd = "mv %s" % arg
@@ -583,6 +602,14 @@ def finalise(config):
     for pattern in links:
         link(pattern)
     
+    for cmd in run:
+        run_cmd(cmd, config)
+    
+    for pattern in remove:
+        flist = glob.glob(pattern)
+        for f in flist:
+            if os.path.exists(f):
+                os.remove(f)
     
     logger.info('*** DONE FINALISE ***')
 
@@ -868,8 +895,7 @@ def get_sst(config):
     # create an lftpscript in model run dir
     
     logger.info('*** FETCHING SST ***')
-    domain_dir    = config['domain_dir']
-    model_run     = config['model_run']
+    working_dir    = config['working_dir']
     tmp_dir        = config['tmp_dir']
     http_proxy     = os.environ['http_proxy']
     home           = os.environ['HOME']
@@ -886,7 +912,7 @@ def get_sst(config):
         logger.info('*** SST ALREADY EXISTS LOCALLY, NOT DOWNLOADED ***')
         return
     
-    lftpfilename = '%s/%s/lftpscript' % (domain_dir, model_run)
+    lftpfilename = '%s/lftpscript' % working_dir
     logger.debug('Writing lftpscript to %s' % lftpfilename)
     lftpscript     = open(lftpfilename, 'w')    
     lftpscript.write('lcd %s\n' % sst_local_dir)    
@@ -915,23 +941,21 @@ def ungrib_sst(config):
     wps_dir      = config['wps_dir']
     wps_run_dir  = config['wps_run_dir']
     tmp_dir      = config['tmp_dir']
-    domain_dir   = config['domain_dir']
-    model_run    = config['model_run']
-    working_dir = config['working_dir']
+    working_dir  = config['working_dir']
     init_time    = config['init_time']
     max_dom      = config['max_dom']
     sst_local_dir = config['sst_local_dir']
     sst_time     = get_sst_time(config)
     sst_filename = get_sst_filename(config)
     vtable_sst   = wps_dir+'/ungrib/Variable_Tables/'+config['sst_vtable']
-    vtable_dom   = wps_dir+'/ungrib/Variable_Tables/'+config['vtable']
+    #vtable_dom   = wps_dir+'/ungrib/Variable_Tables/'+config['vtable']
     vtable       = wps_run_dir+'/Vtable'
     queue        = config['queue']
     log_file     = '%s/ungrib.sst.log' % wps_run_dir
-    namelist_wps  = wps_run_dir+'/namelist.wps'
-    namelist_dom  = '%s/namelist.wps' % working_dir
+    namelist_wps  = config['namelist_wps']
     namelist_sst  = '%s/namelist.sst' % working_dir
-    namelist      = read_namelist(namelist_dom)
+
+    namelist      = read_namelist(namelist_wps)
 
     #
     # update one line to point to the new SST field
@@ -942,8 +966,8 @@ def ungrib_sst(config):
     logger.debug('Updating constants_name ----> %s' % constants_name)
     namelist.update('constants_name', constants_name, section='metgrid')
 
-    # Write the changes into the original namelist file
-    namelist.to_file(namelist_dom)
+    # Write the changes into the original
+    namelist.to_file(namelist_wps)
 
     #
     # Update start and end time to process SST
@@ -963,12 +987,13 @@ def ungrib_sst(config):
 
     #remove any linked namelist.wps 
     logger.debug('removing namelist.wps')
-    if os.path.exists(namelist_wps): 
-        os.remove(namelist_wps)
+    namelist_run = '%s/namelist.wps' % wps_run_dir
+    if os.path.exists(namelist_run):
+        os.remove(namelist_run)
 
     # link namelist.sst to namelist.wps in WPS run dir
     logger.debug('linking namelist.sst -----> namelist.wps')
-    cmd = 'ln -sf %s %s' %(namelist_sst, namelist_wps)
+    cmd = 'ln -sf %s %s' %(namelist_sst, namelist_run)
     run_cmd(cmd, config)
 
     logger.debug('removing Vtable')
@@ -995,10 +1020,10 @@ def ungrib_sst(config):
     
     logger.info('*** SUCCESS UNGRIB SST ***')
     logger.debug('Removing namelist.wps')
-    if os.path.exists(namelist_wps): 
-        os.remove(namelist_wps)
+    if os.path.exists(namelist_run): 
+        os.remove(namelist_run)
     # link in original (unmodified) namelist.wps
-    cmd = 'ln -sf %s %s' %(namelist_dom, namelist_wps)    
+    cmd = 'ln -sf %s %s' %(namelist_wps, namelist_run)    
     run_cmd(cmd, config)
 
 
@@ -1270,8 +1295,14 @@ def run_ungrib(config):
     init_time     = config['init_time']
     log_file      = '%s/ungrib.log' % wps_run_dir
     vtable        = config['vtable']
-    grb_input_fmt = config['grb_input_fmt']
+    grb_input_fmt  = config['grb_input_fmt']
+    grb_input_delay = config.get("grb_input_delay")  # this allows None to be returned 
+    
     bdy_conditions = config['bdy_conditions']
+    
+    
+    
+    
     
     logger.info("*** RUNNING UNGRIB ***")
     
@@ -1292,11 +1323,20 @@ def run_ungrib(config):
     #     
     for key in vtable.keys():
         
+        
+        if grb_input_delay and key in grb_input_delay:
+            logger.debug("applying delay")
+            delay = datetime.timedelta(0, grb_input_delay[key]*60*60)
+            new_bdy_times = [b - delay for b in bdy_times]
+        else:
+            logger.debug("no delay applied")
+            new_bdy_times = bdy_times
+        
         fmt = grb_input_fmt[key]
         #
         # Generate filelist based on the initial time, and the forecast hour
         #        
-        filelist = get_bdy_filenames(fmt, bdy_times)
+        filelist = list(OrderedDict.fromkeys(get_bdy_filenames(fmt, new_bdy_times)))
 
         #
         # Check the boundary files exist
@@ -1310,9 +1350,26 @@ def run_ungrib(config):
     
     logger.debug('all boundary conditions files exist')
     
+    #
+    # Now process boundary conditions
+    #
     for key in vtable.keys():
+
+        if grb_input_delay and key in grb_input_delay:
+            logger.debug("applying delay")
+            delay = datetime.timedelta(0, grb_input_delay[key]*60*60)
+            new_bdy_times = [b - delay for b in bdy_times]
+        else:
+            logger.debug("no delay applied")
+            new_bdy_times = bdy_times
+        
         fmt = grb_input_fmt[key]
-        filelist = get_bdy_filenames(fmt, bdy_times)
+        #
+        # Generate filelist based on the initial time, and the forecast hour
+        #        
+        filelist = list(OrderedDict.fromkeys(get_bdy_filenames(fmt, new_bdy_times)))
+
+        
         logger.debug('running link_grib.csh script to link grib files to GRIBFILE.AAA etc')
         
         os.chdir(wps_run_dir)

@@ -97,6 +97,7 @@ Options:
     --post.upp=<bool>
     --post.compress=<bool>
     --post.metadata=<bool>
+    --post.hyperslab=<bool>
     --power=<bool>
     --power_file=<str>
     --pquants=<str>
@@ -212,6 +213,7 @@ post                = config['post']
 met                 = config['post.met']
 compress            = config['post.compress']
 metadata            = config['post.metadata']
+hyperslab           = config['post.hyperslab']
 upp                 = config['post.upp']
 extract             = config['extract']
 time_series         = config['extract.tseries']
@@ -355,12 +357,21 @@ for init_time in init_times:
     # Post processing
     #
     if post:
+        if hyperslab:
+            try:
+                wrftools.hyperslab(config)
+            except Exception, e:
+                wrftools.handle(e, fail_mode, full_trace)
+
+
         if compress:
             try:
                 wrftools.compress(config)
             except Exception, e:
                 wrftools.handle(e, fail_mode, full_trace)
-
+        
+        
+        
         
         if metadata:
             try:
@@ -471,6 +482,12 @@ for init_time in init_times:
                 logger.error('*** FAIL TIME SERIES DUMPING  ***')
                 wrftools.handle(e, fail_mode, full_trace)
 
+
+            
+    if dispatch:
+        dry_run = run_level=='DUMMY'
+        wrftools.dispatch(config)
+
     if finalise:
         logger.info('*** FINALISE ***')
         
@@ -480,12 +497,8 @@ for init_time in init_times:
             logger.error('*** FAIL FINALISE ***')
             wrftools.handle(e, fail_mode, full_trace)
 
-            
-    if dispatch:
-        dry_run = run_level=='DUMMY'
-        wrftools.dispatch(config)
-
-
+        
+        
 
 # Final code to get executed
 logger.debug('Shutting down the logging framework')

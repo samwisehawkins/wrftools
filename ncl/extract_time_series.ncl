@@ -104,7 +104,16 @@ begin
 ; Give some info
 ;******************************************************
 print(in_file)
+print(out_file)
 ;******************************************************
+
+;******************************************************
+; Remove output file
+;******************************************************
+if (isfilepresent(out_file))
+    print("NCL remving pre-existing output file")
+    system ("rm -f " + out_file )
+end if
 
 
 
@@ -138,7 +147,8 @@ print(in_file)
     ;out_file = out_dir +"/tseries_" + init_time +".nc"
     
     fout = wrf_user_interp_vars_tofile(f, extract_heights,loc_id, lat, lon,-1,out_file, vars, opts)
-
+    printVarSummary(fout)
+    delete(fout)
     
 print("*** SUCCESS NCL EXTRACT TIME SERIES ***")    
 end

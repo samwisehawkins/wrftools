@@ -24,7 +24,7 @@ module add nco
 module add udunits
 module add gdal
 module add vapor
-module add imagemagik
+module add imagemagick
 
 # Load one of these
 # module add openmpi/gcc
