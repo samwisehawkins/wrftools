@@ -446,7 +446,7 @@ def write_aot_files(frame, out_dir, log_name=LOGGER):
                     "LON":	"Europe/London",
                     "UKF":	"Europe/London",
                     "UTH":	"Europe/London",
-                    "UKR":	"Europe/London",
+                    "UOR":	"Europe/London",
                     "UEB":	"Europe/London",
                     "WHM":  "Europe/Amsterdam"}
 

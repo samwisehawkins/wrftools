@@ -45,7 +45,9 @@ def main():
 def strptime(str):
     return datetime.datetime(*time.strptime(str, '%Y-%m-%d_%H:%M:%S')[0:5])
     
-    
+def strftime(dt):
+        return dt.strftime('%Y-%m-%d %H:%M:%S')
+
 def analogtojson(config):
     """Reads output from analog text files and writes JSON """
 
@@ -97,16 +99,15 @@ def analogtojson(config):
         logger.debug(input_file)
         logger.debug(output_file)
 
-        frame = pd.read_csv(input_file, parse_dates=['init', 'valid'])
-        
+        frame = pd.read_csv(input_file, parse_dates=['init', 'valid'], date_parser=strptime)
+        print frame
         frame.columns = ['init', 'valid', 'POWER.An', 'SPEED.An', 'POWER.An.P10', 'POWER.An.P30', 'POWER.An.P50', 'POWER.An.P70', 'POWER.An.P90', 'SPEED.NWP']
-        init_time = frame.init[0]
-     
+
+
         # Bit of a hack to ease output formatting, convert init_time to string
         #frame['init'] = frame['init'].apply(str)
-        frame['init'] = frame['init'].apply(str)
-        frame['valid'] = frame['valid'].apply(strptime)
-        
+        frame['init'] = frame['init'].apply(strftime)
+        init_time = frame.init[0]        
         # we need to group by everything except valid time and value
         #group_by = [c for c in frame.columns if c not in ["valid_time", "value"]]
         #gb = frame.groupby(group_by)
@@ -136,7 +137,7 @@ def analogtojson(config):
             
             timestamp = map(convert, frame['valid'])
             values  = frame[name]
-            mvals = np.ma.masked_invalid(np.array(values))
+            mvals   = np.ma.masked_invalid(np.array(values))
             data    = [ (timestamp[n],mvals[n]) for n in range(len(timestamp))]
             ldata   = map(list, data)
             d['data'] = ldata
