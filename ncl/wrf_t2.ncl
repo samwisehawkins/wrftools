@@ -22,6 +22,16 @@ begin
   diro     = ncl_out_dir
   loc_file = ncl_loc_file
   prefix   = "t2"
+
+;******************************************************
+; Add the file
+;***********************************************
+
+  
+  print("\n\n**********************************************")
+  print("wrf_t2.ncl")
+
+  
   
 ;******************************************************
 ; Add the file
@@ -63,7 +73,7 @@ do it=0,ntimes-1
   current_lead_hh=sprinti("%0.2i", it)
   wks = gsn_open_wks(type,diro+"/"+prefix+"_d"+domain+"_"+current_lead_hh)
   gsn_define_colormap(wks,"WhViBlGrYeOrReWh")
-  print("Working on time: " + times(it) )
+  ;print("Working on time: " + times(it) )
   res@TimeLabel = times(it)   ; Set Valid time to use on plots
 
 
@@ -120,6 +130,11 @@ do it=0,ntimes-1
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 end do 
+  
+  print("wrf_t2.ncl")
+  print("\n\n**********************************************")
+
+
 
 end
 

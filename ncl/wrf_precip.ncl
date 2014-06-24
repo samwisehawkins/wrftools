@@ -10,7 +10,8 @@ load "$NCARG_ROOT/lib/ncarg/nclscripts/csm/gsn_code.ncl"
 load "$NCARG_ROOT/lib/ncarg/nclscripts/wrf/WRFUserARW.ncl"
 
 begin
-
+  print("\n\n**********************************************")
+  print("wrf_precip.ncl")
 
   ; NCL expects some or all of the following to be defined on 
   ; the command-line
@@ -26,8 +27,8 @@ begin
   end if
     
 
-  printVarSummary(ncl_in_file)
-  print(ncl_in_file)
+
+
   print("reading file "+ncl_in_file)
   a = addfile(ncl_in_file,"r")
   
@@ -59,15 +60,14 @@ begin
 ;********************************************
  
   Times  = wrf_user_list_times(a)  ; get times in the file
-  print("times:"+Times)
   ntimes = dimsizes(Times) 
- 
+  print(ntimes)
   mpres@mpDataBaseVersion     = "Ncarg4_1"          ; higher res data base
-  if (a@GRID_ID .eq. 3) then
+  if (a@GRID_ID .ge. 3) then
     mpres@mpDataBaseVersion  = "HighRes"
   end if
 
-  do it = 1,ntimes-1,1
+  do it = 1,ntimes-1
 
     ff = floattointeger(a->XTIME/60.)
 
@@ -76,7 +76,7 @@ begin
     wks = gsn_open_wks(ncl_out_type,PlotName)
     colors = (/"white","black","white","yellow","orange","DarkOrange",\
              "OrangeRed","Red1","Red2","Red4","DarkOrchid1","purple",\
-             "MediumPurple3","Blue2","Blue4","DarkOliveGreen3"/)
+             "MediumPurple3", "Violet","darkviolet","lightblue1", "Blue2","Blue4","DarkOliveGreen3"/)
 
     gsn_define_colormap(wks, colors)  
     print("Working on time: " + Times(it) )
@@ -111,10 +111,10 @@ begin
     opts_r = res                        
     opts_r@UnitLabel            = "mm"
     opts_r@cnLevelSelectionMode = "ExplicitLevels"
-    opts_r@cnLevels             = (/ .1, .5, 1., 2., 3., 4. /)
+    opts_r@cnLevels             = (/ .1, .5, 1., 2., 3., 4., 5., 8., 10. /)
     opts_r@cnFillColors         = (/"transparent","Yellow","orange",\
                                    "DarkOrange",\
-                                   "OrangeRed","Red1","Violet"/)
+                                   "OrangeRed","Red1","Violet", "darkviolet", "lightblue1", "white"/)
     opts_r@cnInfoLabelOn        = False
     opts_r@cnConstFLabelOn      = False
     opts_r@cnFillOn             = True
@@ -129,7 +129,10 @@ begin
 
 
   end do        ; END OF TIME LOOP
- 
+
+  print("wrf_precip.ncl")  
+  print("\n\n**********************************************")
+
 
 ;********************************************
 

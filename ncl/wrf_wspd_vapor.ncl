@@ -131,17 +131,13 @@ begin
     opts@cnFillOn = True  
     
     
-    if  (a@GRID_ID .ge.3) then
-        gsn_define_colormap(wks,"wind_17lev")
-        opts@ContourParameters = (/ 5., 23., 1./)
-        opts@cnFillColors =(/2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23/) 
-    else
-        opts@ContourParameters = (/ 5., 29., 3./)
-        opts@cnFillColors = (/"transparent","yellow",\
-                            "orange","DarkOrange",\
-                            "OrangeRed","Red1","Red2","Red4","DarkOrchid1","purple",\
-                            "MediumPurple3","Blue2","Blue4"/)
-    end if
+
+    gsn_define_colormap(wks,"wind_17lev")
+    opts@ContourParameters = (/ 5., 23., 1./)
+    opts@cnFillPalette = "wind_17lev"
+    //opts@cnFillColors =(/2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23/) 
+       
+
     contour_w = wrf_contour(a,wks,wspd,opts)
     delete(opts)
 

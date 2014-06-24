@@ -6,6 +6,14 @@ load "$NCARG_ROOT/lib/ncarg/nclscripts/wrf/WRFUserARW.ncl"
 ;gsn_define_colormap(wks,"wind_17lev")
 begin
 
+
+;******************************************************
+
+  print("\n\n**********************************************")
+  print("wrf_precip.ncl")
+
+;******************************************************
+
 ;******************************************************
 ; 
 ; NCL expects some or all of the following to be defined on 
@@ -122,7 +130,8 @@ do i=0,ntimes-1
     ; Plotting options for Wind Vectors                 
     opts = res         
     opts@FieldTitle = "Wind"       ; overwrite Field Title
-    opts@NumVectors = 47           ; density of wind barbs
+    ;opts@NumVectors = 47           ; density of wind barbs
+    opts@vcMinDistanceF = 0.08      ; minimum distance between barbs
     vector = wrf_vector(a,wks,u10,v10,opts)
     delete(opts)
     

@@ -85,7 +85,7 @@ begin
     mpres@mpLandFillColor        = "Transparent"
     mpres@mpOceanFillColor       = -1
     mpres@mpInlandWaterFillColor = -1
-    mpres@mpDataBaseVersion  = "HighRes"
+    ;mpres@mpDataBaseVersion  = "HighRes"
 
 
 
