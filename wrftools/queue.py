@@ -35,7 +35,7 @@ def qsub(job_script):
         @job_id -- the job id returned by the PBS system """
  
     logger = loghelper.get_logger('wrf_forecast')
-    logger.debug('submitting job %s' % job_script)
+    #logger.debug('submitting job %s' % job_script)
     
     cmd  = 'qsub %s ' % job_script
     logger.debug(cmd)

@@ -12,7 +12,7 @@ for f in sys.argv[1:]:
 
     #varlist = "LU_INDEX,ZNU,ZNW,ZS,DZS,VAR_SSO,LAP_HGT,HFX_FORCE,LH_FORCE,TSK_FORCE,HFX_FORCE_TEND,LH_FORCE_TEND,TSK_FORCE_TEND,NEST_POS,FNM,FNP,RDNW,RDN,DNW,DN,CFN,CFN1,RDX,RDY,RESM,CF1,CF2,CF3,SHDMAX,SHDMIN,SNOALB,TSLB,SMOIS,SH2O,SMCREL,SEAICE,XICEM,SFROFF,UDROFF,IVGTYP,ISLTYP,VEGFRA,ACGRDFLX,ACSNOM,SNOW,SNOWH,CANWAT,LAI,VAR,MAPFAC_M,MAPFAC_U,MAPFAC_V,MAPFAC_MX,MAPFAC_MY,MAPFAC_UX,MAPFAC_UY,MAPFAC_VX,MF_VX_INV,MAPFAC_VY,F,E,TISO,MAX_MSTFX,MAX_MSTFY,REFL_10CM,OLR,ALBEDO,CLAT,ALBBCK,EMISS,NOAHRES,FLX4,FVB,FBUR,FGSN,ACHFX,ACLHF,SAVE_TOPO_FROM_REAL,SEED1,SEED2".split(",")
     varlist = "LU_INDEX,ZNU,ZNW,ZS,DZS,NEST_POS,FNM,FNP,RDNW,RDN,DNW,DN,CFN,CFN1,RDX,RDY,RESM,CF1,CF2,CF3,TSLB,SEAICE,IVGTYP,ISLTYP,VEGFRA,ACGRDFLX,LAI,MAPFAC_M,F,E,TISO,MAX_MSTFX,MAX_MSTFY,OLR,ALBEDO,ALBBCK,ACHFX,ACLHF,SAVE_TOPO_FROM_REAL,SEED1,SEED2,XLAT_U,XLONG_U,XLAT_V,XLONG_V"
-    levels = "-d bottom_top,0,20 -d bottom_top_stag,0,21"
+    levels = "-d bottom_top,0,25 -d bottom_top_stag,0,26"
     cmd = "ncks -4 -l 9 -O -x -v %s %s %s %s" % (varlist, levels, f, newname)
     print cmd
     subprocess.call(cmd, shell=True)
@@ -29,7 +29,7 @@ for f in sys.argv[1:]:
     
     if not os.path.exists(newname):
         print 'something gone wrong'
-        break
+        continue
     else:
         os.remove(f)
         # rename the lower-level files back to original name

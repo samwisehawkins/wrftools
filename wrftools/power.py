@@ -45,6 +45,9 @@ def power(config):
     pquants         = config['pquants']
     quantiles       = np.array(pquants)
     
+    
+    logger.debug(pnorm)
+    
     if pdist:
         n=pdist
             
@@ -92,7 +95,7 @@ def power(config):
     
     use_locs = []
     for l,loc in enumerate(location):
-        logger.info('Predicting power output for %s' % loc )
+    
         pcurve_file = '%s/%s.csv' %(pcurve_dir, loc)
         
         # mask power data if no power curve found for this park
@@ -100,7 +103,8 @@ def power(config):
             #logger.debug("Power curve: %s not found, skipping" % pcurve_file)
             pdata[:,l,:,:] = np.ma.masked
             continue
-
+        
+        logger.info('Predicting power output for %s' % loc )
         #
         # Open power curve
         #
@@ -234,6 +238,10 @@ class PowerCurve(object):
         return result.reshape(speed.shape)
         
 
+    def scale(self, factor):
+        self._pcentres = self._pcentres*factor
+        
+        
     def power_dist(self, speed, direction, sstd=None, dstd=None, n=None, normalise=False):
         """Returns an array of power interpolated from the speed and direction pairs,
         with independent normal distribution applied to the speed and direction.
@@ -260,6 +268,7 @@ class PowerCurve(object):
         pdist = np.array([self._spline(s,d) for (s,d) in zip(sdist.flatten(), ddist.flatten())])
         
         if normalise:
+            print '\n\n\n*********NORMALISING****************'
             pdist = pdist/float(np.max(self._pcentres))
         
         return pdist.reshape(speed.shape[0], n)

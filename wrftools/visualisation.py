@@ -35,7 +35,7 @@ def produce_ncl_plots(config):
     config -- dictionary containing various configuration options """
     
     logger = wrftools.get_logger()    
-    logger.info('*** RUNNING NCL SCRIPTS ***')
+
      
 
     domain         = config['domain']
@@ -56,6 +56,8 @@ def produce_ncl_plots(config):
     ncl_out_type   = config['ncl_out_type']
     nest_id        =  '%02d' % dom
 
+    logger.info('*** RUNNING NCL SCRIPTS FOR DOMAIN d%02d***' % dom)
+    
     if not os.path.exists(ncl_out_dir):
         os.makedirs(ncl_out_dir)
 
@@ -96,6 +98,7 @@ def produce_ncl_plots(config):
         #
         #cmd  = "ncl %s >> %s 2>&1" % (script, ncl_log)
         #qcmd = 'qrsh -cwd -l mem_total=36G "%s"' % cmd
+        logger.debug(script)
         
         queue = config['queue']
         if queue['ncl']:

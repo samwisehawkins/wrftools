@@ -353,8 +353,96 @@ for init_time in init_times:
 
     
     
+        
     #
-    # Post processing
+    # Visualisation
+    #
+    if visualise:
+        if config['visualise.ncl']:
+            for d in range(1,max_dom+1):
+                try:
+                    logger.debug('Processing domain d%02d' %d)
+                    config['dom'] = d
+                    wrftools.produce_ncl_plots(config)
+                except Exception, e:
+                    logger.error('*** FAIL VISUALISE ***')
+                    wrftools.handle(e, fail_mode, full_trace)
+    
+        
+        if config['visualise.ol']:
+            for d in range(1,max_dom+1):
+                try:
+                    logger.debug('Processing domain d%02d' %d)
+                    config['dom'] = d
+                    wrftools.produce_ncl_ol_plots(config)
+                except Exception, e:
+                    logger.error('*** FAIL NCL ***')
+                    wrftools.handle(e, fail_mode, full_trace)
+    
+    
+    #
+    # Time series extraction
+    #
+    if extract and time_series:
+        for d in range(1,max_dom+1):
+            try:
+                logger.debug('Processing domain d%02d' %d)
+                config['dom'] = d
+                config['grid_id'] = d
+                wrftools.extract_tseries(config)
+            except Exception, e:
+                logger.error('*** FAIL NCL TIME SERIES ***')
+                wrftools.handle(e, fail_mode, full_trace)
+
+                
+
+
+
+                
+                
+    #
+    # Met verification tools
+    #
+    if met:
+        for d in range(1,max_dom+1):        
+            try:
+                config['dom'] = d
+                wrftools.run_point_stat(config)
+            except Exception, e:
+                wrftools.handle(e, fail_mode, full_trace)
+
+   
+    
+    
+    if power:
+        for d in range(1,max_dom+1):
+            try:
+                config['dom'] = d
+                config['grid_id'] = d
+                wrftools.power(config)
+            except Exception, e:
+                logger.error('*** FAIL POWER CONVERSION ***')
+                wrftools.handle(e, fail_mode, full_trace)
+
+
+    if extract and time_series:
+        for d in range(1,max_dom+1):
+            try:
+                config['dom'] = d
+                wrftools.ncdump(config)
+            except Exception, e:
+                logger.error('*** FAIL TIME SERIES DUMPING  ***')
+                wrftools.handle(e, fail_mode, full_trace)
+
+
+            
+    if dispatch:
+        dry_run = run_level=='DUMMY'
+        wrftools.dispatch(config)
+
+        
+    #
+    # Post processing - do this after visualisation
     #
     if post:
         if hyperslab:
@@ -397,97 +485,12 @@ for init_time in init_times:
                     wrftools.convert_grib(config)
                 except Exception, e:
                     logger.error('*** FAIL GRIB CONVERSION ***')
-                    wrftools.handle(e, fail_mode, full_trace)
-
-
-                
-                
-    #
-    # Met verification tools
-    #
-    if met:
-        for d in range(1,max_dom+1):        
-            try:
-                config['dom'] = d
-                wrftools.run_point_stat(config)
-            except Exception, e:
-                wrftools.handle(e, fail_mode, full_trace)
-
+                    wrftools.handle(e, fail_mode, full_trace)        
         
-    #
-    # Visualisation
-    #
-    if visualise:
-        if config['visualise.ncl']:
-            for d in range(1,max_dom+1):
-                try:
-                    logger.debug('Processing domain d%02d' %d)
-                    config['dom'] = d
-                    wrftools.produce_ncl_plots(config)
-                except Exception, e:
-                    logger.error('*** FAIL VISUALISE ***')
-                    wrftools.handle(e, fail_mode, full_trace)
-    
         
-        if config['visualise.ol']:
-            for d in range(1,max_dom+1):
-                try:
-                    logger.debug('Processing domain d%02d' %d)
-                    config['dom'] = d
-                    wrftools.produce_ncl_ol_plots(config)
-                except Exception, e:
-                    logger.error('*** FAIL NCL ***')
-                    wrftools.handle(e, fail_mode, full_trace)
-    
-    if extract and time_series:
-        for d in range(1,max_dom+1):
-            try:
-                logger.debug('Processing domain d%02d' %d)
-                config['dom'] = d
-                config['grid_id'] = d
-                wrftools.extract_tseries(config)
-            except Exception, e:
-                logger.error('*** FAIL NCL TIME SERIES ***')
-                wrftools.handle(e, fail_mode, full_trace)
-
-                
-    #
-    # Some bug seems to be creeping in, causing the programme to 
-    # fail silently around here. I'm adding a sleep statement
-    # as I have a hunch this might be some kind of race condition
-    #
-    #logger.warn('*** SLEEPING FOR 1 SECONDS TO ENSURE TSERIES FILES ARE CLOSED ***')
-    #time.sleep(1)
-
-    
-    
-    
-    if power:
-        for d in range(1,max_dom+1):
-            try:
-                config['dom'] = d
-                config['grid_id'] = d
-                wrftools.power(config)
-            except Exception, e:
-                logger.error('*** FAIL POWER CONVERSION ***')
-                wrftools.handle(e, fail_mode, full_trace)
-
-
-    if extract and time_series:
-        for d in range(1,max_dom+1):
-            try:
-                config['dom'] = d
-                wrftools.ncdump(config)
-            except Exception, e:
-                logger.error('*** FAIL TIME SERIES DUMPING  ***')
-                wrftools.handle(e, fail_mode, full_trace)
-
-
-            
-    if dispatch:
-        dry_run = run_level=='DUMMY'
-        wrftools.dispatch(config)
-
+        
+        
+        
     if finalise:
         logger.info('*** FINALISE ***')
         
