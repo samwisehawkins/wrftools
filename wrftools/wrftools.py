@@ -802,6 +802,7 @@ def get_bdy_times(config):
     #    logger.debug("%s" %t)
     
     return bdy_times
+    
 
 def get_bdy_filenames(grb_fmt, bdy_times):
     """ Creates a list of boundary conditions filenames
@@ -818,6 +819,7 @@ def get_bdy_filenames(grb_fmt, bdy_times):
     logger.debug('*** GENERATING BOUNDARY CONDITION FILENAMES ***')
    
     filelist = [sub_date(grb_fmt, init_time=bdy_times[0], valid_time=b) for b in bdy_times]
+    logger.debug(filelist)
     return filelist
     
 
