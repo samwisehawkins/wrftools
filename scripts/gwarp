@@ -1,0 +1,11 @@
+#!/bin/bash
+source $HOME/.bashrc
+for f in "$@"
+do
+    bname=`basename "$f" .tiff`
+    echo $bname
+    gdalwarp -t_srs EPSG:3857 -dstnodata 255 $f $bname.tmp.tiff
+    gdal_translate -of PNG -scale $bname.tmp.tiff $bname.png
+    rm *.tmp.tiff
+    rm *.tmp.png     
+done
