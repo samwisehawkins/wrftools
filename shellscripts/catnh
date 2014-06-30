@@ -1,7 +1,0 @@
-#!/bin/bash
-
-head -1 $1 | sed "s/^ *//;s/ *$//;s/ \{1,\}/,/g" 
-for ARG in "$@"
-do
-    sed 1d $ARG | sed "s/^ *//;s/ *$//;s/ \{1,\}/,/g" 
-done
