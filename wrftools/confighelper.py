@@ -255,7 +255,7 @@ def expand_leaf(node, scope, expr):
 
 
 def expand_evar(s, env, expr):
-    print 'expand evars called'
+
     vars = expr.findall(s)
     for v in vars:
         vname = v[2:-1]
@@ -305,21 +305,21 @@ def parse_cmd_args(args, format="json"):
         import yaml
     else:
         raise ConfigError("configuration format: %s not understood, use json or yaml" % format)
-    print format
+
     for (k,v) in args.items():
         #if v and type(v)==type("") and ( lexpr.match(v) or dexpr.match(v)):
         if v and type(v)==type(""):
-            print v, type(v)
+
             if format in JSON:
                 jv = json.loads(v)
             elif format in YAML:
                 jv = yaml.load(v)
-                print jv, type(jv)
+
 
             jargs[k] = jv
         else:
             jargs[k] = v
-    print jargs
+
     return jargs
          
   

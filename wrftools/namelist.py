@@ -1,22 +1,21 @@
 import time, datetime
-import collections
 import re
 from StringIO import StringIO
 import ast
-#from odict import OrdDict # we can switch to native OrderedDict now
 from collections import OrderedDict
-from csvtools import CommentedFile
+from commentedfile import CommentedFile
 import os
 
 class Namelist(object):
-    """Thin wrapper around a dictionary of settings, and a dictionary of sections.
+    """Class representing a FORTRAN namelist, as used for WRF configuration settings. 
+    Class is composed of a dictionary of settings, and a dictionary of sections.
     
     The Namelist.settings provides one single dictionary specifying all of the settings
-    while the Namelist.sections provides a list of settings keys within each section.
-    E.g. sections['domain'] = ['max_dom', 'i_parent_start', 'j_parent_start', ...]
-    Problem is how to do a reverse lookup, i.e. given a key, find the section
+    while the Namelist.sections is a dictionary which maps section names to subsets of keys. 
+    E.g. namelist.sections['domain'] = ['max_dom', 'i_parent_start', 'j_parent_start', ...]
     
-    Bit of a hack, there are surely much better ways to do this"""
+    
+    """
 
     def __init__(self):
         self.settings = OrderedDict()
@@ -256,17 +255,6 @@ def read_namelist(filename):
     return namelist
 
 
-def add_cmd_args(config, cmd_args):
-    """ Parses command-line arguments and updates the config
-    dictionary to add or override existing settings.
-    
-    Arguments:
-        @config   -- a dictionary of existing settings
-        @cmd_args -- list of command-line arguments to parse and add to config
-                     command line arguments should be of the form --key=value"""
-    parts = [a.split('=') for a in cmd_args]
-    updates = dict([(p[0].lstrip('--'), parse(p[1]))for p in parts ])
-    config.update(updates)
 
         
 def parse(str_input):
@@ -589,10 +577,9 @@ obs_file          = /home/slha/domains/obs/adpupa.nc
     #f = StringIO(namelist_string)
     #namelist = from_file(f)
     namelist = read_namelist('/home/slha/forecasting/domains/aberdeen/resource/namelist.input')
-    print namelist.settings['gfdda_inname']
-    
+   
     print namelist
-    print '\n\n\n'
+    print '\n'
     
 
     

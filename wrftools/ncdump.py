@@ -66,7 +66,7 @@ def main():
 
 def ncdump(config):
     
-    logger = loghelper.get_logger(config['log_name'])
+    logger = loghelper.get_logger(config['log.name'])
     
     # subset of config to be used for expanding filenames
     scope = {'init_time' : config['init_time'],
@@ -89,7 +89,7 @@ def ncdump(config):
             files = glob.glob(tseries_files)
             logger.debug("found %d files" % len(files))
 
-        dump(files, entry, scope, log_name=config['log_name'])
+        dump(files, entry, scope, log_name=config['log.name'])
     
     
     

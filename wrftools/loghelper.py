@@ -3,7 +3,7 @@ import logging
 def create_logger(config):
     
 
-    logger = create(config['log_name'],config['log_level'], config['log_fmt'],config.get('log_file'), config.get('log_mail'), config.get('mailto'), config.get('mail_subject'), config.get('mail_level'),config.get('mail_buffer'))
+    logger = create(config['log.name'],config['log.level'], config['log.fmt'],config.get('log.file'), config.get('log.mail'), config.get('log.mail.to'), config.get('log.mail.subject'), config.get('log.mail.level'),config.get('log.mail.buffer'))
     return logger
 
 def get_logger(name):
@@ -55,3 +55,6 @@ def create(name, log_level, log_fmt, log_file=None, log_mail=None, mailto=None, 
 def get(name):
     return logging.getLogger(name)
         
+        
+def shutdown():
+    logging.shutdown()

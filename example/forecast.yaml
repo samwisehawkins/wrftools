@@ -30,16 +30,16 @@ start              : 2013-06-14 00:00:00     # first initial time
 end                : 2013-06-14 00:00:00     # final *inital time*, not forecast end time
 init_interval      : 24                      # period between inital times
 max_dom            : 1                       # maximum number of nests
-fcst_hours         : 12                      # length of forecast
+fcst_hours         : 72                      # length of forecast
 
 
 #************************************************
 # Components to run
 #************************************************
-sst               : false    # fetch SST field from seperate source
+sst               : true     # fetch SST field from seperate source
 fetch             : true     # fetch external files
 fetch.gribmaster  : true     # see gribmaster section
-fetch.sst         : false    
+fetch.sst         : true    
 prepare           : true
  
 simulate          : true
@@ -52,12 +52,11 @@ simulate.real     : true
 simulate.ndown    : false
 simulate.timing   : true 
 simulate.status   : true     # write json status file specifying time of last update etc
-
 post              : true     # run post-processing steps, see section post
 post.upp          : false    # Universal Post Processor
 post.metadata     : true     # add metadata as attributes to netcdf files
 post.compress     : true     # compress wrfout files using NCO
-post.hyperslab    : true     # hyperslab files via ncks operator
+post.hyperslab    : true     # hyperslab using ncks
 power             : true     # calculate power production at points
 visualise         : true     # see visualise section
 visualise.ol      : true     # run openlayers visualisation (requiress VAPOR, ImageMagik)
@@ -88,24 +87,35 @@ metadata          :                        # everything within this will be copi
 # Shared  
 #************************************************
 base_dir          : $(HOME)/forecasting/domains                
-wrftools_dir      : $(HOME)/code/wrftools/devel                 # location of local wrftools repository
+wrftools_dir      : $(HOME)/code/wrftools/master                # location of local wrftools repository
 working_dir       : "%(base_dir)/%(domain)/%(model_run)"        # this should replace the (confusing) working_dir
 tmp_dir           : $(HOME)/forecasting/tmp                     # temporary directory
-web_dir           : $(HOME)/web2/forecast                       # convenience for copying plots
+web_dir           : $(HOME)/web/forecast                       # convenience for copying plots
 
 #************************************************
 # Logging
 #************************************************
-log_name          : wrf_forecast                           # name of logger object
-log_level         : DEBUG                                  # log level to write to file   
-log_file          : "%(working_dir)/forecast.log"          #
-log_fmt           : "%(message)s"                          # see logging module for format codes
-mail_level        : INFO                                   # log level for email
-#mailto            : sam.hawkins@vattenfall.com            # send log email here
-mail_buffer       : 10000                                  # how many messages to collate in one email
-mail_subject      : "Operational WRF log"                  # subject to use in email 
+#log_name          : wrf_forecast                           # name of logger object
+#log_level         : DEBUG                                  # log level to write to file   
+#log_mail          : INFO                                   # level to mail
+#log_file          : "%(working_dir)/forecast.log"          #
+#log_fmt           : "%(message)s"                          # see logging module for format codes
+#mail_level        : INFO                                   # log level for email
+##mailto            : sam.hawkins@vattenfall.com             # send log email here
+#mail_buffer       : 100000                                 # how many messages to collate in one email
+#mail_subject      : "Operational WRF log"                  # subject to use in email 
 
 
+log.name         : wrf_forecast
+log.level        : DEBUG
+log.fmt          : "%(message)s"                           # see logging module for format codes
+log.mail         : false
+log.mail.level   : INFO
+log.mail.to      : sam.hawkins@vattenfall.com
+log.mail.subject : "Operational WRF log"
+log.mail.buffer  : 1000000
+
+ 
 #************************************************
 # Status file
 #************************************************
@@ -119,7 +129,7 @@ status_file       : "%(working_dir)/json/status.json"           # write various 
 #************************************************
 dry_run           : false
 full_trace        : true                                   # log a full stack trace of exceptions
-fail_mode         : exit           # CONTINUE, EXIT
+fail_mode         : continue                               # CONTINUE, EXIT
 run_level         : run            # RUN, DUMMY
 cmd_timing        : false
 
@@ -133,8 +143,10 @@ queue:                                                          # queue to use. 
   real.exe    : false
   ndown.exe   : false
   wrf.exe     : false
-  ncl         : false
+  ncl         : post.q
   nccopy      : post.q
+  ncks        : post.q
+
 
 host_file         : "%(working_dir)/hostfile"                # host file to use for mpirun, not needed if using SGE submission
 
@@ -168,6 +180,8 @@ poll_interval:
   wrf.exe      : 10
   ncl          : 1
   nccopy       : 1
+  ncks         : 1
+
 
 max_job_time: 
   ungrib.exe  : 10
@@ -178,6 +192,7 @@ max_job_time:
   wrf.exe     : 60
   ncl         : 10
   nccopy      : 10
+  ncks        : 10
 
 queue_log:
   ungrib.exe  : ungrib.log
@@ -188,7 +203,7 @@ queue_log:
   wrf.exe     : wrf.log
   nccopy      : nccopy.log
   ncl         : ncl.log
-
+  ncks        : ncks.log
   
 #************************************************
 # Prepare/simulate
@@ -202,11 +217,20 @@ met_em_dir        : "%(working_dir)/met_em/%iY-%im-%id_%iH"     # location of me
 namelist_wps      : "%(working_dir)/namelist.wps"               # location of namelist.wps file to use
 namelist_input    : "%(working_dir)/namelist.input"             # location of namelist.input file to use
 grb_dir           : $(HOME)/forecasting/domains/GFS/operational # location of boundary conditions once downloaded
-grb_input_fmt     : "%(grb_dir)/GFS_Global_0p5deg_%iy%im%id_%iH%iM_fh%fH.grb"
+
+grb_input_fmt     : 
+    GFS: "%(grb_dir)/GFS_Global_0p5deg_%iy%im%id_%iH%iM_fh%fH.grb"
+
+
+grb_input_delay :       # number of hours delay to apply to initial time to derive boundary conditions filename
+    SST: 24
+    
+    
 history_interval  : 60
 bdy_interval      : 3                                           # hours between boundary conditions
 vtable            :                                             # Vtables to use in the form prefix: vtable
-    GFS: Vtable.GFS
+    GFS: Vtable.GFS    
+
 wrfout_dir        : "%(working_dir)/wrfout"                     # move wrfout files here after WRF has completed 
 
 prepare.create    : 
@@ -248,8 +272,7 @@ prepare.copy      : []       # list of arguments to consecutive linux cp command
 upp_dir                 : $(HOME)/UPPV1.0
 compression_level       : 9                # Compresion level passed to -L flag
 post.met                : false            # MET verification tool
-post.hyperslab.dimspec  : "-d bottom_top,0,20 -d bottom_top_stag,0,21"  # dimspec argument passed to NetCDF operators
-
+post.hyperslab.dimspec  : "-d bottom_top,0,25 -d bottom_top_stag,0,26"                 # d argument to ncks
 
 #************************************************
 # Gribmaster settings
@@ -271,7 +294,7 @@ convert_grb       : false
 sst_delay           : 24                    # number of hours SST field is delayed
 sst_server          : polar.ncep.noaa.gov
 sst_server_dir      : /pub/history/sst/ophi
-sst_local_dir       : /home/slha/forecasting/domains/SST
+sst_local_dir       : "$(HOME)/forecasting/domains/SST"
 sst_filename        : rtg_sst_grb_hr_0.083.%iY%im%id
 sst_vtable          : Vtable.SST
 
@@ -291,7 +314,7 @@ ncl_code_dir   : "%(wrftools_dir)/ncl"
 ncl_out_dir    : "%(working_dir)/plots/%iHZ"                                           # inital time will be substitued in
 ncl_code       : 
     - "%(ncl_code_dir)/wrf_surface.ncl"
-    - "%(ncl_code_dir)/wrf_time_series.ncl"
+#    - "%(ncl_code_dir)/wrf_time_series.ncl"
     - "%(ncl_code_dir)/wrf_precip.ncl"
     - "%(ncl_code_dir)/wrf_t2.ncl"
     - "%(ncl_code_dir)/wrf_sst.ncl"
@@ -326,7 +349,7 @@ ncdump:
         coord_vars    : [time,location,height]
         global_atts   : [GRID_ID,DOMAIN,MODEL_RUN,DX,DY]
         var_atts      : [units,description]
-        dir           : /home/slha/forecasting/development/json
+        dir           : "%(working_dir)/json"
         fname         : fcst_data_d%dd_%iHZ.json
         format        : json
         float_format  : "%0.3f"
@@ -344,7 +367,7 @@ ncdump:
         coord_vars    : [time,location,height]
         global_atts   : [GRID_ID,DOMAIN,MODEL_RUN,DX,DY]
         var_atts      : [units,description]
-        dir           : /home/slha/forecasting/development/json
+        dir           : "%(working_dir)/json"
         fname         : power_d%dd_%iHZ.json
         format        : json
         float_format  : "%0.3f"
@@ -362,7 +385,7 @@ ncdump:
         global_atts   : [GRID_ID,DOMAIN,MODEL_RUN,DX,DY]
         var_atts      : [units,description]
         coord_vars    : [time,location,height]
-        dir           : /home/slha/forecasting/development/aot
+        dir           : "%(working_dir)/aot"
         format        : aot
 
 
@@ -377,7 +400,7 @@ pdist           : 100          # False or N, where N is the number of sample poi
 sstd            : 1.0          # Standard deviation to apply to wind speed at each timestep
 dstd            : 3.5          # Standard deviation to apply to wind direction at each timestep
 pquants         : [10,30,70,90] # power quantiles to generate, using N sample values
-pnorm           : true         # Normalise power outputs by capacity
+pnorm           : false         # Normalise power outputs by capacity
 
 
 
@@ -388,13 +411,29 @@ dispatch.list:
   aot : 
     mailto     : "sam.hawkins@vattenfall.com"
     from       : "sam.hawkins@vattenfall.com"
-    subject    : "WRF plots"
+    subject    : "Edinburgh forecast "
     body       : "%(working_dir)/body.txt"
-    attach     : [ "%(working_dir)/plots/%iHZ/pp_d01_01.png"]
+    attach     : [ "%(working_dir)/aot/EDI/d01/%iy%im%id%iH.txt"]
+  jepn: 
+    mailto     : "jespernielsen.nissen@vattenfall.com"
+    from       : "sam.hawkins@vattenfall.com"
+    subject    : "WRF forecast test"
+    body       : "%(working_dir)/body.txt"
+    attach     : [ "%(working_dir)/plots/%iHZ/pp_d01_01.png", "%(working_dir)/plots/%iHZ/pp_d01_24.png", "%(working_dir)/plots/%iHZ/pp_d01_48.png","%(working_dir)/plots/%iHZ/pp_d01_72.png" ]
+  slh : 
+    mailto     : "sam.hawkins@vattenfall.com"
+    from       : "sam.hawkins@vattenfall.com"
+    subject    : "WRF %iHZ forecast"
+    body       : "%(working_dir)/body.txt"
+    attach     : [ "%(working_dir)/plots/%iHZ/pp_d01_01.png", "%(working_dir)/plots/%iHZ/pp_d01_24.png", "%(working_dir)/plots/%iHZ/pp_d01_48.png", "%(working_dir)/plots/%iHZ/pp_d01_72.png"]
 
-
-
-
+  vrd : 
+    mailto     : "forecasting.vet.amsterdam@etrm.vattenfall.com"
+    from       : "sam.hawkins@vattenfall.com"
+    subject    : "WRF Forecast Hamburg Test"
+    body       : "%(working_dir)/body.txt"
+    attach     : [ "%(working_dir)/aot/HAM/d01/%iy%im%id%iH.txt" ]
+  
 #************************************************
 # Finalise
 #************************************************
@@ -410,13 +449,6 @@ finalise.move: []
 finalise.remove: 
   - "%(wps_run_dir)/GFS*"
   - "-r %(met_em_dir)"
-  - "%(working_dir)/plots/%iHZ/*.xml"
-  - "%(working_dir)/plots/%iHZ/*.ps"
-  - "%(working_dir)/plots/%iHZ/*.tiff"
-  - "%(working_dir)/plots/%iHZ/*.png"
-  
+
 finalise.run:
   - "zip -r %(web_dir)/img/%iHZ.zip %(web_dir)/img/%iHZ"
-  
-  
-  

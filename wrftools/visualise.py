@@ -1,8 +1,6 @@
 import os
-import wrftools
-import io
 import glob
-
+import shared
 
 __all__ = ['produce_ncl_plots', 'produce_ncl_ol_plots']
 
@@ -34,7 +32,7 @@ def produce_ncl_plots(config):
     Arguments:
     config -- dictionary containing various configuration options """
     
-    logger = wrftools.get_logger()    
+    logger = shared.get_logger()    
 
      
 
@@ -52,7 +50,7 @@ def produce_ncl_plots(config):
     fcst_file      = '%s/wrfout_d%02d_%s:00:00.nc' %(wrfout_dir, dom, init_time.strftime("%Y-%m-%d_%H"))
     ncl_in_file    = fcst_file
     ncl_loc_file   = config['locations_file']
-    ncl_out_dir    = wrftools.sub_date(config['ncl_out_dir'], init_time=init_time)
+    ncl_out_dir    = shared.sub_date(config['ncl_out_dir'], init_time=init_time)
     ncl_out_type   = config['ncl_out_type']
     nest_id        =  '%02d' % dom
 
@@ -106,7 +104,7 @@ def produce_ncl_plots(config):
         else:
             cmd  = """ncl 'ncl_in_file="%s"' 'ncl_out_dir="%s"' 'ncl_out_type="%s"' 'ncl_loc_file="%s"' %s 2>&1 >> %s/ncl.log""" % (ncl_in_file,ncl_out_dir, ncl_out_type, ncl_loc_file, script, working_dir)
         
-        ret = wrftools.run(cmd, config)
+        ret = shared.run(cmd, config)
 
 
 def produce_ncl_ol_plots(config):
@@ -131,7 +129,7 @@ def produce_ncl_ol_plots(config):
     Arguments:
     config -- dictionary containing various configuration options """
     
-    logger = wrftools.get_logger()    
+    logger = shared.get_logger()    
     logger.info('*** RUNNING NCL SCRIPTS ***')
      
     working_dir  = config['working_dir']
@@ -146,14 +144,14 @@ def produce_ncl_ol_plots(config):
     init_time      = config['init_time']
     dom            = config['dom']
     fcst_file      = '%s/wrfout_d%02d_%s:00:00.nc' %(wrfout_dir, dom, init_time.strftime("%Y-%m-%d_%H"))
-    ncl_out_dir    = wrftools.sub_date(config['ncl_ol_out_dir'], init_time=init_time)
+    ncl_out_dir    = shared.sub_date(config['ncl_ol_out_dir'], init_time=init_time)
     ncl_out_type   = config['ncl_out_type']
     nest_id        =  '%02d' % dom
     
 
     ncl_in_file    = fcst_file
     ncl_loc_file   = config['locations_file']
-    ncl_out_dir    = wrftools.sub_date(config['ncl_out_dir'], init_time=init_time)
+    ncl_out_dir    = shared.sub_date(config['ncl_out_dir'], init_time=init_time)
     ncl_out_type   = config['ncl_out_type']
 
 
@@ -205,7 +203,7 @@ def produce_ncl_ol_plots(config):
 
         cmd  = """ncl 'ncl_in_file="%s"' 'ncl_out_dir="%s"' 'ncl_out_type="%s"' 'ncl_loc_file="%s"' %s 2>&1 >> %s/ncl.log""" % (ncl_in_file,ncl_out_dir, ncl_out_type, ncl_loc_file, script, working_dir)
 
-        ret = wrftools.run_cmd(cmd, config)
+        ret = shared.run_cmd(cmd, config)
         
         
         gwarp = config['gwarp']
@@ -213,34 +211,34 @@ def produce_ncl_ol_plots(config):
         
         cmd = "%s %s/*.tiff" %(gwarp, ncl_out_dir)
         logger.debug(cmd)
-        wrftools.run_cmd(cmd, config)
+        shared.run_cmd(cmd, config)
 
         
         
 def transfer_to_web_dir(config):
     """ Transfers all plots in output folder to web folder"""
     
-    logger = wrftools.get_logger()    
+    logger = shared.get_logger()    
     logger.debug('Transferring plot files to web dir')
     init_time      = config['init_time']    
     full_trace     = config['full_trace']
-    ncl_out_dir    = wrftools.sub_date(config['ncl_out_dir'], init_time=init_time)
-    ncl_web_dir    = wrftools.sub_date(config['ncl_web_dir'], init_time=init_time)
+    ncl_out_dir    = shared.sub_date(config['ncl_out_dir'], init_time=init_time)
+    ncl_web_dir    = shared.sub_date(config['ncl_web_dir'], init_time=init_time)
     
     if not os.path.exists(ncl_web_dir):
         os.makedirs(ncl_web_dir)
     
     flist = glob.glob(ncl_out_dir+'/*')
-    wrftools.transfer(flist, ncl_web_dir, mode='copy', debug_level='NONE')
+    shared.transfer(flist, ncl_web_dir, mode='copy', debug_level='NONE')
 
-    ncl_out_dir    = wrftools.sub_date(config['ncl_ol_out_dir'], init_time=init_time)
-    ncl_web_dir    = wrftools.sub_date(config['ncl_ol_web_dir'], init_time=init_time)
+    ncl_out_dir    = shared.sub_date(config['ncl_ol_out_dir'], init_time=init_time)
+    ncl_web_dir    = shared.sub_date(config['ncl_ol_web_dir'], init_time=init_time)
     
     if not os.path.exists(ncl_web_dir):
         os.makedirs(ncl_web_dir)
     
     flist = glob.glob(ncl_out_dir+'/*')
-    wrftools.transfer(flist, ncl_web_dir, mode='copy', debug_level='NONE')
+    shared.transfer(flist, ncl_web_dir, mode='copy', debug_level='NONE')
 
 
     

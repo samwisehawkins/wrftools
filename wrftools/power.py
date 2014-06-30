@@ -34,7 +34,7 @@ def power(config):
     if __name__ == "__main__":
         logger = loghelper.create_logger(config)
     else:
-        logger = loghelper.get_logger(config['log_name'])
+        logger = loghelper.get_logger(config['log.name'])
     
     # Number of samples to use should be in here
     # Whether to normalise power should be in here    
