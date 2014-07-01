@@ -30,7 +30,7 @@ start              : 2013-06-14 00:00:00     # first initial time
 end                : 2013-06-14 00:00:00     # final *inital time*, not forecast end time
 init_interval      : 24                      # period between inital times
 max_dom            : 1                       # maximum number of nests
-fcst_hours         : 72                      # length of forecast
+fcst_hours         : 6                       # length of forecast
 
 
 #************************************************

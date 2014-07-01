@@ -1,0 +1,34 @@
+INSTALL
+--------
+
+
+## Dependencies
+
+### External tools
+
+The following external tools are required. All are findable via your favourite search engine.
+
+* WRF        - obviously
+* WPS        - ditto
+* gribmaster - fetches external boundary conditions 
+* NCL        - for visualisation and time-series extraction
+* NCO        - needed for adding metadata and compression (compiled with netCDF4 support)
+
+### Python dependecies
+
+Despite trying to reduce the python dependencies to a bare minimimum, 
+there are still some modules which are not included with a standard
+python installation. These are:
+
+* pyyaml - needed if yaml is used for config files (recommended)
+* docopt - intelligent parsing of command-line arguments
+* numpy
+
+## Quick start
+
+ 1. Clone wrftools repository `git clone https://github.com/samwisehawkins/wrftools.git`
+ 2. Create a local working directory
+ 3. Link `run_forecast.py` into working directory 
+ 4. Copy `examples/forecast.yaml` into working directory 
+ 5. Edit the new `forecast.yaml` file
+ 6. `$> python run_forecast.py --config=forecast.yaml`

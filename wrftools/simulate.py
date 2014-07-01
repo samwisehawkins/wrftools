@@ -4,6 +4,7 @@ import subprocess
 from collections import OrderedDict
 import datetime
 import re
+import glob
 import shared
 
 
@@ -849,7 +850,7 @@ def move_wrfout_files(config):
 
     # Move WRF output files to new directory
     flist = glob.glob(wrf_run_dir+'/wrfout*')
-    transfer(flist, wrfout_dir, mode='move', debug_level='debug')
+    shared.transfer(flist, wrfout_dir, mode='move', debug_level='debug')
 
     # Move log files to new directoy
     #flist = glob.glob(wrf_run_dir+'/rsl.*')

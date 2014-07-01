@@ -36,10 +36,10 @@ python installation. These are:
 
 ## Quick start
 
- 1. Clone wrftools repository `git clone 
- 2. Create a local working directory 
- 3. Link `run_forecast.py` into working directory
- 4. Copy `examples/forecast.yaml` into working directory
+ 1. Clone wrftools repository `git clone https://github.com/samwisehawkins/wrftools.git`
+ 2. Create a local working directory
+ 3. Link `run_forecast.py` into working directory 
+ 4. Copy `examples/forecast.yaml` into working directory 
  5. Edit the new `forecast.yaml` file
  6. `$> python run_forecast.py --config=forecast.yaml`
 
