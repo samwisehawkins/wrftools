@@ -2,14 +2,12 @@
 
 Dependencies: json or yaml, docopt
 
-confighelper.py allows options to be specified in a json or yaml config file and overridden on the command line. 
-The range of valid options to a command-line tool can be specified in the docstring as optional options i.e surrounded by
-square braces as in [--option], to make the usage pattern meaninful. 
-
-To use this module within another python module, import and call the config function with the calling modules docstring
-and command line arguments:
+confighelper.py allows options to be specified in a json or yaml config file **and** overridden on the command line. 
+To use this module, import and call the config function passing in the calling module's docstring
+and command line arguments e.g.
     
-    "modules docstring in docopt recognised format"
+    mymodule.py
+    "mymodule.py docstring in docopt recognised format"
     
     import confighelper as conf
     config = conf.config(__doc__, sys.argv[1:] )
@@ -17,7 +15,7 @@ and command line arguments:
 Potential gotcha is that any defaults specified in the docstring will override those specified in the config file. 
 Therefore it is preferrable not to specify defaults in the docstring, but place them in a defaults config file. 
 
-Another gotcha is that the options will come back stripped of preceding "--", to allow the equivalent 
+Command-line options are stripped of preceding "--", to allow the equivalent 
 options to be specified in the config file without leading "--". 
 
 As an example, this module can be run from the command line:
@@ -56,9 +54,6 @@ LVAR  = re.compile('%\(.*?\)')                               # match rows contai
 CVAR = [re.compile('%\(.*\.'+e+'\)' ) for e in JSON + YAML]  # match rows containing config file specifiers
 
 
-
-
-
 class ConfigError(Exception):
     pass
 
@@ -67,7 +62,7 @@ def main():
  
     c = config(__doc__, sys.argv[1:] )
     
-    # Need these for pretty printing
+    # Need this for pretty printing
     import json       
     def date_handler(obj):
         return obj.isoformat() if hasattr(obj, 'isoformat') else obj
@@ -76,6 +71,18 @@ def main():
    
 
 def config(docstring, args, format="json", flatten=False):
+    """ this is the primary function, which takes a modules's docstring, 
+    a list of command line arguments (as in sys.argv[1:]) and returns a 
+    merged dictionary which is the result of reading any file specified
+    by a --config argument, and then merging into that any other command-line
+    arguments. 
+    
+    Arguments:
+    docstring -- calling module's docstring in docopt recognised format
+    args      -- command line arguments as in sys.argv[1:]
+    format    -- format for parsing configuration files (default json)
+    flatten   -- how to deal with hierachical inclusion of config files """
+    
     cargs  = docopt.docopt(docstring,args)
         
     if '--config-fmt' in cargs and cargs['--config-fmt']:
@@ -91,13 +98,14 @@ def config(docstring, args, format="json", flatten=False):
 
     elif format in YAML:
         import yaml
-        
+
+    # strip command line arguments of leading --
     cargs = {key.lstrip("--"): cargs[key] for key in cargs.keys()}
     
     # always parse command-line arguments as yaml, as this saves having to put quotes around arguments
     cargs = parse_cmd_args(cargs, format="yaml")
 
-    
+    # if a config file is specified, and is not 'falsy'
     if 'config' in cargs and cargs['config']:
         cfile = load(cargs['config'], flatten=flatten)
         merged = merge(cargs, cfile)
@@ -109,8 +117,18 @@ def config(docstring, args, format="json", flatten=False):
        
         
 def load(fname, evar=EVAR, lvar=LVAR, cvar=CVAR, flatten=False, format=None):
-    """Loads a config file, and recursively opens any subsets specified 
-        by a reference to another config file. Suppose in the parent we have:
+    """Loads a config file, and recursively opens any included config files 
+    
+    Arguments:
+    fname -- name of the file to load
+    evar  -- regular expression matching environment variable definition
+    lvar  -- regular expression matching local variable definition
+    cvar  -- regular expression matching included config file  definition
+    flatten -- how to merge hierachical nested config files, see below
+    format -- format to use for config file, json or yaml, default determine by file extension
+    
+    Suppose in the parent we have:
+        
         option1: value1
         option2: value2
         option3: %(config2.yaml)

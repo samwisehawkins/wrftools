@@ -278,7 +278,7 @@ for init_time in init_times:
             except Exception, e:
                 shared.handle(e, fail_mode, full_trace)
         
-        if config['sst']:
+        if config['simulate.ungrib'] and config['sst']:
             try:
                 simulate.ungrib_sst(config)
             except Exception, e:

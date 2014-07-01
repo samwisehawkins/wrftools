@@ -1,44 +1,51 @@
+import os
+import glob
 import shared
 
-def run_scripts(config):
-    """Simply runs whatever scripts are specified in the config file. 
-    Sets a few environment variables first """
-    logger = get_logger()
+    
+def finalise(config):
+    """Removes files, transfers etc."""
+
+    logger = shared.get_logger()
+
+    logger.info('*** FINALISING ***')
+    
+    working_dir    = config['working_dir']
     
     
-    domain_dir     = config['domain_dir']
-    domain         = config['domain']
-    model_run      = config['model_run']
-    init_time      = config['init_time']
-    nest_id        = config['dom']
-    loc_file       = config['locations_file']
-    scripts        = config['run_scripts']
+    links       = [shared.expand(x, config) for x in config['finalise.link']]
+    remove      = [shared.expand(x, config) for x in config['finalise.remove']]
+    subdirs     = [shared.expand(x, config) for x in config['finalise.create']]
+    copy        = [shared.expand(x, config) for x in config['finalise.copy']]
+    move        = [shared.expand(x, config) for x in config['finalise.move']]
+    run         = [shared.expand(x, config) for x in config['finalise.run']]
     
-    fcst_file      = '%s/%s/wrfout/wrfout_d%02d_%s:00:00.nc' %(domain_dir, model_run, nest_id, init_time.strftime("%Y-%m-%d_%H"))
-
-    os.environ['FCST_FILE']      = fcst_file
-    os.environ['LOCATIONS_FILE'] = loc_file
-    os.environ['NEST_ID']        = str(nest_id)
-    logger.info('*** RUNNING ADDITIONAL SCRIPTS ***')
-    logger.warn('Checking success of external scripts is not yet implemented')
-    for s in scripts:
-        run_cmd(s, config)
+        
+    fulldirs  = subdirs 
+    for d in fulldirs:
+        if not os.path.exists(d):
+            logger.debug('creating directory %s ' %d)
+            os.mkdir(d) 
+   
     
-    logger.info('*** FINISHED ADDITIONAL SCRIPTS ***')
+    for arg in move:
+        cmd = "mv %s" % arg
+        shared.run_cmd(cmd, config)
 
-
-def cleanup(config):
-    """Cleans up various files """
-    logger = get_logger()
-
-    logger.debug('**** CLEANUP FILES ****')
-    init_time   = config['init_time']
-    post_clean  = config['post_clean']
-    cleanup_dir = [sub_date(s, init_time=init_time) for s in post_clean]
+    for arg in copy:
+        cmd = "cp %s" % arg
+        shared.run_cmd(cmd, config)        
+        
+    for pattern in links:
+        shared.link(pattern)
     
-    for d in cleanup_dir:
-        cmd = 'rm -f %s' % d
-        logger.debug(cmd)
-        run_cmd(cmd, config)
-
-    logger.info('*** FINISHED CLEANUP ***')
+    for cmd in run:
+        shared.run_cmd(cmd, config)
+    
+    for pattern in remove:
+        flist = glob.glob(pattern)
+        for f in flist:
+            if os.path.exists(f):
+                os.remove(f)
+    
+    logger.info('*** DONE FINALISE ***')    

@@ -1,25 +1,30 @@
 README
 --------
 
-A set of python scripts for running WRF and associated
+A framework for running WRF and associated
 programmes, e.g. WPS, NCL etc.
 
 It is designed to be quickly hackable. There are some tools out there
 which run WRF, but they are not easily modified. This is designed to provide 
 an easy to use framework which is easily customised and modified. 
 
-This README file serves as documentation in the (hopefully temporary)
-absence of dedicated documentation. 
+This README file serves as documentation in the (temporary)
+absence of dedicated documentation. For more detailed docs, try the ./doc folder. 
+
 
 ## Dependencies
 
-The following external tools are required:
+### External tools
+
+The following external tools are required. All are findable via your favourite search engine.
 
 * WRF        - obviously
 * WPS        - ditto
-* gribmaster - fetches external boundary conditions
+* gribmaster - fetches external boundary conditions 
 * NCL        - for visualisation and time-series extraction
 * NCO        - needed for adding metadata and compression (compiled with netCDF4 support)
+
+### Python dependecies
 
 Despite trying to reduce the python dependencies to a bare minimimum, 
 there are still some modules which are not included with a standard
@@ -27,12 +32,13 @@ python installation. These are:
 
 * pyyaml - needed if yaml is used for config files (recommended)
 * docopt - intelligent parsing of command-line arguments
+* numpy
 
 ## Quick start
 
- 1. Clone wrftools repository
+ 1. Clone wrftools repository `git clone 
  2. Create a local working directory 
- 3. Link the run_forecast.py into working directory
+ 3. Link `run_forecast.py` into working directory
  4. Copy `examples/forecast.yaml` into working directory
  5. Edit the new `forecast.yaml` file
  6. `$> python run_forecast.py --config=forecast.yaml`
@@ -56,18 +62,19 @@ See [example/forecast.yaml](example/forecast.yaml) for an explanation of options
 The design is slowly evolving into a more modular structure, but one that allows all of the modules to be run together if so desired. 
 I will call these modules components, to distinguish them from pure python modules.  There are currently the following components:
 
-* fetch          - a thin wrapper around gribmaster
+* fetch          - a thin wrapper around gribmaster, fetches boundary conditions
 * prepare        - ensures correct files present, does some linking, updates namelist files
 * simulate       - runs WPS and WRF
 * post           - adds metadata, compresses files
 * visualise      - calls NCL with specified scripts. Note the English (i.e. correct ;) spelling
-* extract        - extracts time-series of variables at specified locations
-* finalise       - removes files, transfer locally, archive etc. 
+* extract        - extracts time-series of variables at specified locations, relies on NCL
+* finalise       - removes files, transfers locally, archive etc. 
 * dispatch       - send out emails, plots etc
 
 
-Each component can be run stand-alone, with a configuration file. Alternatively the
-[run_forecast.py](run_forecast.py) script will run all components specified.
+Each component has an associated python module, so everything to do with the fetch component is defined within fetch.py. 
+Each compoenent has an associated boolean option within the config file, so to run the functions associated with the fetch 
+component, set `fetch : true` in the config file, or use `--fetch=true` at the command line. 
 
 ## Configuration
 
@@ -80,6 +87,7 @@ Configuration is done via a config file, alhough options can also be overridden
 at the command line. json and yaml formats are understood. json has the advantage
 that a parser is included in standard python distributions. 
 However, I prefer YAML since the syntax is clearer, and the files can be commented.
+JSON will not be supported in future, unless there is a great need for it.
 
 Within a config file, environment variables can be specified accessed using `${var}`.
 Local variables defined elsewhere in tht config file can be specified  using `%(var)`.

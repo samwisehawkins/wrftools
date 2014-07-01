@@ -38,7 +38,7 @@ def dispatch(config):
     if __name__ == "__main__":
         logger = loghelper.create_logger(config)
     else:
-        logger = loghelper.get_logger(config['log_name'])
+        logger = loghelper.get_logger(config['log.name'])
 
     dist = config['dispatch.list']
     logger.info("dispatch.py sending files via email")
@@ -46,7 +46,7 @@ def dispatch(config):
     
     for name, entry in dist.items():
         logger.info("dispatching files for entry: %s" % name)
-        dispatch_entry(config, entry, dry_run=dry_run, log_name=config['log_name'])
+        dispatch_entry(config, entry, dry_run=dry_run, log_name=config['log.name'])
         
         
         

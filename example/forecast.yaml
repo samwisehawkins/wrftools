@@ -41,7 +41,6 @@ fetch             : true     # fetch external files
 fetch.gribmaster  : true     # see gribmaster section
 fetch.sst         : true    
 prepare           : true
- 
 simulate          : true
 simulate.wps      : true     # run WPS 
 simulate.ungrib   : true
@@ -95,17 +94,6 @@ web_dir           : $(HOME)/web/forecast                       # convenience for
 #************************************************
 # Logging
 #************************************************
-#log_name          : wrf_forecast                           # name of logger object
-#log_level         : DEBUG                                  # log level to write to file   
-#log_mail          : INFO                                   # level to mail
-#log_file          : "%(working_dir)/forecast.log"          #
-#log_fmt           : "%(message)s"                          # see logging module for format codes
-#mail_level        : INFO                                   # log level for email
-##mailto            : sam.hawkins@vattenfall.com             # send log email here
-#mail_buffer       : 100000                                 # how many messages to collate in one email
-#mail_subject      : "Operational WRF log"                  # subject to use in email 
-
-
 log.name         : wrf_forecast
 log.level        : DEBUG
 log.fmt          : "%(message)s"                           # see logging module for format codes
@@ -129,7 +117,7 @@ status_file       : "%(working_dir)/json/status.json"           # write various 
 #************************************************
 dry_run           : false
 full_trace        : true                                   # log a full stack trace of exceptions
-fail_mode         : continue                               # CONTINUE, EXIT
+fail_mode         : exit                                   # CONTINUE, EXIT
 run_level         : run            # RUN, DUMMY
 cmd_timing        : false
 

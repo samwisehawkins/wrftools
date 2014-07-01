@@ -1,3 +1,4 @@
+import os
 import shared
 
 
@@ -12,7 +13,7 @@ def compress(config):
     nccopy does not support the -O overwrite flag, so we need to manually rename the files,
     and remove the originals on sucess"""
     
-    logger=get_logger()
+    logger=shared.get_logger()
     logger.info("*** Compressing wrfout files ***")
     wrfout_dir = config['wrfout_dir']
     init_time  = config['init_time']
@@ -27,7 +28,7 @@ def compress(config):
         tmp_name = f + '.tmp'
         logger.debug("compressing %s to temporary file: %s" % (f, tmp_name))
         cmd = 'nccopy -k4 -d %s %s %s' %(comp_level, f, tmp_name)
-        run(cmd, config)
+        shared.run(cmd, config)
         if not os.path.exists(tmp_name):
             raise IOError("compression failed for %s" % f)
         
@@ -39,7 +40,7 @@ def compress(config):
     
 def hyperslab(config):
     
-    logger=get_logger()
+    logger=shared.get_logger()
     logger.info("*** Hyperslabbing wrfout files ***")
     wrfout_dir = config['wrfout_dir']
     init_time  = config['init_time']
@@ -54,7 +55,7 @@ def hyperslab(config):
         tmp_name = f + '.tmp'
         logger.debug("compressing %s to temporary file: %s" % (f, tmp_name))
         cmd = 'ncks -4 -O %s %s %s' % (dimspec, f, tmp_name)
-        run(cmd, config)
+        shared.run(cmd, config)
         if not os.path.exists(tmp_name):
             raise IOError("compression failed for %s" % f)
         
@@ -69,7 +70,7 @@ def add_metadata(config):
     """ Adds metadata tags into the wrfout files. Expects there to be one 
     wrfout file per init_time. If there are more, they will not have metadata added."""
 
-    logger = get_logger()
+    logger = shared.get_logger()
     logger.info("*** Adding metadata to wrfout files ***")
 
 
@@ -92,7 +93,7 @@ def add_metadata(config):
         logger.debug(att_defs)
         cmd = 'ncatted -O -h %s %s' % (att_defs, f)
         logger.debug(cmd)
-        run_cmd(cmd, config)
+        shared.run_cmd(cmd, config)
     
     
     
@@ -108,7 +109,7 @@ def run_unipost(config):
     config -- dictionary containing various configuration options
     
     """
-    logger = get_logger()    
+    logger = shared.get_logger()    
     logger.info('*** RUNNING UNIVERSAL POST PROCESSOR ***')
     
     domain_dir    = config['domain_dir']
@@ -155,14 +156,14 @@ def run_unipost(config):
     #
     #logger.debug('Removing old output files')
     cmd = 'rm -f %s/*.out' % post_dir
-    run_cmd(cmd, config)
+    shared.run_cmd(cmd, config)
     cmd = 'rm -f %s/*.tm00' % post_dir
-    run_cmd(cmd, config)
+    shared.run_cmd(cmd, config)
     
     
     # Link Ferrier's microphysic's table and Unipost control file, 
     cmd = 'ln -sf %s/ETAMPNEW_DATA ./eta_micro_lookup.dat' % wrf_working_dir
-    run_cmd(cmd, config)
+    shared.run_cmd(cmd, config)
     
     #
     # Get local copy of parm file
@@ -251,7 +252,7 @@ def run_unipost(config):
         os.system('ln -sf wrf_cntrl.parm fort.14')
         os.system('ln -sf griddef.out fort.110')
         cmd = '%s/bin/unipost.exe < itag > unipost_d%02d.%s.out 2>&1' %(upp_dir, dom,current_time)
-        run_cmd(cmd, config)
+        shared.run_cmd(cmd, config)
         
         tmp_name = 'WRFPRS%03d.tm00' % fhr
         grb_name = 'wrfpost_d%02d_%s.tm00' %(dom,current_time)
@@ -260,19 +261,19 @@ def run_unipost(config):
         # If keeping same format, just move output file
         #
         cmd = 'mv %s %s' %(tmp_name, grb_name)
-        run_cmd(cmd, config)
+        shared.run_cmd(cmd, config)
         
         #
         # Convert to grib2 format if required
         #            
         #if grb_fmt=='grib2':
         #    cmd = 'cnvgrib -g12 %s %s' %(tmp_name, grb_name) 
-        #    run_cmd(cmd, config)
+        #    shared.run_cmd(cmd, config)
             
     logger.debug('concatenating grib records into single file for domain dom %02d...' %dom)
     outname = 'wrfpost_d%02d_%s.grb'%(dom,init_time.strftime('%Y-%m-%d_%H'))
     cmd     = 'cat wrfpost_d%02d_*.tm00 > %s' %(dom, outname)
-    run_cmd(cmd, config)
+    shared.run_cmd(cmd, config)
 
     
     #-----------------------------------------------------------------------
@@ -280,7 +281,7 @@ def run_unipost(config):
     #-----------------------------------------------------------------------
     cmd = 'mv %s %s' %(outname, wrfpost_dir)
 
-    ret = run_cmd(cmd, config)
+    ret = shared.run_cmd(cmd, config)
     
     if ret!=0:
         raise IOError('could not move post-processed output')
@@ -297,7 +298,7 @@ def convert_grib(config):
     Should not rely on globbing directories here. Could have nasty consequences,
     e.g. conversion of too many files etc """
 
-    logger=get_logger()
+    logger=shared.get_logger()
     logger.debug('*** CONVERTING GRIB1 TO GRIB2 ***')
     domain_dir = config['domain_dir']
     model_run  = config['model_run']
@@ -309,6 +310,6 @@ def convert_grib(config):
     f1 = '%s/%s/archive/wrfpost_d%02d_%s.grb' % (domain_dir, model_run, dom, init_time.strftime('%Y-%m-%d_%H'))
     f2 =  f1.replace('.grb', '.grib2')
     cmd = 'cnvgrib -g12 %s %s' %(f1, f2)
-    run_cmd(cmd, config)
+    shared.run_cmd(cmd, config)
     
     

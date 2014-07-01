@@ -1,12 +1,12 @@
-import shared
+import os
 import datetime
+import subprocess
+import shared
 
-#*****************************************************************
-# Comopnent run functions
-#*****************************************************************
+
 def run_gribmaster(config):
     """Runs the gribmaster programme to download the most recent boundary conditions """
-    logger      = get_logger()
+    logger      = shared.get_logger()
     gm_dir      = config['gm_dir']
     gm_transfer = config['gm_transfer']
     gm_dataset  = config['gm_dataset']
@@ -22,7 +22,7 @@ def run_gribmaster(config):
 
     for attempt in range(gm_max_attempts):
         logger.info('*** RUNNING GRIBMASTER, %s attempt ***' % (attempt+1))
-        run_cmd(cmd, config)
+        shared.run_cmd(cmd, config)
         
         cmd = 'grep "BUMMER" %s' % gm_log # check for failure
         ret = subprocess.call(cmd, shell=True)
@@ -50,7 +50,7 @@ def get_sst(config):
     Whoever is running this must have the http_proxy environment variable set
     correctly to allow them to download files through the proxy.  Example:
     http_proxy = http://slha:password@webproxy-se.corp.vattenfall.com:8080"""
-    logger      = get_logger()
+    logger      = shared.get_logger()
     # create an lftpscript in model run dir
     
     logger.info('*** FETCHING SST ***')
@@ -61,8 +61,8 @@ def get_sst(config):
     sst_server     = config['sst_server']
     sst_server_dir = config['sst_server_dir']
     sst_local_dir  = config['sst_local_dir']
-    sst_time       = get_sst_time(config)
-    sst_filename   = sub_date(get_sst_filename(config), init_time=config['init_time'])
+    sst_time       = shared.get_sst_time(config)
+    sst_filename   = shared.sub_date(shared.get_sst_filename(config), init_time=config['init_time'])
    
     if not os.path.exists(sst_local_dir):
         os.makedirs(sst_local_dir)
@@ -83,7 +83,7 @@ def get_sst(config):
     lftpscript.close()
     
     cmd = '/usr/bin/lftp -f %s' % lftpfilename
-    run_cmd(cmd, config)
+    shared.run_cmd(cmd, config)
     # check if file downloaded
 
     if not os.path.exists('%s/%s' %(sst_local_dir, sst_filename)):

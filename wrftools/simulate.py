@@ -1,4 +1,11 @@
+import os
+import shutil
+import subprocess
+from collections import OrderedDict
+import datetime
+import re
 import shared
+
 
 
 def link_namelist_wps(config):
@@ -55,7 +62,7 @@ def prepare_wps(config):
     
     grb_input_fmt = config['grb_input_fmt']
     vtable        = config['vtable']
-    bdy_times     = get_bdy_times(config)
+    bdy_times     = shared.get_bdy_times(config)
 
     if type(grb_input_fmt)==type({}):
         logger.debug(grb_input_fmt)
@@ -88,7 +95,7 @@ def prepare_wps(config):
     os.chdir(wps_run_dir)
     args = ' '.join(filelist)
     cmd = '%s/link_grib.csh %s' %(wps_run_dir,args)
-    run_cmd(cmd, config)
+    shared.run_cmd(cmd, config)
 
     logger.debug('Path for met_em files is %s' % met_em_dir)
     if not os.path.exists(met_em_dir):
@@ -118,7 +125,7 @@ def update_namelist_wps(config):
     namelist_wps = config['namelist_wps']
     shutil.copyfile(namelist_wps, namelist_wps+'.backup')
     
-    bdy_times  = get_bdy_times(config)
+    bdy_times  = shared.get_bdy_times(config)
     
     max_dom    = config['max_dom']
     init_time  = config['init_time']
@@ -162,7 +169,7 @@ def update_namelist_wps(config):
 def ungrib_sst(config):
     """ Runs ungrib.exe for SST fields, makes and modifies a copy of namelist.wps,
     then restores the original namelist.wps"""
-    logger = get_logger()
+    logger = shared.get_logger()
     
     wps_dir      = config['wps_dir']
     wps_run_dir  = config['wps_run_dir']
@@ -171,8 +178,8 @@ def ungrib_sst(config):
     init_time    = config['init_time']
     max_dom      = config['max_dom']
     sst_local_dir = config['sst_local_dir']
-    sst_time     = get_sst_time(config)
-    sst_filename = get_sst_filename(config)
+    sst_time     = shared.get_sst_time(config)
+    sst_filename = shared.get_sst_filename(config)
     vtable_sst   = wps_dir+'/ungrib/Variable_Tables/'+config['sst_vtable']
     #vtable_dom   = wps_dir+'/ungrib/Variable_Tables/'+config['vtable']
     vtable       = wps_run_dir+'/Vtable'
@@ -181,7 +188,7 @@ def ungrib_sst(config):
     namelist_wps  = config['namelist_wps']
     namelist_sst  = '%s/namelist.sst' % working_dir
 
-    namelist      = read_namelist(namelist_wps)
+    namelist      = shared.read_namelist(namelist_wps)
 
     #
     # update one line to point to the new SST field
@@ -220,27 +227,27 @@ def ungrib_sst(config):
     # link namelist.sst to namelist.wps in WPS run dir
     logger.debug('linking namelist.sst -----> namelist.wps')
     cmd = 'ln -sf %s %s' %(namelist_sst, namelist_run)
-    run_cmd(cmd, config)
+    shared.run_cmd(cmd, config)
 
     logger.debug('removing Vtable')
     if os.path.exists(vtable):
         os.remove(vtable)
     logger.debug('linking Vtable.SST ----> Vtable')
     cmd = 'ln -sf %s %s' %(vtable_sst, vtable)
-    run_cmd(cmd, config)
+    shared.run_cmd(cmd, config)
 
     # run link_grib to link SST gribs files
     logger.debug('Linking SST GRIB files')
     cmd = '%s/link_grib.csh %s/%s' %(wps_dir, sst_local_dir, sst_filename)
-    run_cmd(cmd, config)
+    shared.run_cmd(cmd, config)
 
 
     logger.info('*** RUNNING UNGRIB FOR SST ***')
     cmd     =  '%s/ungrib.exe' % wps_run_dir
-    run(cmd, config, wps_run_dir)
+    shared.run(cmd, config, wps_run_dir)
 
     cmd = 'grep "Successful completion" ./ungrib.log*' # check for success
-    ret = run_cmd(cmd, config)
+    ret = shared.run_cmd(cmd, config)
     if ret!=0:
         raise IOError('Ungrib failed for SST')
     
@@ -250,7 +257,7 @@ def ungrib_sst(config):
         os.remove(namelist_run)
     # link in original (unmodified) namelist.wps
     cmd = 'ln -sf %s %s' %(namelist_wps, namelist_run)    
-    run_cmd(cmd, config)
+    shared.run_cmd(cmd, config)
     
 def prepare_ndown(config):
     """Runs a one-way nested simulation using ndown.exe
@@ -272,7 +279,7 @@ def prepare_ndown(config):
     Assume the geo_em files exist for both domains.
     What """
 
-    logger = get_logger()
+    logger =shared.get_logger()
     logger.info('*** PREPARING NDOWN ***')
     namelist_wps   = config['namelist_wps']
     namelist_input = config['namelist_input']
@@ -283,15 +290,15 @@ def prepare_ndown(config):
     if max_dom!=2:
         raise ConfigError("max_dom must equal 2 when doing ndown runs")
     
-    bdy_times = get_bdy_times(config)
+    bdy_times = shared.get_bdy_times(config)
     ndown_fmt = config['ndown_fmt']
     
-    wrfout_d01_files = [sub_date(ndown_fmt, init_time=bdy_times[0], valid_time=t) for t in bdy_times]
+    wrfout_d01_files = [shared.sub_date(ndown_fmt, init_time=bdy_times[0], valid_time=t) for t in bdy_times]
     for f in wrfout_d01_files:
         if not os.path.exists(f):
             raise MissingFile("File: %s missing" % f)
         cmd = 'ln -sf %s %s' % (f, wrf_run_dir)
-        run_cmd(cmd, config)
+        shared.run_cmd(cmd, config)
     
     
     # Check for wrfinput_d02
@@ -314,7 +321,7 @@ def prepare_ndown(config):
     logger.info('*** DONE PREPARE NDOWN ***')
     
 def run_ndown(config):
-    logger = get_logger()
+    logger =shared.get_logger()
     logger.info('*** RUNNING NDOWN ***')
     
     wrf_run_dir = config['wrf_run_dir']
@@ -329,10 +336,10 @@ def run_ndown(config):
     logger.debug(nprocs)
     logger.debug(nprocs['ndown.exe'])
     
-    run(cmd, config, wrf_run_dir)
+    shared.run(cmd, config, wrf_run_dir)
         
     cmd = 'grep "Successful completion" %s' % log_file # check for success
-    ret = run_cmd(cmd,config)
+    ret =shared.run_cmd(cmd,config)
     if ret!=0:
         raise IOError('ndown.exe did not complete')
     
@@ -352,7 +359,7 @@ def run_ungrib(config):
     config -- dictionary specifying configuration options
     
     """
-    logger        = get_logger()
+    logger        =shared.get_logger()
     wps_dir       = config['wps_dir']
     wps_run_dir   = config['wps_run_dir']
     namelist_wps  = config['namelist_wps']
@@ -372,9 +379,9 @@ def run_ungrib(config):
     
     logger.info("*** RUNNING UNGRIB ***")
     
-    namelist = read_namelist(namelist_wps)
+    namelist = shared.read_namelist(namelist_wps)
     
-    bdy_times     = get_bdy_times(config)
+    bdy_times     = shared.get_bdy_times(config)
     
 
     if type(grb_input_fmt)!=type({}):
@@ -402,7 +409,7 @@ def run_ungrib(config):
         #
         # Generate filelist based on the initial time, and the forecast hour
         #        
-        filelist = list(OrderedDict.fromkeys(get_bdy_filenames(fmt, new_bdy_times)))
+        filelist = list(OrderedDict.fromkeys(shared.get_bdy_filenames(fmt, new_bdy_times)))
 
         #
         # Check the boundary files exist
@@ -433,7 +440,7 @@ def run_ungrib(config):
         #
         # Generate filelist based on the initial time, and the forecast hour
         #        
-        filelist = list(OrderedDict.fromkeys(get_bdy_filenames(fmt, new_bdy_times)))
+        filelist = list(OrderedDict.fromkeys(shared.get_bdy_filenames(fmt, new_bdy_times)))
 
         
         logger.debug('running link_grib.csh script to link grib files to GRIBFILE.AAA etc')
@@ -441,7 +448,7 @@ def run_ungrib(config):
         os.chdir(wps_run_dir)
         args = ' '.join(filelist)
         cmd = '%s/link_grib.csh %s' %(wps_run_dir,args)
-        run_cmd(cmd, config)
+        shared.run_cmd(cmd, config)
   
         vtabname = vtable[key]
         prefix = key
@@ -461,10 +468,10 @@ def run_ungrib(config):
         cmd     =  '%s/ungrib.exe' % wps_run_dir
         
         logger.debug(cmd)
-        run(cmd, config, wps_run_dir)
+        shared.run(cmd, config, wps_run_dir)
 
         cmd = 'grep "Successful completion" %s/ungrib.log*' % wps_run_dir # check for success
-        ret = run_cmd(cmd,config)
+        ret =shared.run_cmd(cmd,config)
         if ret!=0:
             raise IOError('ungrib.exe did not complete')
     
@@ -477,7 +484,7 @@ def run_geogrid(config):
     config -- dictionary specifying configuration options
     
     """
-    logger = get_logger()
+    logger =shared.get_logger()
     logger.info("*** RUNINING GEOGRID ***")
     wps_run_dir    = config['wps_run_dir']
     os.chdir(wps_run_dir)
@@ -493,10 +500,10 @@ def run_geogrid(config):
 
     cmd       =  '%s/geogrid.exe' % wps_run_dir
     
-    run(cmd, config, wps_run_dir)
+    shared.run(cmd, config, wps_run_dir)
     
     cmd = 'grep "Successful completion" %s/geogrid.log*' %(wps_run_dir)
-    ret = run_cmd(cmd, config)
+    ret =shared.run_cmd(cmd, config)
     if ret!=0:
         raise IOError('geogrid.exe did not complete')
 
@@ -509,7 +516,7 @@ def run_metgrid(config):
     config -- dictionary specifying configuration options
     
     """
-    logger = get_logger()
+    logger =shared.get_logger()
     logger.info("*** RUNNING METGRID ***")
     
     queue          = config['queue']
@@ -517,9 +524,9 @@ def run_metgrid(config):
     log_file       = '%s/metgrid.log' % wps_run_dir
     bdy_conditions = config['bdy_conditions']
     namelist_wps   = config['namelist_wps']
-    namelist       = read_namelist(namelist_wps)
+    namelist       = shared.read_namelist(namelist_wps)
     
-    met_em_dir     = sub_date(config['met_em_dir'], config['init_time'])        
+    met_em_dir     = shared.sub_date(config['met_em_dir'], config['init_time'])        
     
     #
     # vtable may be a dictionary to support running ungrib multiple
@@ -550,10 +557,10 @@ def run_metgrid(config):
     os.chdir(wps_run_dir)
     cmd      =  "%s/metgrid.exe" % wps_run_dir
     
-    run(cmd, config, wps_run_dir)
+    shared.run(cmd, config, wps_run_dir)
 
     cmd = 'grep "Successful completion" %s/metgrid.log*' % wps_run_dir
-    ret = run_cmd(cmd, config)
+    ret =shared.run_cmd(cmd, config)
     if ret!=0:
         raise IOError('metgrid.exe did not complete')
     
@@ -567,7 +574,7 @@ def prepare_wrf(config):
     config -- a dictionary containing forecast options
 
     """
-    logger = get_logger()    
+    logger =shared.get_logger()    
     logger.debug('*** PREPARING FILES FOR WRF ***')
     
     met_em_format      = "%Y-%m-%d_%H:%M:%S"
@@ -578,8 +585,8 @@ def prepare_wrf(config):
     init_time    = config['init_time']
     fcst_hours   = config['fcst_hours']
     bdy_interval = config['bdy_interval']
-    bdy_times    = get_bdy_times(config)
-    met_em_dir   = sub_date(config['met_em_dir'], init_time=init_time)
+    bdy_times    = shared.get_bdy_times(config)
+    met_em_dir   = shared.sub_date(config['met_em_dir'], init_time=init_time)
     met_em_files = ['%s/met_em.d%02d.%s.nc' % (met_em_dir,d, t.strftime(met_em_format)) for d in domains for t in bdy_times] 
     wrf_run_dir    = config['wrf_run_dir']
     namelist_run   = '%s/namelist.input' % wrf_run_dir
@@ -605,14 +612,14 @@ def prepare_wrf(config):
         if not os.path.exists(f):
             raise IOError('met_em file missing : %s' %f)
         cmd = 'ln -sf %s %s/'%(f, wrf_run_dir)
-        run_cmd(cmd, config)
+        shared.run_cmd(cmd, config)
     
     
     logger.debug('linking namelist.input to wrf_run_dir')
     cmd = 'rm -f %s' % namelist_run
-    run_cmd(cmd, config)
+    shared.run_cmd(cmd, config)
     cmd = 'ln -sf %s %s' %(namelist_input, namelist_run)
-    run_cmd(cmd, config)
+    shared.run_cmd(cmd, config)
 
     logger.debug('*** FINISHED PREPARING FILES FOR WRF ***')
 
@@ -624,7 +631,7 @@ def update_namelist_input(config):
     config -- dictionary containing various configuration options
         
     """        
-    logger = get_logger()        
+    logger =shared.get_logger()        
     logger.debug('*** UPDATING namelist.input ***')
     
 
@@ -641,10 +648,10 @@ def update_namelist_input(config):
     shutil.copyfile(namelist_input, namelist_input+'.backup')
     
     # read settings from domain-based namelist
-    namelist        = read_namelist(namelist_input)   
+    namelist        = shared.read_namelist(namelist_input)   
 
     # read settings from domain-based namelist.wps
-    #namelist_wps   = read_namelist(namelist_wps)   
+    #namelist_wps   = shared.read_namelist(namelist_wps)   
     #wps_settings   = namelist_wps.settings
 
 
@@ -673,7 +680,7 @@ def update_namelist_input(config):
     #namelist.update('dx', wps_settings['dx'])
     #namelist.update('dy', wps_settings['dy'])    
     fcst_hours       = config['fcst_hours']
-    fcst_times       = get_fcst_times(config)
+    fcst_times       = shared.get_fcst_times(config)
     history_interval = config['history_interval']   
     bdy_interval     = config['bdy_interval']  # this is in hours         
     
@@ -747,7 +754,7 @@ def run_real(config):
     Arguments:
     config -- dictionary containing various configuration options """
     
-    logger = get_logger()    
+    logger =shared.get_logger()    
     logger.info('*** RUNNING REAL ***')
     
     queue           = config['queue']
@@ -764,7 +771,7 @@ def run_real(config):
     # so we need to change directory first.
     os.chdir(wrf_run_dir)
     cmd     =  "%s/real.exe" % wrf_run_dir
-    run(cmd, config, wrf_run_dir)
+    shared.run(cmd, config, wrf_run_dir)
     
     
     rsl = '%s/rsl.error.0000' % wrf_run_dir
@@ -773,12 +780,12 @@ def run_real(config):
 
     # now copy rsl file to a log directory
     cmd = 'cp %s %s/rsl/rsl.error.%s.%s.%s' % (rsl, working_dir, domain, model_run, init_time.strftime('%y-%m-%d_%H') )
-    run_cmd(cmd, config)
+    shared.run_cmd(cmd, config)
 
 
 
     cmd = 'grep "SUCCESS COMPLETE" %s/rsl.error.0000' % wrf_run_dir
-    ret = run_cmd(cmd, config)
+    ret =shared.run_cmd(cmd, config)
     
     if ret!=0:
         raise IOError('real.exe did not complete')
@@ -795,21 +802,21 @@ def run_wrf(config):
     config -- dictionary containing various configuration options
     
     """
-    logger          = get_logger()    
+    logger          =shared.get_logger()    
     logger.info('*** RUNNNING WRF ***')
     queue         = config['queue']
     wrf_run_dir   = config['wrf_run_dir']
     log_file      = '%s/wrf.log' % wrf_run_dir
     
     executable  = '%s/wrf.exe' % wrf_run_dir
-    run(executable, config, wrf_run_dir)
+    shared.run(executable, config, wrf_run_dir)
     
 
     #
     # Check for success
     #    
     cmd = 'grep "SUCCESS COMPLETE" %s/rsl.error.0000' % wrf_run_dir
-    ret =  run_cmd(cmd, config)
+    ret = shared.run_cmd(cmd, config)
     if ret!=0:
         raise IOError('wrf.exe did not complete')
     
@@ -819,7 +826,7 @@ def run_wrf(config):
 def move_wrfout_files(config):
     """ Moves output files from run directory to wrfout 
     director"""
-    logger = get_logger()    
+    logger =shared.get_logger()    
     logger.info('*** MOVING WRFOUT FILES AND NAMELIST SETTINGS ***')
     
     domain        = config['domain']
@@ -849,10 +856,10 @@ def move_wrfout_files(config):
     #transfer(flist, rsl_dir, mode='move', debug_level='debug')
 
     cmd = 'cp %s %s/namelist.input.%s.%s' % (namelist_input, namelist_dir, run_key, init_str)
-    run_cmd(cmd, config)
+    shared.run_cmd(cmd, config)
     
     cmd = 'cp %s/namelist.wps %s/namelist.wps.%s.%s' % (working_dir, namelist_dir, run_key, init_str)
-    run_cmd(cmd, config)
+    shared.run_cmd(cmd, config)
 
 
     #
@@ -860,7 +867,7 @@ def move_wrfout_files(config):
     # 
     logger.debug('moving rsl files to %s' % rsl_dir )
     cmd = 'cp %s/rsl.out.0000 %s/rsl.out.%s' %(wrf_run_dir, rsl_dir, run_key)
-    run_cmd(cmd, config)
+    shared.run_cmd(cmd, config)
     
 
 def timing(config):
@@ -871,12 +878,12 @@ def timing(config):
     # Where should we assume to find the rsl file?
     # In the wrf_working_dir
     #
-    logger = get_logger()
+    logger =shared.get_logger()
     logger.info('*** Computing timing information ***')
     wrf_run_dir    = config['wrf_run_dir']
     rsl_file       = '%s/rsl.error.0000' % wrf_run_dir
     namelist_input = config['namelist_input']
-    namelist       = read_namelist(namelist_input).settings
+    namelist       = shared.read_namelist(namelist_input).settings
     timestep       = namelist['time_step'][0]
     f              = open(rsl_file, 'r')
     lines          = f.read().split('\n')
