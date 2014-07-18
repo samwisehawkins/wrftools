@@ -1,3 +1,9 @@
+""" 
+=====================================
+shared helper functions for wrftools
+=====================================
+"""
+
 import os
 import subprocess
 import sys

@@ -545,7 +545,7 @@ def run_metgrid(config):
         
     namelist.update('fg_name', prefixes)
     namelist.update('opt_output_from_metgrid_path', met_em_dir, section='metgrid')
-    if not 'constants_name' in config.keys():
+    if not config['sst']:
         namelist.remove('constants_name')
         
     namelist.to_file(namelist_wps)
