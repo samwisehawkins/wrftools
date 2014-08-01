@@ -81,7 +81,6 @@ def dispatch_entry(config, entry, dry_run=None, log_name=LOGGER):
         
     cmd = """EMAIL="%s" mutt %s -s"%s" %s %s -- %s < %s """ %(from_addr, ct_arg, subject, a_arg, cc_arg, address, body)
     logger.debug(cmd)
-    logger.debug(dry_run)
     if not dry_run:
         subprocess.call(cmd, shell=True)
 
