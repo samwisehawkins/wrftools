@@ -164,6 +164,11 @@ from wrftools import finalise
 
 config = conf.config(__doc__, sys.argv[1:], flatten=True, format="yaml")
 
+# horrible hack to ensure if start and end arguments 
+# are supplied by the shell, they are parsed as datrtimes
+if type(config['start'])==type(""):
+    config['start'] = datetime.datetime.strptime(config['start'], '%Y-%m-%d_%H:%M:%S')
+    config['end'] = datetime.datetime.strptime(config['end'], '%Y-%m-%d_%H:%M:%S')
 
 #************************************************
 # Logging
@@ -229,6 +234,10 @@ except Exception,e:
     shared.handle(e, fail_mode, full_trace)
     sys.exit()
 
+    
+
+
+    
 #**********************************************************
 # Forecast initial times
 #**********************************************************
