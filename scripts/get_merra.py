@@ -14,7 +14,7 @@ min_lat = 40
 max_lat = 75
 
 
-start = datetime.datetime(2012, 6, 6, 0)
+start = datetime.datetime(2000, 1, 1, 0)
 end   = datetime.datetime(2012, 6, 7, 0)
 rrule = rrule.rrule(rrule.DAILY, dtstart=start, until=end)
 
@@ -25,7 +25,7 @@ version    = 0
 # determine stream by start date
 if start.year<1989:
     stream = 1
-elif start.year<1988:
+elif start.year<2001:
     stream = 2
 else:
     stream=3
