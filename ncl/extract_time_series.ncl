@@ -131,6 +131,7 @@ end if
         f = addfiles(in_file, "r")
     end if 
  
+
     locations = read_locations(loc_file)
     loc_id = locations[0]
 	name   = locations[1]
