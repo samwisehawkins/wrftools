@@ -1,20 +1,22 @@
 """ncdump.py dumps data from a netcdf file to text file
 
 Usage: 
-    ncdump.py [--config=<file>] [<files>] [options]
+    ncdump.py --config=<file> <files>... [options] 
 
 Options:
-    <files>                input files to operate on
-    --config=<file>        config file specifying options
-    --init_time=<datetime> inital time
-    --tseries_file=<str>   file pattern to become time series
-    --grid_id=<int>        nest id number
-    --log_level=<level>    info, debug or warn
-    --mail_level=<level>   info, debug or warn
-    --mailto=<level>       sam.hawkins@vattenfall.com             # send log email here
-    --mail_buffer          10000                                  # how many messages to collate in one email
-    --mail_subject         "Operational WRF log"                  # subject to use in email 
-    -h |--help             show this message
+    <files>                     input files to operate on
+    --config=<file>             config file specifying options
+    --init_time=<datetime>      inital time
+    --tseries_file=<str>        file pattern to become time series
+    --grid_id=<int>             nest id number
+    --log.level=<level>         info, debug or warn
+    --log.file=<file>           optionally write to log file
+    --log.mail=<bool>
+    --log.mail.level=<level>    info, debug or warn
+    --log.mail.to=<level>       sam.hawkins@vattenfall.com             # send log email here
+    --log.mail.buffer           10000                                  # how many messages to collate in one email
+    --log.mail.subject          "Operational WRF log"                  # subject to use in email 
+    -h |--help                  show this message
 
 
    
@@ -84,14 +86,11 @@ def ncdump(config):
         else:
             tseries_files = expand(entry['tseries_file'], config)
             logger.debug("expanding file list from pattern and init time")
-            #logger.debug(tseries_files)
             
             files = glob.glob(tseries_files)
             logger.debug("found %d files" % len(files))
 
         dump(files, entry, scope, log_name=config['log.name'])
-    
-    
     
     
 def dump(files,entry,scope,log_name=LOGGER):
@@ -114,26 +113,26 @@ def dump(files,entry,scope,log_name=LOGGER):
     logger.debug("\t log_name: %s"    % str(log_name))
     
     
-    for file in files:
-        logger.debug(file)
-        frame = frame_from_nc([file], vars, global_atts, var_atts, coord_vars,log_name)
-            
-        if format not in FORMATS:
-            logger.error("format %s not understood" % format)
-            raise UnknownFormat("format not understood")
+    #for file in files:
+    #logger.debug(file)
+    frame = frame_from_nc(files, vars, global_atts, var_atts, coord_vars,log_name)
         
-        if format=='txt' :
-            pass
-            #write_txt_files(frame, entry['dir'], entry['dimspec'], log_name)
-            
-        elif format=='json':
-            write_json_files(frame, entry['dir'], expand(entry['fname'], scope), entry['tseries_vars'], entry['dimspec'], entry['drop'], entry['rename'], entry['float_format'], log_name)
+    if format not in FORMATS:
+        logger.error("format %s not understood" % format)
+        raise UnknownFormat("format not understood")
+    
+    if format=='txt' :
+        pass
+        #write_txt_files(frame, entry['dir'], entry['dimspec'], log_name)
+        
+    elif format=='json':
+        write_json_files(frame, entry['dir'], expand(entry['fname'], scope), entry['tseries_vars'], entry['dimspec'], entry['drop'], entry['rename'], entry['float_format'], log_name)
 
-        elif format=='csv':
-            write_csv_files(frame, entry['dir'], expand(entry['fname'], scope), entry['tseries_vars'],entry['dimspec'], entry['drop'], values='value', rows=entry['rows'],cols=entry['cols'],sort_by=entry['sort_by'],rename=entry['rename'],float_format=entry['float_format'], na_rep=entry['na_rep'], log_name=log_name)
-                
-        elif format=='aot':
-            write_aot_files(frame, entry['dir'])
+    elif format=='csv':
+        write_csv_files(frame, entry['dir'], expand(entry['fname'], scope), entry['tseries_vars'],entry['dimspec'], entry['drop'], values='value', rows=entry['rows'],cols=entry['cols'],sort_by=entry['sort_by'],rename=entry['rename'],float_format=entry['float_format'], na_rep=entry['na_rep'], log_name=log_name)
+            
+    elif format=='aot':
+        write_aot_files(frame, entry['dir'])
 
 
         
@@ -143,6 +142,10 @@ def frame_from_nc(ncfiles, vars, global_atts, var_atts, coord_vars,log_name):
 
     logger = loghelper.get_logger(log_name)
     frames = []
+
+    # for type testing
+    ma = np.ma.array([0])
+
     
     # Open files one-by-one
     for f in ncfiles:
@@ -178,7 +181,7 @@ def frame_from_nc(ncfiles, vars, global_atts, var_atts, coord_vars,log_name):
         loc_id_raw  = [''.join(loc_masked[l,:].filled('')) for l in range(nloc)]
         location    = map(string.strip, loc_id_raw)
         location    = map(str,location)
-        
+        logger.debug(location)
         height      = variables['height']
         nheight     = len(height)
 
@@ -186,9 +189,10 @@ def frame_from_nc(ncfiles, vars, global_atts, var_atts, coord_vars,log_name):
         vars2D = [v for v in varnames if len(variables[v].shape)==2]
         vars3D = [v for v in varnames if len(variables[v].shape)==3]
        
-
+        
         #can't really avoid nested loop here without making code unintelligble
         for v in vars2D:
+            fill_value = variables[v].getncattr("_FillValue")
             for l in range(nloc):
                 # create dataframe then append columns avoids copying each series
                 df = pd.DataFrame(datetimes, index=range(len(datetimes)), columns=['valid_time'])
@@ -197,7 +201,16 @@ def frame_from_nc(ncfiles, vars, global_atts, var_atts, coord_vars,log_name):
                 df['location']   = df['location'].astype(str)
                 df['height']     = HGT2DNUM
                 df['variable']   = v
-                df['value']      = variables[v][:,l]
+                
+
+                value            = variables[v][:,l]
+                
+                # pandas doesn't handle masked arrays well, fill with nans will ensure missing in output                
+                if type(value)==type(ma):
+                    value=value.filled(np.nan)
+                
+                df['value']      = value
+
                 for att in global_atts:
                     df[str(att)] = dataset_atts[att]
                 for att in var_atts:
@@ -205,6 +218,8 @@ def frame_from_nc(ncfiles, vars, global_atts, var_atts, coord_vars,log_name):
                 frames.append(df)
         
         for v in vars3D:
+            fill_value = variables[v].getncattr("_FillValue")
+            logger.debug(v)
             for l in range(nloc):
                 for h in range(nheight):
                     # create dataframe then append columns avoids copying each series
@@ -213,10 +228,17 @@ def frame_from_nc(ncfiles, vars, global_atts, var_atts, coord_vars,log_name):
                     df['location']   = location[l]
                     df['height']     = height[h]
                     df['variable']   = v
-                    df['value']      = variables[v][:,l,h]
+                    value            = variables[v][:,l,h]
+                    # pandas doesn't handle masked arrays well, fill with nans will ensure missing in output                
+                    if type(value)==type(ma):
+                        value=value.filled(np.nan)
+                    
+                    df['value']      = value
+
                     for att in global_atts:
                         df[str(att)] = dataset_atts[att]
                     for att in var_atts:
+                        logger.debug(att)
                         df[str(att)] = variables[v].getncattr(att)
                     frames.append(df)
         dataset.close()
@@ -231,7 +253,7 @@ def frame_from_nc(ncfiles, vars, global_atts, var_atts, coord_vars,log_name):
     new_cols = pre_cols + data_cols
     df = df[new_cols]
     df.index = range(len(df))
-    
+    #df.replace(fill_value, np.nan)
     return df
 
 
@@ -299,23 +321,25 @@ def write_csv_files(frame, out_dir, out_name, variables, dimspec, drop, values, 
     # subset based on variable, location, height
     frame = _filter(frame, variables, dimspec, log_name)
     
+    #frame = frame.set_index(['init_time','valid_time'])    
     logger.debug(frame)
+    logger.debug("about to pivot")
+    logger.debug("values: %s" % values)
+    logger.debug("rows: %s" % rows)
+    logger.debug("cols: %s" % cols)
     frame = pd.pivot_table(frame, values=values, rows=rows,cols=cols)
-    
-    #logger.debug(frame)
-    #tuples  = frame.columns
-    #columns = map(collapse, tuples)
-    #frame.columns = columns
+
     frame = frame.reset_index()
 
     logger.debug(frame)
-    logger.debug(sort_by)
     if sort_by:
         frame.sort(sort_by, inplace=True)
 
     if rename:
         frame = _rename(frame, rename)
-
+    
+    logger.debug("outputting csv file: %s/%s " % (out_dir, out_name))
+    logger.debug(na_rep)
     frame.to_csv('%s/%s' % (out_dir, out_name), index=False, float_format=float_format, na_rep=na_rep)    
     
     
