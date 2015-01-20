@@ -14,8 +14,8 @@ min_lat = 40
 max_lat = 75
 
 
-start = datetime.datetime(2000, 1, 1, 0)
-end   = datetime.datetime(2012, 6, 7, 0)
+start = datetime.datetime(2002, 1, 1, 0)
+end   = datetime.datetime(2010, 12, 31, 23)
 rrule = rrule.rrule(rrule.DAILY, dtstart=start, until=end)
 
 server     = 'http://goldsmr2.sci.gsfc.nasa.gov/opendap/MERRA/MAT1NXSLV.5.2.0'

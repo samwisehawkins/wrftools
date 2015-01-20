@@ -181,8 +181,7 @@ def ungrib_sst(config):
     sst_local_dir = config['sst_local_dir']
     sst_time     = shared.get_sst_time(config)
     sst_filename = shared.get_sst_filename(config)
-    vtable_sst   = wps_dir+'/ungrib/Variable_Tables/'+config['sst_vtable']
-    #vtable_dom   = wps_dir+'/ungrib/Variable_Tables/'+config['vtable']
+    vtable_sst   = config['sst_vtable']
     vtable       = wps_run_dir+'/Vtable'
     queue        = config['queue']
     log_file     = '%s/ungrib.sst.log' % wps_run_dir
@@ -451,12 +450,11 @@ def run_ungrib(config):
         cmd = '%s/link_grib.csh %s' %(wps_run_dir,args)
         shared.run_cmd(cmd, config)
   
-        vtabname = vtable[key]
+        vtabpath = vtable[key]
         prefix = key
         namelist.update('prefix', key)
         namelist.to_file(namelist_wps)
         link_namelist_wps(config)
-        vtab_path = wps_dir+'/ungrib/Variable_Tables/'+vtabname
         vtab_wps  = wps_run_dir+'/Vtable'
 
         if os.path.exists(vtab_wps):
