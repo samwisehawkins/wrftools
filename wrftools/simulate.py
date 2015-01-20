@@ -450,7 +450,7 @@ def run_ungrib(config):
         cmd = '%s/link_grib.csh %s' %(wps_run_dir,args)
         shared.run_cmd(cmd, config)
   
-        vtabpath = vtable[key]
+        vtab_path = vtable[key]
         prefix = key
         namelist.update('prefix', key)
         namelist.to_file(namelist_wps)
