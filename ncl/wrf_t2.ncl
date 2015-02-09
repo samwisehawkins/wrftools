@@ -93,18 +93,20 @@ do it=0,ntimes-1
     ; Plotting options for T                
     opts = res                         
     opts@cnFillOn = True  
-    
+    opts@cnFillPalette = "posneg_2" 
     t_max = floattoint(ceil(max(tc2)))
     t_min = floattoint(floor(min(tc2)))
     t_start = t_min - (t_max % 5)
     t_end   = t_max + (t_max % 5)
     ;print(t_start)
     ;print(t_end)
-    opts@ContourParameters = (/t_start,t_end,1/) ; winter 
+    ;opts@ContourParameters = (/t_start,t_end,1/) ; winter 
     ;opts@ContourParameters = (/5.,30.,1/)  
-    opts@gsnSpreadColorStart = 6
-    opts@gsnSpreadColorEnd = 97
+    ;opts@gsnSpreadColorStart = 6
+    ;opts@gsnSpreadColorEnd = 97
+    symMinMaxPlt(tc2,20,False,opts)  
     contour_tc = wrf_contour(a,wks,tc2,opts)
+
     delete(opts)
 
     ; Plotting options for SLP                     
