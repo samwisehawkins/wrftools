@@ -14,7 +14,7 @@ def prepare(config):
     subdirs        = config['prepare.create']
 
     logger         = shared.get_logger()
-    logger.info('*** PREPARING ***')
+    logger.info('\n*** PREPARING ***')
 
     if not os.path.exists(working_dir):
         os.makedirs(working_dir)
@@ -36,4 +36,4 @@ def prepare(config):
 
     for pattern in links:
         shared.link(pattern)
-    logger.info('*** DONE PREPARE ***')
+    logger.info('*** DONE PREPARE ***\n')

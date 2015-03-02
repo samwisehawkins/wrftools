@@ -9,21 +9,6 @@ import subprocess
 from customexceptions import QueueError
 
 
-def fill_template(template, output, replacements):
-     """Replaces placeholders in template with corresponding
-     values in dictionary replacements """
-     
-     
-     i = open(template, 'r')
-     content = i.read()
-     for key in replacements.keys():
-        content = content.replace(key,str(replacements[key]))
-
-     o     = open(output, 'w')
-     o.write(content)
-     o.close()
-     i.close()
-     return output     
      
 
 def qsub(job_script):

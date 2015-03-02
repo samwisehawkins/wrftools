@@ -10,6 +10,24 @@ def _fix_ncarg_env():
 
 
 
+def fill_template(template, output, replacements):
+     """Replaces placeholders in template with corresponding
+     values in dictionary replacements """
+     
+     
+     i = open(template, 'r')
+     content = i.read()
+     for key in replacements.keys():
+        content = content.replace(key,str(replacements[key]))
+
+     o = open(output, 'w')
+     o.write(content)
+     o.close()
+     i.close()
+     return output     
+
+    
+    
 def produce_ncl_plots(config):
     """ Calls a series of ncl scripts to produce visualisations.
     
@@ -24,10 +42,6 @@ def produce_ncl_plots(config):
     run can simply be specified somewhere in the config file
     e.g. wrf_basic_plots.ncl, wrf_vertical_plots.ncl etc.
     
-    Updated: Some plots are much easier to produce using the original 
-    wrfout netcdf files, rather than use the UPP post-processed grib files. 
-    Howeverm in future we should stick with one or the other.
-    
     
     Arguments:
     config -- dictionary containing various configuration options """
@@ -41,7 +55,6 @@ def produce_ncl_plots(config):
     working_dir    = config['working_dir']
     ncl_code_dir   = config['ncl_code_dir']
     ncl_files      = config['ncl_code']
-    #ncl_code      = ['%s/%s' % (ncl_code_dir, f) for f in ncl_files]
     ncl_code       =  ncl_files
     ncl_log        = config['ncl_log']
     wrfout_dir     = config['wrfout_dir']
@@ -53,43 +66,35 @@ def produce_ncl_plots(config):
     ncl_out_dir    = shared.sub_date(config['ncl_out_dir'], init_time=init_time)
     ncl_out_type   = config['ncl_out_type']
     nest_id        =  '%02d' % dom
-
+    ncl_opt_template = config['ncl_opt_template']
+    ncl_opt_file = config['ncl_opt_file']
+    extract_hgts = config['extract_hgts']
     logger.info('*** RUNNING NCL SCRIPTS FOR DOMAIN d%02d***' % dom)
     
     if not os.path.exists(ncl_out_dir):
         os.makedirs(ncl_out_dir)
 
-    #
-    # Communicate to NCL via environment variables
-    # NCL expects the following to be set
-    #File    = getenv("FCST_FILE")
-    #type    = getenv("NCL_OUT_TYPE")
-    #diro    = getenv("NCL_OUT_DIR")
-    #;web_dir = getenv("WEB_DIR")
-    #domain  = getenv("NEST_ID")    
-    #run_hour = getenv("RUN_HOUR")
-
-    #
-    # Try escaping : in fcst_file
-    #
-    #fcst_file = fcst_file.replace(':', r'\:')
-    #os.environ['FCST_FILE']      = fcst_file
-    #os.environ['LOCATIONS_FILE'] = loc_file
-    #os.environ['NCL_OUT_DIR']    = ncl_out_dir
-    #os.environ['NCL_OUT_TYPE']   = ncl_out_type
-    #os.environ['NEST_ID']        = nest_id
-    #os.environ['DOMAIN']         = domain
-    #os.environ['MODEL_RUN']      = model_run
-
-    logger.debug('ncl_in_file  ----> %s' % ncl_in_file)
-    logger.debug('ncl_out_dir  ----> %s' % ncl_out_dir)
-    logger.debug('ncl_out_type ----> %s' % ncl_out_type)
-    logger.debug('ncl_loc_file ----> %s' % ncl_loc_file)
-
     if not ncl_in_file.endswith('.nc'):
         ncl_in_file = ncl_in_file + '.nc' 
-    
-    
+
+    ncl_hgts = '(/%s/)' % ','.join(map(str,extract_hgts))        
+        
+    replacements = {'<ncl_in_file>'  : ncl_in_file, 
+                    '<ncl_out_dir>'  : ncl_out_dir, 
+                    '<ncl_out_type>' : ncl_out_type,
+                    '<ncl_loc_file>' : ncl_loc_file,
+                    '<extract_heights>' : ncl_hgts} 
+        
+
+    fill_template(ncl_opt_template, ncl_opt_file, replacements)
+        
+    logger.debug('ncl_opt_template: %s' % ncl_opt_template)
+    logger.debug('    ncl_in_file  ----> %s' % ncl_in_file)
+    logger.debug('    ncl_out_dir  ----> %s' % ncl_out_dir)
+    logger.debug('    ncl_out_type ----> %s' % ncl_out_type)
+    logger.debug('    ncl_loc_file ----> %s' % ncl_loc_file)
+    logger.debug('ncl_opt_file: %s' % ncl_opt_file)
+
     for script in ncl_code:
         #
         # mem_total forces the use postprocessing node
@@ -99,12 +104,19 @@ def produce_ncl_plots(config):
         logger.debug(script)
         
         queue = config['queue']
-        if queue['ncl']:
-            cmd  = """ncl ncl_in_file="%s" ncl_out_dir="%s" ncl_out_type="%s" ncl_loc_file="%s" %s""" % (ncl_in_file,ncl_out_dir, ncl_out_type, ncl_loc_file, script)
-        else:
-            cmd  = """ncl 'ncl_in_file="%s"' 'ncl_out_dir="%s"' 'ncl_out_type="%s"' 'ncl_loc_file="%s"' %s 2>&1 >> %s/ncl.log""" % (ncl_in_file,ncl_out_dir, ncl_out_type, ncl_loc_file, script, working_dir)
+        cmd = "ncl %s" % script
         
-        ret = shared.run(cmd, config)
+        
+        #if queue['ncl']:
+            # works on Schumi
+        
+            #cmd  = """ncl ncl_in_file="%s" ncl_out_dir="%s" ncl_out_type="%s" ncl_loc_file="%s" %s""" % (ncl_in_file,ncl_out_dir, ncl_out_type, ncl_loc_file, script)
+            # works on maestro
+            #cmd  = """ncl 'ncl_in_file="%s"' 'ncl_out_dir="%s"' 'ncl_out_type="%s"' 'ncl_loc_file="%s"' %s """ % (ncl_in_file,ncl_out_dir, ncl_out_type, ncl_loc_file, script)
+        #else:
+            #cmd  = """ncl 'ncl_in_file="%s"' 'ncl_out_dir="%s"' 'ncl_out_type="%s"' 'ncl_loc_file="%s"' %s 2>&1 >> %s/ncl.log""" % (ncl_in_file,ncl_out_dir, ncl_out_type, ncl_loc_file, script, working_dir)
+        env_vars={'NCL_OPT_FILE' : ncl_opt_file}
+        ret = shared.run(cmd, config,env_vars=env_vars )
 
 
 def produce_ncl_ol_plots(config):

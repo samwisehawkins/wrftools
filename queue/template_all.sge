@@ -9,7 +9,7 @@
 #$ -v LD_LIBRARY_PATH
 #$ -cwd
 #$ -q <qname>
-#$ -pe openmpi <nprocs>
+#$ -pe mpi <nprocs>
 #$ -j yes
 #$ -o <logfile>
 

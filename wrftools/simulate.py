@@ -96,7 +96,7 @@ def prepare_wps(config):
     os.chdir(wps_run_dir)
     args = ' '.join(filelist)
     cmd = '%s/link_grib.csh %s' %(wps_run_dir,args)
-    shared.run_cmd(cmd, config)
+    shared.run(cmd, config)
 
     logger.debug('Path for met_em files is %s' % met_em_dir)
     if not os.path.exists(met_em_dir):
@@ -227,37 +227,37 @@ def ungrib_sst(config):
     # link namelist.sst to namelist.wps in WPS run dir
     logger.debug('linking namelist.sst -----> namelist.wps')
     cmd = 'ln -sf %s %s' %(namelist_sst, namelist_run)
-    shared.run_cmd(cmd, config)
+    shared.run_cline(cmd, config)
 
     logger.debug('removing Vtable')
     if os.path.exists(vtable):
         os.remove(vtable)
     logger.debug('linking Vtable.SST ----> Vtable')
     cmd = 'ln -sf %s %s' %(vtable_sst, vtable)
-    shared.run_cmd(cmd, config)
+    shared.run_cline(cmd, config)
 
     # run link_grib to link SST gribs files
     logger.debug('Linking SST GRIB files')
     cmd = '%s/link_grib.csh %s/%s' %(wps_dir, sst_local_dir, sst_filename)
-    shared.run_cmd(cmd, config)
+    shared.run_cline(cmd, config)
 
 
-    logger.info('*** RUNNING UNGRIB FOR SST ***')
+    logger.info('\n*** RUNNING UNGRIB FOR SST ***')
     cmd     =  '%s/ungrib.exe' % wps_run_dir
     shared.run(cmd, config, wps_run_dir)
 
     cmd = 'grep "Successful completion" ./ungrib.log*' # check for success
-    ret = shared.run_cmd(cmd, config)
+    ret = shared.run_cline(cmd, config)
     if ret!=0:
         raise IOError('Ungrib failed for SST')
     
-    logger.info('*** SUCCESS UNGRIB SST ***')
+    logger.info('*** SUCCESS UNGRIB SST ***\n')
     logger.debug('Removing namelist.wps')
     if os.path.exists(namelist_run): 
         os.remove(namelist_run)
     # link in original (unmodified) namelist.wps
     cmd = 'ln -sf %s %s' %(namelist_wps, namelist_run)    
-    shared.run_cmd(cmd, config)
+    shared.run_cline(cmd, config)
     
 def prepare_ndown(config):
     """Runs a one-way nested simulation using ndown.exe
@@ -377,7 +377,7 @@ def run_ungrib(config):
     
     
     
-    logger.info("*** RUNNING UNGRIB ***")
+    logger.info("\n*** RUNNING UNGRIB ***")
     
     namelist = shared.read_namelist(namelist_wps)
     
@@ -474,7 +474,7 @@ def run_ungrib(config):
         if ret!=0:
             raise IOError('ungrib.exe did not complete')
     
-    logger.info('*** SUCESS UNGRIB ***')
+    logger.info('*** SUCESS UNGRIB ***\n')
 
 def run_geogrid(config):
     """ Runs geogrid.exe and checks output was sucessful
@@ -484,7 +484,7 @@ def run_geogrid(config):
     
     """
     logger =shared.get_logger()
-    logger.info("*** RUNINING GEOGRID ***")
+    logger.info("\n*** RUNINING GEOGRID ***")
     wps_run_dir    = config['wps_run_dir']
     os.chdir(wps_run_dir)
 
@@ -506,7 +506,7 @@ def run_geogrid(config):
     if ret!=0:
         raise IOError('geogrid.exe did not complete')
 
-    logger.info('*** SUCESS GEOGRID ***')
+    logger.info('*** SUCESS GEOGRID ***\n')
 
 def run_metgrid(config):
     """ Runs metgrid.exe and checks output was sucessful
@@ -516,7 +516,7 @@ def run_metgrid(config):
     
     """
     logger =shared.get_logger()
-    logger.info("*** RUNNING METGRID ***")
+    logger.info("\n*** RUNNING METGRID ***")
     
     queue          = config['queue']
     wps_run_dir    = config['wps_run_dir']
@@ -556,14 +556,14 @@ def run_metgrid(config):
     os.chdir(wps_run_dir)
     cmd      =  "%s/metgrid.exe" % wps_run_dir
     
-    shared.run(cmd, config, wps_run_dir)
+    shared.run(cmd, config, from_dir=wps_run_dir)
 
     cmd = 'grep "Successful completion" %s/metgrid.log*' % wps_run_dir
     ret =shared.run_cmd(cmd, config)
     if ret!=0:
         raise IOError('metgrid.exe did not complete')
     
-    logger.info('*** SUCESS METGRID ***')
+    logger.info('*** SUCESS METGRID ***\n')
 
 
 def prepare_wrf(config):
@@ -754,7 +754,7 @@ def run_real(config):
     config -- dictionary containing various configuration options """
     
     logger =shared.get_logger()    
-    logger.info('*** RUNNING REAL ***')
+    logger.info('\n*** RUNNING REAL ***')
     
     queue           = config['queue']
     working_dir   = config['working_dir']
@@ -770,7 +770,7 @@ def run_real(config):
     # so we need to change directory first.
     os.chdir(wrf_run_dir)
     cmd     =  "%s/real.exe" % wrf_run_dir
-    shared.run(cmd, config, wrf_run_dir)
+    shared.run(cmd, config, from_dir=wrf_run_dir)
     
     
     rsl = '%s/rsl.error.0000' % wrf_run_dir
@@ -790,7 +790,7 @@ def run_real(config):
         raise IOError('real.exe did not complete')
 
 
-    logger.info('*** SUCESS REAL ***')
+    logger.info('*** SUCESS REAL ***\n')
 
 
  
@@ -802,13 +802,13 @@ def run_wrf(config):
     
     """
     logger          =shared.get_logger()    
-    logger.info('*** RUNNNING WRF ***')
+    logger.info('\n*** RUNNNING WRF ***')
     queue         = config['queue']
     wrf_run_dir   = config['wrf_run_dir']
     log_file      = '%s/wrf.log' % wrf_run_dir
     
     executable  = '%s/wrf.exe' % wrf_run_dir
-    shared.run(executable, config, wrf_run_dir)
+    shared.run(executable, config, from_dir=wrf_run_dir)
     
 
     #
@@ -819,14 +819,14 @@ def run_wrf(config):
     if ret!=0:
         raise IOError('wrf.exe did not complete')
     
-    logger.info('*** SUCESS WRF ***')
+    logger.info('*** SUCESS WRF ***\n')
 
 
 def move_wrfout_files(config):
     """ Moves output files from run directory to wrfout 
     director"""
     logger =shared.get_logger()    
-    logger.info('*** MOVING WRFOUT FILES AND NAMELIST SETTINGS ***')
+    logger.debug('\n*** MOVING WRFOUT FILES AND NAMELIST SETTINGS ***')
     
     domain        = config['domain']
     model_run     = config['model_run']
@@ -844,7 +844,7 @@ def move_wrfout_files(config):
     namelist_dir  = '%s/namelist' % working_dir
     run_key       = '%s.%s'       %(domain, model_run)    # composite key  
 
-    logger.debug('Moving wrfout files from %s to %s' %(wrf_run_dir, wrfout_dir) )
+    logger.debug('Moving wrfout files from %s ----> %s' %(wrf_run_dir, wrfout_dir) )
 
     # Move WRF output files to new directory
     flist = glob.glob(wrf_run_dir+'/wrfout*')
@@ -864,10 +864,10 @@ def move_wrfout_files(config):
     #
     # Archive log files
     # 
-    logger.debug('moving rsl files to %s' % rsl_dir )
+    logger.debug('moving rsl files ----> %s' % rsl_dir )
     cmd = 'cp %s/rsl.out.0000 %s/rsl.out.%s' %(wrf_run_dir, rsl_dir, run_key)
     shared.run_cmd(cmd, config)
-    
+    logger.debug("*** FINISHED MOVING WRFOUT FILES ***")
 
 def timing(config):
     """Reads a rsl file from WRF and works out timing information
@@ -893,11 +893,11 @@ def timing(config):
     steps       = len(main_times)
     time_per_step = (total/steps)
     x_real       = timestep / time_per_step
-    logger.info('*** TIMING INFORMATION ***')
+    logger.info('\n*** TIMING INFORMATION ***')
     logger.info('\t %d outer timesteps' % steps)
     logger.info('\t %0.3f elapsed seconds' % total)
     logger.info('\t %0.3f seconds per timestep' % time_per_step )
     logger.info('\t %0.3f times real time' %x_real)
-    logger.info('*** END TIMING INFORMATION ***')    
+    logger.info('*** END TIMING INFORMATION ***\n')    
     
     

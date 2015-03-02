@@ -2,14 +2,30 @@
 post-processing, visualization and verification which goes with it.
 
 Config comes from a file, specified in an argument to the --config option.
-Configuation can also be given at the command lind, and these will override
+Configuration can also be given at the command lind, and these will override
 the configuration file. See example/forecast.yaml for an annotated list 
 of options. 
 
 Usage:
     run_forecast.py [--config=<file>] [options]
 
-See examples/forecast.yaml for an annotated list of options
+See examples/forecast.yaml for an annotated list of options. A forecast is run in a series of stages
+the main stages are: 
+
+* fetch          - fetch boundary conditions
+* prepare        - ensures correct files present, does some linking, updates namelist files
+* simulate       - runs WPS and WRF
+* post           - adds metadata, compresses files
+* visualise      - calls NCL with specified scripts. Note the English (i.e. correct ;) spelling
+* extract        - extracts time-series of variables at specified locations, relies on NCL
+* finalise       - removes files, transfers locally, archive etc. 
+* dispatch       - send out emails, plots etc
+
+These are all available as boolean options e.g. `--fetch=false` will not run anything in the fetch stage.
+Alternatively, individual stage(s) can be selected by passing it as an argument(s) to the `--only` option, e.g.
+`--only=fetch`, will only run the fetch stage, even if other options contradict this. `--only=fetch,simulate` will 
+run fetch and simulate stages.
+
 
 Options:
     --archive_mode=<str>
@@ -88,6 +104,7 @@ Options:
     --ncl_out_type=<str>
     --ncl_web_dir=<str>
     --num_procs=<dict>
+    --only=<string>
     --operational=<bool>
     --pcurve_dir=<str>
     --pdist=<int>
@@ -162,7 +179,12 @@ from wrftools import post
 from wrftools import extract
 from wrftools import finalise
 
+# these are the registered stages which can be turned on or off with config file and/or commad-line options
+STAGES = ['fetch', 'prepare', 'simulate','post', 'visualise', 'extract', 'power', 'finalise', 'dispatch']
+
+# Get configuration from command line and file, and merge the two
 config = conf.config(__doc__, sys.argv[1:], flatten=True, format="yaml")
+
 
 # horrible hack to ensure if start and end arguments 
 # are supplied by the shell, they are parsed as datrtimes
@@ -170,15 +192,21 @@ if type(config['start'])==type(""):
     config['start'] = datetime.datetime.strptime(config['start'], '%Y-%m-%d_%H:%M:%S')
     config['end'] = datetime.datetime.strptime(config['end'], '%Y-%m-%d_%H:%M:%S')
 
+    
+if config.get('only'): 
+    config = shared.set_only_stages(config, STAGES)
+
+        
 #************************************************
 # Logging
 #************************************************
 logger = shared.create_logger(config)
+
     
     
 
 #************************************************
-# Get some required settings
+# Unpack some required settings
 #************************************************
 fcst_hours   = config['fcst_hours']               # forecast length
 domain       = config['domain']                   # name of domain 
@@ -187,42 +215,15 @@ fail_mode    = config['fail_mode']                # what to do on failure
 full_trace   = config['full_trace']               # print a full stack trace
 run_level    = config['run_level']
 
+
+config['simulation.start'] = datetime.datetime.now()
 #************************************************
-# Main options. Unpack from config to make sure 
-# they are defined. Is this wise? What if an option 
-# is not needed, why should it be defined?
+# Print some information 
 #************************************************
 logger.info('*** FORECAST CYCLE STARTED ***')
-config['simulation.start'] = datetime.datetime.now()
+for stage in STAGES:
+    logger.info("    %s:    %s" %(stage.ljust(15), config[stage]))
 
-# run_level           = config['run_level']
-# fail_mode           = config['fail_mode']
-# full_trace          = config['full_trace']
-# fetch               = config['fetch']
-# gribmaster          = config['fetch.gribmaster']
-# convert_grb         = config['convert_grb']
-# sst                 = config['sst']
-# simulate            = config['simulate']
-# wps                 = config['simulate.wps']
-# ungrib              = config['simulate.ungrib']
-# geogrid             = config['simulate.geogrid']
-# metgrid             = config['simulate.metgrid']
-# ndown               = config['simulate.ndown']
-# real                = config['simulate.real']
-# wrf                 = config['simulate.wrf']
-# timing              = config['simulate.timing']
-# post                = config['post']
-# met                 = config['post.met']
-# compress            = config['post.compress']
-# metadata            = config['post.metadata']
-# hyperslab           = config['post.hyperslab']
-# upp                 = config['post.upp']
-# extract             = config['extract']
-# time_series         = config['extract.tseries']
-# power               = config['power']
-# visualise           = config['visualise']
-# dispatch            = config['dispatch']
-# finalise            = config['finalise']
 
 
 #**********************************************************

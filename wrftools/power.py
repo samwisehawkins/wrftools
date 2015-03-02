@@ -75,7 +75,7 @@ def power(config):
     
     # Get coordinate variables
     nctime    = dataset_in.variables['time']
-    datetimes = netcdftime.num2date(nctime, nctime.units)
+    datetimes = netcdftime.num2date(nctime[:], nctime.units)
     location = [''.join(l.filled(' ')).strip() for l in dataset_in.variables['location']]
     height   = dataset_in.variables['height']
 
@@ -133,9 +133,6 @@ def power(config):
 
 
     use_inds = np.array(use_locs)
-    logger.debug(use_inds)
-    logger.debug(pdata.shape)
-    logger.debug(pdata[:,use_inds,:,:].shape)
 
     if dataset_out != dataset_in:
 

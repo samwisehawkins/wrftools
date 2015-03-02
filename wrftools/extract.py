@@ -126,7 +126,7 @@ def main():
 def extract_tseries(config):
 
     logger = shared.get_logger()
-    logger.info('*** EXTRACTING TIME SERIES ***')
+    logger.info('\n*** EXTRACTING TIME SERIES ***')
      
     wrfout_dir     = config['wrfout_dir']
     tseries_dir    = config['tseries_dir']
@@ -134,43 +134,46 @@ def extract_tseries(config):
     init_time      = config['init_time']
     dom            = config['dom']
     fcst_file      = '%s/wrfout_d%02d_%s:00:00.nc' %(wrfout_dir, dom, init_time.strftime("%Y-%m-%d_%H")) # note we add on the nc extension here
-    loc_file       = config['locations_file']
+    ncl_loc_file   = config['locations_file']
     ncl_code       = config['tseries_code']
     extract_hgts   = config['extract_hgts']
     tseries_fmt    = config['tseries_fmt']
-    ncl_opt_file   = config['ncl_opt_file']
-    
-    
     ncl_log        = config['ncl_log']
+    ncl_opt_template = config['ncl_opt_template']
+    ncl_opt_file     = config['ncl_opt_file']
+
     if not os.path.exists(tseries_dir):
         os.makedirs(tseries_dir)
     
     # Always go via the netcdf file
     tseries_file = '%s/tseries_d%02d_%s.nc' % (tseries_dir, dom,init_time.strftime("%Y-%m-%d_%H"))
 
-    os.environ['FCST_FILE']      = fcst_file
-    os.environ['LOCATIONS_FILE'] = loc_file
-    os.environ['NCL_OUT_DIR']    = tseries_dir
-    os.environ['NCL_OUT_FILE']   = tseries_file
-    os.environ['NCL_OPT_FILE']   = ncl_opt_file
-    
-    
-    logger.debug('Setting environment variables')
-    logger.debug('FCST_FILE    ----> %s'  % fcst_file)
-    logger.debug('NCL_OUT_DIR  ----> %s'  % tseries_dir)
-    logger.debug('NCL_OUT_FILE  ----> %s' % tseries_file)
-    logger.debug('LOCATIONS_FILE ----> %s' % loc_file)
-    logger.debug('NCL_OPT_FILE   ----> %s' % ncl_opt_file)
-    logger.debug(extract_hgts)
-
     ncl_hgts = '(/%s/)' % ','.join(map(str,extract_hgts))
+    replacements = {'<ncl_in_file>'  : fcst_file, 
+                    '<ncl_out_file>' : tseries_file,
+                    '<ncl_out_dir>'  : tseries_dir, 
+                    '<ncl_out_type>' : "nc",
+                    '<ncl_loc_file>' : ncl_loc_file,
+                    '<extract_heights>': ncl_hgts}
+        
+
+    shared.fill_template(ncl_opt_template, ncl_opt_file, replacements)
+        
+    logger.debug('ncl_opt_template: %s' % ncl_opt_template)
+    logger.debug('    ncl_in_file  ----> %s' % fcst_file)
+    logger.debug('    ncl_out_dir  ----> %s' % tseries_dir)
+    logger.debug('    ncl_out_type ----> %s' % "nc")
+    logger.debug('    ncl_loc_file ----> %s' % ncl_loc_file)
+    logger.debug('ncl_opt_file: %s' % ncl_opt_file)
+    
+    
     
     for script in ncl_code:
-        cmd  = "ncl 'extract_heights=%s'  %s >> %s 2>&1" % (ncl_hgts,script, ncl_log)
+        cmd  = "NCL_OPT_FILE=%s ncl %s >> %s 2>&1" % (ncl_opt_file,script, ncl_log)
         shared.run_cmd(cmd, config)
 
     ncdump(config)
-    
+    logger.info("*** DONE EXTRACTING TIME SERIES ***\n")
     
 if __name__ == '__main__':
     main()

@@ -23,7 +23,7 @@ def run_gribmaster(config):
 
     for attempt in range(gm_max_attempts):
         logger.info('*** RUNNING GRIBMASTER, %s attempt ***' % (attempt+1))
-        shared.run_cmd(cmd, config)
+        shared.run(cmd, config)
         
         cmd = 'grep "BUMMER" %s' % gm_log # check for failure
         ret = subprocess.call(cmd, shell=True)

@@ -164,7 +164,7 @@ def frame_from_nc(ncfiles, vars, global_atts, var_atts, coord_vars,log_name):
             
         # get coorinate variables
         time      = variables['time']
-        datetimes = num2date(time,units=time.units,calendar=time.calendar)
+        datetimes = num2date(time[:],units=time.units,calendar=time.calendar)
         ntime     = len(datetimes) 
         init_time = datetimes[0]
       
@@ -177,11 +177,12 @@ def frame_from_nc(ncfiles, vars, global_atts, var_atts, coord_vars,log_name):
             
         # Unmask string and strip, convert from unicode to string
         nloc        = location.shape[0]
-        loc_masked  = np.ma.array(location)
-        loc_id_raw  = [''.join(loc_masked[l,:].filled('')) for l in range(nloc)]
-        location    = map(string.strip, loc_id_raw)
-        location    = map(str,location)
-        logger.debug(location)
+        
+        loc_names = [''.join(location[l,:].filled(' ')) for l in range(nloc)]
+        location = map(string.strip, loc_names)
+        
+
+        #location    = map(str,location)
         height      = variables['height']
         nheight     = len(height)
 
@@ -219,7 +220,6 @@ def frame_from_nc(ncfiles, vars, global_atts, var_atts, coord_vars,log_name):
         
         for v in vars3D:
             fill_value = variables[v].getncattr("_FillValue")
-            logger.debug(v)
             for l in range(nloc):
                 for h in range(nheight):
                     # create dataframe then append columns avoids copying each series
@@ -238,7 +238,6 @@ def frame_from_nc(ncfiles, vars, global_atts, var_atts, coord_vars,log_name):
                     for att in global_atts:
                         df[str(att)] = dataset_atts[att]
                     for att in var_atts:
-                        logger.debug(att)
                         df[str(att)] = variables[v].getncattr(att)
                     frames.append(df)
         dataset.close()
@@ -331,7 +330,7 @@ def write_csv_files(frame, out_dir, out_name, variables, dimspec, drop, values, 
 
     frame = frame.reset_index()
 
-    logger.debug(frame)
+
     if sort_by:
         frame.sort(sort_by, inplace=True)
 
@@ -644,10 +643,8 @@ def frame_from_nc_old(ncfiles, vars, dimspec, global_atts, var_atts, log_name):
     Unstacking a coordinate, e.g. height would have to be implemented somehow."""
 
     logger = loghelper.get_logger(log_name)
-    logger.debug(vars)
-    logger.debug(dimspec)
-    logger.debug(global_atts)
-    logger.debug(var_atts)
+
+
     
     rows = []
     

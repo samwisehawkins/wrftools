@@ -19,7 +19,7 @@ from collections import OrderedDict
 
 from namelist import Namelist, read_namelist
 
-from queue import fill_template
+from queue import QueueError
 
 import glob
 
@@ -54,6 +54,31 @@ def check_config(config):
 
     
 
+def set_only_stages(config, stages):
+    """Overwrides individual stages if --only option has been specified. 
+    
+    Args
+       config -- the configuration dictionary
+       stages -- a list of registered stages"""
+    
+    # modify a copy, probably best practice rather than 
+    # modifying the original. 
+    
+    result = config.copy()
+    only = config.get('only')
+
+    if type(only)==type(""): only=[only]
+
+    # set all other stages to false
+    for stage in stages:
+        result[stage] = False
+    
+    for stage in only:
+        if stage in stages:
+            result[stage] = True
+                
+    return result
+            
     
     
 
@@ -101,28 +126,88 @@ def status(config):
     f.close()
         
         
-    
+
+def fill_template(template, output, replacements):
+     """Replaces placeholders in template file with corresponding
+     values in dictionary of replacements, and writes file to output
+
+    Arguments:
+        template     -- filename path of template file
+        output       -- filename path of output file
+        replacements -- dictionary with string keys and values, keys ocuuring in template
+                        are replaced by values in output.
+     """
+     
+     
+     i = open(template, 'r')
+     content = i.read()
+     for key in replacements.keys():
+        content = content.replace(key,str(replacements[key]))
+
+     o = open(output, 'w')
+     o.write(content)
+     o.close()
+     i.close()
+     return output     
+
+
+        
 #******************************************************************************
 # Running commands
 #******************************************************************************
+def env_var(expr):
+    """determines whether an expression is setting an environment variable
+    before a script is executed, e.g A=1 cmd"""
+
+    return "=" in expr
+    
+
+    
 def get_exe_name(cmd):
     """returns the executable name stripped of any path and arguments"""
 
+    # a command may not be the first token, for example
+    # ENV_VAR=var cmd
+    
     #
     # Either cmd, or cmd args other_stuff
     #
-    parts = cmd.split()
-    if len(parts)==0:
+    tokens = cmd.split()
+    
+    
+    if len(tokens)==0:
         executable = cmd
     else:
+        # eclude all environment variable definitions
+        parts = [t for t in tokens if not env_var(t)]
         executable = parts[0]
 
     exe = os.path.split(executable)[-1]
     return exe
 
+def get_env_vars(cmd):
+    """returns any environment variable specifications supplied as prefixes to 
+    the command, as e.g. A=1 B=2 my_script"""
     
-def run(cmd, config, from_dir=None):
+    env_vars = [t for t in cmd.split() if env_var(t)]
     
+    
+    
+    
+def run(cmd, config, from_dir=None, env_vars=None):
+    """ An all-purpose function to determine how a command should be run. 
+    This looks in the config, and determined whether the command is to be run
+    directly at the command line, at the command line via mpirun, or by 
+    packaged up into a job script and submitted to the scheduler
+    
+    Arguments:
+        cmd      -- executable to run 
+        config   -- configuration specifying number of processors etc 
+        env_vars -- optional dictionary of environment variables for this specific script
+        from_dir -- optional directory to run the the script from
+    """
+    
+    logger=get_logger()
     exec_name  = get_exe_name(cmd)
     queue      = config['queue']
     num_procs  = config['num_procs']
@@ -135,17 +220,17 @@ def run(cmd, config, from_dir=None):
     
     # if a queue name is specified and is not false
     if exec_name in queue and queue[exec_name]:
-        run_cmd_queue(cmd,config,from_dir,queue_log[exec_name])
+        run_queue(cmd,config,from_dir,queue_log[exec_name], env_vars=env_vars)
         
     elif n>1:
-        mpirun(cmd, n, config['host_file'], config['run_level'],config['cmd_timing'])
+        mpirun(cmd, n, config['host_file'], config['run_level'],config['cmd_timing'], env_vars=env_vars)
     
     else:
-        run_cmd(cmd, config)
+        run_cmd(cmd, config, env_vars=env_vars)
 
 
 
-def mpirun(cmd, num_procs, hostfile, run_level, cmd_timing=False):
+def mpirun(cmd, num_procs, hostfile, run_level, cmd_timing=False, env_vars=None):
     """Wrapper around the system mpirun command.
     
     Arguments:
@@ -163,11 +248,20 @@ def mpirun(cmd, num_procs, hostfile, run_level, cmd_timing=False):
     else:
         nprocs = num_procs
 
+    # LD_LIBRARY_PATH is an ungly hack to get it to work 
+    # on Maestro, hopefully we can get rid of reliance on 
+    # this
+    env_var_str = ""
+    
+    if env_vars:
+        env_var_str = " ".join(["-x %s=%s" %(key,value) for key,value in env_vars.items()])
+        logger.debug(env_var_str)
+    
     if hostfile=='None':
-        cmd = 'mpirun -n %d %s' % (nprocs,  cmd)
+        cmd = 'mpirun -x LD_LIBRARY_PATH %s -n %d %s' % (env_var_str, nprocs, cmd)
 
     else:
-        cmd = 'mpirun -n %d -hostfile %s %s' % (nprocs, hostfile, cmd)
+        cmd = 'mpirun -x LD_LIBRARY_PATH %s -n %d -hostfile %s %s' % (env_var_str, nprocs, hostfile, cmd)
 
     logger.debug(cmd)
     
@@ -183,7 +277,7 @@ def mpirun(cmd, num_procs, hostfile, run_level, cmd_timing=False):
 
         
 
-def run_cmd(cmd, config):
+def run_cmd(cmd, config, env_vars=None):
     """Executes and logs a shell command. If config['run_level']=='DUMMY', then
     the command is logged but not executed."""
     
@@ -194,12 +288,18 @@ def run_cmd(cmd, config):
     t0          = time.time()
     logger.debug(cmd)
     
+    env_var_str = ""
+    if env_vars:
+        env_var_str = " ".join(["%s=%s" %(key,value) for key,value in env_vars.items()])
+    
+    cmd_str = "%s %s" %(env_var_str, cmd)
+    
     #
     # Only execute command if run level is 'RUN', 
     # otherwise return a non-error 0. 
     #
     if run_level=='RUN':
-        ret = subprocess.call(cmd, shell=True)
+        ret = subprocess.call(cmd_str, shell=True)
     else:
         ret = 0
     
@@ -210,15 +310,16 @@ def run_cmd(cmd, config):
     return ret
 
 
-def run_cmd_queue(cmd,config, run_from_dir, log_file):
+def run_queue(cmd,config, run_from_dir, log_file, env_vars=None):
     """ Run a command via the scheduler, and wait in loop until
     command is expected to finish.
     
     Arguments:
-        @xmd            -- full path of the executable
+        @cmd            -- full path of the executable
         @config         -- all the other settings!
         @run_from_dir   -- directory to run from 
-        @log_file       -- redirect to different log file"""
+        @log_file       -- redirect to different log file
+        @env_vars       -- optional dict of environment vars"""
     
     logger          = get_logger()    
 
@@ -251,18 +352,27 @@ def run_cmd_queue(cmd,config, run_from_dir, log_file):
         tb = traceback.format_exc()
         raise ConfigError(tb)    
     
-    # If no queue is specified, then we run directly via mpirun
-    if not qname:
-        mpirun(cmd, config['num_procs'], config['host_file'], config['run_level'], config['cmd_timing']) 
-        return
-    
-    # Otherwise we want to run via SGE
-    logger.debug(mjt)
-    logger.debug(pint)
+
     attempts = mjt / pint
     
     logger.debug('Submitting %s to %d slots on %s, polling every %s minutes for %d attempts' %(exe, nprocs, qname, pint, attempts ))
     #logger.debug('Running from dir: %s ' % run_from_dir)
+    
+    env_var_str = ""
+    if env_vars:
+        logger.debug("environment variables supplied")
+        
+        # for older mpi versions
+        env_var_str = " ".join(["-x %s=%s" %(key,value) for key,value in env_vars.items()])
+        
+        # mca_base_env_list" parameter to specify the whole list of required
+        # environment variables. With this new mechanism, -x env_foo1=bar1 -x env_foo2=bar2
+        # becomes -mca mca_base_env_list "env_foo1=bar1;env_foo2=bar2".
+        #env_var_str = "-mca";".join(["%s=%s" %(key,value) for key,value in env_vars.items()])                
+        
+        cmd = "%s %s" %(env_var_str, cmd)
+        logger.debug(env_var_str)
+        
     replacements = {'<executable>': cmd,
                 '<jobname>': exe,
                 '<qname>'  : qname,
