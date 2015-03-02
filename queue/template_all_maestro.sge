@@ -1,0 +1,32 @@
+#!/bin/bash
+
+. /etc/profile.d/modules.sh
+
+# Module stuff
+module add gcc
+module load netcdf
+module load szip
+module load sge
+module load openmpi
+module add ncl/nodap
+
+#
+# Active comments for SGE 
+#
+#$ -S /bin/bash
+#$ -N <jobname>
+#$ -v MPI_HOME
+#$ -v LD_LIBRARY_PATH
+#$ -cwd
+#$ -q <qname>
+#$ -pe mpi <nprocs>
+#$ -j yes
+#$ -o <logfile>
+
+
+CMD="$MPI_HOME/bin/mpirun -np $NSLOTS <executable>"
+ 
+echo $CMD
+ 
+$CMD
+
