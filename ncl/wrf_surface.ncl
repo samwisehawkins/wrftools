@@ -20,16 +20,19 @@ begin
 
 
 ;******************************************************
-  File     = ncl_in_file
-  type     = ncl_out_type
-  diro     = ncl_out_dir
-  loc_file = ncl_loc_file
-  prefix   = "w10"
-
   
-  if isdefined("ncl_opt_file") then 
-    loadscript(opt_file)
-  end if
+  ;******************************************************
+  ; NCL expects some or all of the following to be defined on 
+  ; the command-line
+  ; ncl_in_file
+  ; ncl_out_dir
+  ; ncl_out_file
+  ; ncl_out_ncl_out_type
+  ; ncl_ncl_loc_file
+  ; ncl_opt_file
+  ;******************************************************
+  load "$NCL_OPT_FILE"
+  prefix   = "w10"
 
   
   
@@ -37,11 +40,11 @@ begin
 ;******************************************************
 ; Add the file
 ;***********************************************
-  file_handle = addfile(File,"r")  
+  file_handle = addfile(ncl_in_file,"r")  
 ;
 ; The WRF ARW input file.  
 ;
-  a = addfile(File,"r")
+  a = addfile(ncl_in_file,"r")
   domain = sprinti("%0.2i",a@GRID_ID)
 
  colors = (/"white","black","white","yellow","orange","DarkOrange",\
@@ -83,8 +86,8 @@ do i=0,ntimes-1
   res@TimeLabel = times(i)   ; Set Valid time to use on plots
     current_lead_hh=sprinti("%0.2i", i)
     print("Lead time is:"+current_lead_hh)
-        fileout = diro + "/" + prefix + "_d" + domain + "_" + current_lead_hh 
-        wks = gsn_open_wks(type,fileout)
+        fileout = ncl_out_dir + "/" + prefix + "_d" + domain + "_" + current_lead_hh 
+        wks = gsn_open_wks(ncl_out_type,fileout)
         gsn_define_colormap(wks, colors)
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; First get the variables we will need        
@@ -140,6 +143,5 @@ end if
 
 end do 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-
 end
+quit

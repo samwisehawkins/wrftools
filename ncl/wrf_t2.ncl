@@ -13,22 +13,18 @@ begin
 ; ncl_in_file
 ; ncl_out_dir
 ; ncl_out_file
-; ncl_out_type
-; ncl_loc_file
+; ncl_out_ncl_out_type
+; ncl_ncl_loc_file
 ; ncl_opt_file
 ;******************************************************
-  fcst_file= ncl_in_file
-  type     = ncl_out_type
-  diro     = ncl_out_dir
-  loc_file = ncl_loc_file
+  load "$NCL_OPT_FILE"
   prefix   = "t2"
 
 ;******************************************************
 ; Add the file
 ;***********************************************
-
   
-  print("\n\n**********************************************")
+  print("**********************************************")
   print("wrf_t2.ncl")
 
   
@@ -37,7 +33,7 @@ begin
 ; Add the file
 ;***********************************************
 
-  a = addfile(fcst_file, "r")
+  a = addfile(ncl_in_file, "r")
   domain = sprinti("%0.2i",a@GRID_ID)
 
 ; Set some basic resources
@@ -47,6 +43,8 @@ begin
   res@Footer = False
   res@InitTime = True 
   res@ValidTime= True
+  res@FontHeightF = 0.015
+
  
   pltres = True
   mpres = True
@@ -71,7 +69,7 @@ last_lead_hh=sprinti("%0.2i", 0)
 
 do it=0,ntimes-1
   current_lead_hh=sprinti("%0.2i", it)
-  wks = gsn_open_wks(type,diro+"/"+prefix+"_d"+domain+"_"+current_lead_hh)
+  wks = gsn_open_wks(ncl_out_type,ncl_out_dir+"/"+prefix+"_d"+domain+"_"+current_lead_hh)
   gsn_define_colormap(wks,"WhViBlGrYeOrReWh")
   ;print("Working on time: " + times(it) )
   res@TimeLabel = times(it)   ; Set Valid time to use on plots
@@ -93,7 +91,7 @@ do it=0,ntimes-1
     ; Plotting options for T                
     opts = res                         
     opts@cnFillOn = True  
-    opts@cnFillPalette = "posneg_2" 
+    opts@cnFillPalette = "BlWhRe" 
     t_max = floattoint(ceil(max(tc2)))
     t_min = floattoint(floor(min(tc2)))
     t_start = t_min - (t_max % 5)
@@ -104,7 +102,7 @@ do it=0,ntimes-1
     ;opts@ContourParameters = (/5.,30.,1/)  
     ;opts@gsnSpreadColorStart = 6
     ;opts@gsnSpreadColorEnd = 97
-    symMinMaxPlt(tc2,20,False,opts)  
+    symMinMaxPlt(tc2,40,False,opts)  
     contour_tc = wrf_contour(a,wks,tc2,opts)
 
     delete(opts)
@@ -134,9 +132,7 @@ do it=0,ntimes-1
 end do 
   
   print("wrf_t2.ncl")
-  print("\n\n**********************************************")
-
-
+  print("**********************************************")
 
 end
-
+quit

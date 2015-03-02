@@ -12,13 +12,11 @@
 ;
 ; The following arguments/environment variables are used:
 ;
-; Command line arg  Env variable      Description
-; in_file           FCST_FILE         a single input file or array of input files
-; out_dir           NCL_OUT_DIR       a single output directory
-; out_file          NCL_OUT_FILE      the name of an output file
-; loc_file          LOCATIONS_FILE    the name of a locations file specifying locations
-;                   NCL_OPT_FILE      a snippet of ncl code which will get loaded,
-;                                     defining options and variables. Must be env variable.
+; Command line arg  Description
+; ncl_in_file       a single input file or array of input files
+; ncl_out_dir       a single output directory
+; ncl_out_file      the name of an output file
+; ncl_loc_file      the name of a locations file specifying locations
 ;
 ; Credit to Dennis Shea's wrfout_to_cf.ncl for some inspiration
 ;
@@ -31,37 +29,19 @@ load "$HOME/code/wrftools/devel/ncl/wrftools.ncl"
 begin
 
 ;******************************************************
-; Either get input from command-line options (preference)
-; or environment variables
-; Strategy. If the variable is directly 
-; defined on the command-line, then that takes preference.
-; Otherwise we take it from an environment variable.
-
+; Get options from file
 ;******************************************************
-    if .not. isdefined("in_file") then 
-        in_file = getenv("FCST_FILE") 
-    end if
-
-    if .not. isdefined("out_dir") then 
-        out_dir    = getenv("NCL_OUT_DIR")
-    end if
-
-    if .not. isdefined("out_file") then 
-        out_file   = getenv("NCL_OUT_FILE")
-    end if 
-    
-    if .not. isdefined("loc_file") then 
-        loc_file   = getenv("LOCATIONS_FILE")
-    end if
     
     ; this must be defined as a environment variable
     ; due to the way a load statement works in NCL
-    opt_file   = getenv("NCL_OPT_FILE")
+    ;opt_file   = getenv("NCL_OPT_FILE")
+    load "$NCL_OPT_FILE"
+;******************************************************
 
     
-    ;******************************************************
-    ; Default height options hard-coded
-    ;******************************************************
+;******************************************************
+; Default height options hard-coded
+;******************************************************
     if .not. isdefined("extract_heights") then 
         extract_heights = (/20.0,40.0,60.0,80.0,100.0,150.0,200.0/)      
     end if
@@ -92,27 +72,20 @@ begin
 ;  end if
 ;*****************************************************
   
-;******************************************************
-; Options and output variables
-; Load these at run-time to avoid hard-coding options
-; into the script.
-;******************************************************  
-    load "$NCL_OPT_FILE"
-;******************************************************
 
 ;******************************************************
 ; Give some info
 ;******************************************************
-print(in_file)
-print(out_file)
+print(ncl_in_file)
+print(ncl_out_file)
 ;******************************************************
 
 ;******************************************************
 ; Remove output file
 ;******************************************************
-if (isfilepresent(out_file))
+if (isfilepresent(ncl_out_file))
     print("NCL remving pre-existing output file")
-    system ("rm -f " + out_file )
+    system ("rm -f " + ncl_out_file )
 end if
 
 
@@ -121,18 +94,19 @@ end if
 ; Add the file(s)
 ; Only used addfiles if there is more than one file
 ;******************************************************
-	dims = dimsizes(in_file)
+	dims = dimsizes(ncl_in_file)
     nfiles = dims(0)
     delete(dims)
   
     if (nfiles.eq.1) then 
-        f = addfile(in_file(0),"r")
+        f = addfile(ncl_in_file(0),"r")
     else 
-        f = addfiles(in_file, "r")
+        f = addfiles(ncl_in_file, "r")
     end if 
  
-
-    locations = read_locations(loc_file)
+    print(ncl_loc_file)
+    locations = read_locations(ncl_loc_file)
+    print(locations)
     loc_id = locations[0]
 	name   = locations[1]
 	lat    = locations[2]
@@ -147,7 +121,7 @@ end if
     ; What do we call out_file?
     ;out_file = out_dir +"/tseries_" + init_time +".nc"
     
-    fout = wrf_user_interp_vars_tofile(f, extract_heights,loc_id, lat, lon,-1,out_file, vars, opts)
+    fout = wrf_user_interp_vars_tofile(f, extract_heights,loc_id, lat, lon,-1,ncl_out_file, vars, tsopts)
     delete(fout)
     
 print("*** SUCCESS NCL EXTRACT TIME SERIES ***")    

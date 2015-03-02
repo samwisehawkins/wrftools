@@ -13,21 +13,18 @@ begin
   print("\n\n**********************************************")
   print("wrf_precip.ncl")
 
-  ; NCL expects some or all of the following to be defined on 
-  ; the command-line
+  ;*************************************************************
+  ; NCL expects some or all of the following to be defined,
+  ; either on the command line, or in a single options file
+  ; specified in an environment variable
   ; ncl_in_file
   ; ncl_out_dir
   ; ncl_out_file
   ; ncl_out_type
   ; ncl_loc_file
-  ; ncl_opt_file
     
-  if isdefined("ncl_opt_file") then 
-    loadscript(opt_file)
-  end if
-    
-
-
+  load "$NCL_OPT_FILE"
+  prefix = "pp"
 
   print("reading file "+ncl_in_file)
   a = addfile(ncl_in_file,"r")
@@ -71,7 +68,7 @@ begin
 
     ff = floattointeger(a->XTIME/60.)
 
-    PlotName = ncl_out_dir+"/pp_d"+sprinti("%0.2i",a@GRID_ID)+"_"+sprinti("%0.2i",ff(it))
+    PlotName = ncl_out_dir+"/"+prefix+"_d"+sprinti("%0.2i",a@GRID_ID)+"_"+sprinti("%0.2i",ff(it))
     print("PlotName: "+PlotName)
     wks = gsn_open_wks(ncl_out_type,PlotName)
     colors = (/"white","black","white","yellow","orange","DarkOrange",\
@@ -131,9 +128,9 @@ begin
   end do        ; END OF TIME LOOP
 
   print("wrf_precip.ncl")  
-  print("\n\n**********************************************")
-
+  print("**********************************************")
 
 ;********************************************
 
 end
+quit

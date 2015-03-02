@@ -8,28 +8,23 @@ begin
 ; The WRF ARW input file.  
 ; This needs to have a ".nc" appended, so just do it.
     
-;******************************************************
-; 
-; NCL expects some or all of the following to be defined on 
-; the command-line
-; ncl_in_file
-; ncl_out_dir
-; ncl_out_file
-; ncl_out_type
-; ncl_loc_file
-; ncl_opt_file
-;**************************************************************
-    
-    type=ncl_out_type
-    
-    fname   = ncl_in_file
-    a       = addfile(fname,"r")
+    ;******************************************************
+    ; 
+    ; NCL expects some or all of the following to be defined on 
+    ; the command-line
+    ; ncl_in_file
+    ; ncl_out_dir
+    ; ncl_out_file
+    ; ncl_out_type
+    ; ncl_loc_file
+    ; ncl_opt_file
+    ;**************************************************************
+    load "$NCL_OPT_FILE"
+    prefix   = "sst"
+
+    a = addfile(ncl_in_file,"r")
     grid_id = a@GRID_ID
     d = grid_id
-
-    diro     = ncl_out_dir
-    web_dir = diro   
-    print ("writing to "+web_dir)
 
     colors = (/"white","black","white","yellow","orange","DarkOrange",\
              "OrangeRed","Red1","Red2","Red4","DarkOrchid1","purple",\
@@ -71,9 +66,9 @@ begin
     res@TimeLabel = times(i)   ; Set Valid time to use on plots
     current_lead_hh=sprinti("%0.2i", i)
     print("Lead time is:"+current_lead_hh)
-    fileout = web_dir+"/sst_d"+sprinti("%0.2i", grid_id)+".png"
+    fileout = ncl_out_dir+"/"+prefix+"_d"+sprinti("%0.2i", grid_id)+".png"
     print("fileout is "+fileout)
-    wks = gsn_open_wks(type,fileout)
+    wks = gsn_open_wks(ncl_out_type,fileout)
     gsn_define_colormap(wks,"temp1")        
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; First get the variables we will need        
@@ -175,3 +170,4 @@ end if
 	frame(wks) 
 
 end
+quit
