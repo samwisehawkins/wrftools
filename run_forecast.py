@@ -192,7 +192,7 @@ if type(config['start'])==type(""):
     config['start'] = datetime.datetime.strptime(config['start'], '%Y-%m-%d_%H:%M:%S')
     config['end'] = datetime.datetime.strptime(config['end'], '%Y-%m-%d_%H:%M:%S')
 
-    
+# this allows a user to select only certain stages, and all others are set to false    
 if config.get('only'): 
     config = shared.set_only_stages(config, STAGES)
 
@@ -201,9 +201,6 @@ if config.get('only'):
 # Logging
 #************************************************
 logger = shared.create_logger(config)
-
-    
-    
 
 #************************************************
 # Unpack some required settings
@@ -223,7 +220,7 @@ config['simulation.start'] = datetime.datetime.now()
 logger.info('*** FORECAST CYCLE STARTED ***')
 for stage in STAGES:
     logger.info("    %s:    %s" %(stage.ljust(15), config[stage]))
-
+logger.info('*****************************')
 
 
 #**********************************************************
@@ -401,7 +398,7 @@ for init_time in init_times:
                
                 
     #
-    # Met verification tools
+    # Post processing stages
     #
     if config['post'] and config['post.met']:
         for d in range(1,max_dom+1):        

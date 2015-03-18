@@ -1,13 +1,14 @@
 """ncdump.py dumps data from a netcdf file to text file
 
 Usage: 
-    ncdump.py --config=<file> <files>... [options] 
+    ncdump.py --config=<file> [<files>...] [options] 
 
 Options:
     <files>                     input files to operate on
     --config=<file>             config file specifying options
-    --init_time=<datetime>      inital time
-    --tseries_file=<str>        file pattern to become time series
+    --init-time=<datetime>      inital time
+    --output=<dict>             output mapping
+    --file-pattern=<str>        file pattern to become time series
     --grid_id=<int>             nest id number
     --log.level=<level>         info, debug or warn
     --log.file=<file>           optionally write to log file
@@ -39,12 +40,10 @@ from netCDF4 import num2date, date2num
 import loghelper
 import confighelper as conf
 from substitute import expand
-
+import nctools
 
 RESERVED_ATTS = ['_index']
 LOGGER        = 'ncdump'
-HGT2DNUM      = 9999   # height to encode 2D variables as (must be numeric and not clash with real heights)
-HGT2DSTR      = "2D"   # how 2D vars are specified in config file (can be string)
 
 
 FORMATS         = ['csv','txt','json','aot'] # supported output formats
@@ -52,7 +51,9 @@ FILE_DATE_FMT   = '%Y-%m-%d_%H%M'  # Date format for file name
 DATE_FMT        = '%Y-%m-%d %H:%M' # Date format within files
 GLOBAL_ATTS     = ['GRID_ID']  # which global attributes to copy from ncfile to json
 VAR_ATTS        = ['units', 'description']  # which variables attributes to include in json series
-FULL_SLICE      = {'time': (0,None), 'location': (0,None), 'height':(0,None)} # this represents no slicing
+#FULL_SLICE      = {'time': (0,None), 'location': (0,None), 'height':(0,None)} # this represents no slicing
+FULL_SLICE      = {'reftime': (0,None), 'leadtime': (0,None), 'location': (0,None), 'height':(0,None)} # this represents no slicing
+
 
 class UnknownFormat(Exception):
     pass
@@ -74,23 +75,18 @@ def ncdump(config):
     scope = {'init_time' : config['init_time'],
              'grid_id'   : config['grid_id']}
              
-
+    files = config['<files>']
+    frame = nctools.melt(files)
     
-    for name, entry in config['ncdump'].items():
-        logger.debug("procesing entry %s " % name)
+    
+    logger.debug(type(config['ncdump']))
+    
+    for key,entry in config['ncdump'].items():
+        filter = entry.get('filter')
+        pivot = entry.get('pivot')
         
-        if config.get('<files>'):
-            files = config['<files>']
-            if type(files)!=type([]):
-                files = [files]
-        else:
-            tseries_files = expand(entry['tseries_file'], config)
-            logger.debug("expanding file list from pattern and init time")
-            
-            files = glob.glob(tseries_files)
-            logger.debug("found %d files" % len(files))
-
-        dump(files, entry, scope, log_name=config['log.name'])
+        
+        #dump(files, entry, scope, log_name=config['log.name'])
     
     
 def dump(files,entry,scope,log_name=LOGGER):
@@ -135,211 +131,8 @@ def dump(files,entry,scope,log_name=LOGGER):
         write_aot_files(frame, entry['dir'])
 
 
-        
-def frame_from_nc(ncfiles, vars, global_atts, var_atts, coord_vars,log_name):
-
-    """ Build a Pandas DataFrame from a series of netcdf files"""
-
-    logger = loghelper.get_logger(log_name)
-    frames = []
-
-    # for type testing
-    ma = np.ma.array([0])
-
-    
-    # Open files one-by-one
-    for f in ncfiles:
-        logger.debug("reading:  %s" % f)
-        dataset = Dataset(f, 'r')
-        #logger.debug(dataset)
-        variables = dataset.variables
-        # lookup global attributes in dataset
-        # shouldn't really use this, but it works
-        dataset_atts = dataset.__dict__
-        
-        
-        # if no vars specified, use all in ncfiles
-        if vars==None:
-            vars = list(variables.keys())
-            
-        # get coorinate variables
-        time      = variables['time']
-        datetimes = num2date(time[:],units=time.units,calendar=time.calendar)
-        ntime     = len(datetimes) 
-        init_time = datetimes[0]
       
-      
-        # hack to catch thanet files which have location_id rather than location
-        try:
-            location    = variables['location']
-        except KeyError:
-            location    = variables['location_id']
-            
-        # Unmask string and strip, convert from unicode to string
-        nloc        = location.shape[0]
-        
-        loc_names = [''.join(location[l,:].filled(' ')) for l in range(nloc)]
-        location = map(string.strip, loc_names)
-        
 
-        #location    = map(str,location)
-        height      = variables['height']
-        nheight     = len(height)
-
-        varnames = [v for v in vars if v not in coord_vars]
-        vars2D = [v for v in varnames if len(variables[v].shape)==2]
-        vars3D = [v for v in varnames if len(variables[v].shape)==3]
-       
-        
-        #can't really avoid nested loop here without making code unintelligble
-        for v in vars2D:
-            fill_value = variables[v].getncattr("_FillValue")
-            for l in range(nloc):
-                # create dataframe then append columns avoids copying each series
-                df = pd.DataFrame(datetimes, index=range(len(datetimes)), columns=['valid_time'])
-                df['init_time']  = init_time
-                df['location']   = location[l]  # this creates is an object type
-                df['location']   = df['location'].astype(str)
-                df['height']     = HGT2DNUM
-                df['variable']   = v
-                
-
-                value            = variables[v][:,l]
-                
-                # pandas doesn't handle masked arrays well, fill with nans will ensure missing in output                
-                if type(value)==type(ma):
-                    value=value.filled(np.nan)
-                
-                df['value']      = value
-
-                for att in global_atts:
-                    df[str(att)] = dataset_atts[att]
-                for att in var_atts:
-                    df[str(att)] = variables[v].getncattr(att)
-                frames.append(df)
-        
-        for v in vars3D:
-            fill_value = variables[v].getncattr("_FillValue")
-            for l in range(nloc):
-                for h in range(nheight):
-                    # create dataframe then append columns avoids copying each series
-                    df = pd.DataFrame(datetimes, index=range(len(datetimes)),columns=['valid_time'])
-                    df['init_time']  = init_time
-                    df['location']   = location[l]
-                    df['height']     = height[h]
-                    df['variable']   = v
-                    value            = variables[v][:,l,h]
-                    # pandas doesn't handle masked arrays well, fill with nans will ensure missing in output                
-                    if type(value)==type(ma):
-                        value=value.filled(np.nan)
-                    
-                    df['value']      = value
-
-                    for att in global_atts:
-                        df[str(att)] = dataset_atts[att]
-                    for att in var_atts:
-                        df[str(att)] = variables[v].getncattr(att)
-                    frames.append(df)
-        dataset.close()
-    
-    df = pd.concat(frames)
-    
-    cols = df.columns
-
-    # re-order the columns for cleaner output
-    pre_cols = ['init_time','valid_time','location']
-    data_cols = [c for c in cols if c not in pre_cols]
-    new_cols = pre_cols + data_cols
-    df = df[new_cols]
-    df.index = range(len(df))
-    #df.replace(fill_value, np.nan)
-    return df
-
-
-def _filter(frame, variables=None, dimspec=None, log_name=LOGGER):
-    
-    logger = loghelper.get_logger(log_name)
-    
-    # filter by variables
-    if variables:
-        use_var = map(str,variables)
-        logger.debug("filtering on variable: %s" % str(use_var))
-        frame = frame[frame['variable'].isin(use_var)]
-        logger.debug("%d rows" % len(frame))
-    
-    # filter by location
-    if dimspec and 'location' in dimspec:
-        use_loc = map(str,dimspec['location'])
-        logger.debug("filtering on location: %s" % str(use_loc))
-        frame = frame[frame['location'].isin(use_loc)]
-        logger.debug("%d rows" % len(frame))
-    
-    # filter by height. How do we treat surface here?
-    if dimspec and 'height' in dimspec:
-        use_hgt = dimspec['height']
-        use_hgt = [HGT2DNUM if h==HGT2DSTR else h for h in use_hgt]
-        
-        logger.debug("filtering on height: %s" % str(use_hgt))
-        ind = frame['height'].isin(use_hgt)
-        frame = frame[ind]
-        logger.debug("%d rows" % len(frame))
-    
-    return frame
-    
-
-def _drop(frame, cols):
-    new_cols = [c for c in frame.columns if c not in cols]
-    return frame[new_cols]
-
-def _rename(frame, mapping):
-    new_names = [ mapping[c] if c in mapping else c for c in frame.columns]
-    frame.columns = new_names
-    return frame
-
-
-    
-def write_csv_files(frame, out_dir, out_name, variables, dimspec, drop, values, rows, cols, sort_by=None, rename=None, float_format='%0.3f', na_rep="",log_name=LOGGER):
-    """Writes each variable and height into a seperate column.  Columns will be labelled variable_height where height if formatted as %03d int(height)
-    
-    Takes as input a DataFrame in a record based format, e.g. init_time, valid_time, height, location, variable, units, value."""
-    
-    logger = loghelper.get_logger(log_name)
-
-    if not os.path.exists(out_dir):
-        os.makedirs(out_dir)
-    
-    # drop columns first, this will cause problems later if someone else wants to use it!
-    #if drop:
-    #    for col in drop:
-    #        del(frame[col])
-    #logger.debug(frame)
-    
-    # drop columns by subsetting to create a view
-    if drop: _drop(frame, drop)
-      
-    # subset based on variable, location, height
-    frame = _filter(frame, variables, dimspec, log_name)
-    
-    #frame = frame.set_index(['init_time','valid_time'])    
-    logger.debug(frame)
-    logger.debug("about to pivot")
-    logger.debug("values: %s" % values)
-    logger.debug("rows: %s" % rows)
-    logger.debug("cols: %s" % cols)
-    frame = pd.pivot_table(frame, values=values, rows=rows,cols=cols)
-
-    frame = frame.reset_index()
-
-
-    if sort_by:
-        frame.sort(sort_by, inplace=True)
-
-    if rename:
-        frame = _rename(frame, rename)
-    
-    logger.debug("outputting csv file: %s/%s " % (out_dir, out_name))
-    logger.debug(na_rep)
-    frame.to_csv('%s/%s' % (out_dir, out_name), index=False, float_format=float_format, na_rep=na_rep)    
     
     
 def write_json_files(frame, out_dir, out_name, variables, dimspec, drop, rename=None, float_format="%0.3f",log_name=LOGGER ):

@@ -103,10 +103,8 @@ end if
     else 
         f = addfiles(ncl_in_file, "r")
     end if 
- 
-    print(ncl_loc_file)
+
     locations = read_locations(ncl_loc_file)
-    print(locations)
     loc_id = locations[0]
 	name   = locations[1]
 	lat    = locations[2]

@@ -355,12 +355,12 @@ def run_queue(cmd,config, run_from_dir, log_file, env_vars=None):
 
     attempts = mjt / pint
     
-    logger.debug('Submitting %s to %d slots on %s, polling every %s minutes for %d attempts' %(exe, nprocs, qname, pint, attempts ))
+    #logger.debug('Submitting %s to %d slots on %s, polling every %s minutes for %d attempts' %(exe, nprocs, qname, pint, attempts ))
     #logger.debug('Running from dir: %s ' % run_from_dir)
     
     env_var_str = ""
     if env_vars:
-        logger.debug("environment variables supplied")
+        #logger.debug("environment variables supplied")
         
         # for older mpi versions
         env_var_str = " ".join(["-x %s=%s" %(key,value) for key,value in env_vars.items()])
@@ -371,7 +371,7 @@ def run_queue(cmd,config, run_from_dir, log_file, env_vars=None):
         #env_var_str = "-mca";".join(["%s=%s" %(key,value) for key,value in env_vars.items()])                
         
         cmd = "%s %s" %(env_var_str, cmd)
-        logger.debug(env_var_str)
+        #logger.debug(env_var_str)
         
     replacements = {'<executable>': cmd,
                 '<jobname>': exe,
@@ -394,7 +394,7 @@ def run_queue(cmd,config, run_from_dir, log_file, env_vars=None):
     for i in range(attempts):
         output = queue.qstat(job_id)
         if output=='':
-            logger.debug('no queue status for job, presume complete')
+            #logger.debug('no queue status for job, presume complete')
             return
         
         logger.debug(output)
@@ -437,7 +437,7 @@ def transfer(flist, dest, mode='copy', debug_level='NONE'):
         @mode        -- copy (leave original) or move (delete original). Default 'copy'
         @debug_level -- what level to report sucess/failure to """
     logger = get_logger()
-    logger.info(' *** TRANSFERRING %d FILES TO %s ***' %(len(flist), dest))
+    #logger.info(' *** TRANSFERRING %d FILES TO %s ***' %(len(flist), dest))
     
     n=0
     if type(flist)!=type([]):
@@ -446,23 +446,16 @@ def transfer(flist, dest, mode='copy', debug_level='NONE'):
     for f in flist:
         fname = os.path.split(f)[1]
         dname = '%s/%s' % (dest, fname)
-        #logger.debug(dname)
-        # bit dangerous, could delete then fail
+
+        # bit dangerous, could delete then fail?
         if os.path.exists(dname):
             os.remove(dname)
 
         shutil.copy2(f, dname)
-        if debug_level=='DEBUG':
-            pass
-            #logger.debug('copied %s ---------> %s' % (f, dname))
-        elif debug_level=='INFO':
-            pass
-            #logger.info('copied %s ---------> %s' % (f, dname))
-        if mode=='move':
-            os.remove(f)                        
+        if mode=='move': os.remove(f)                        
         n+=1
 
-    logger.info(' *** %d FILES TRANSFERRED ***' % n )
+    #logger.info(' *** %d FILES TRANSFERRED ***' % n )
 
 def rsync(source, target, config):
     """ Calls rysnc to transfer files from source to target.
@@ -520,8 +513,6 @@ def get_fcst_times(config):
     logger.debug("Forecast start: %s \t end: %s" %(fcst_times[0], fcst_times[-1]))
     return fcst_times
     
-   
-
 
 def get_operational_init_time(config):
     """ Returns a list of most recent init times for an operational forecast 
@@ -534,8 +525,6 @@ def get_operational_init_time(config):
     """
     
     logger        = get_logger()
-    logger.debug("get_operational_init_times called")
-
 
     fcst_hours    = config['fcst_hours']
     operational   = config['operational']
@@ -565,7 +554,7 @@ def get_operational_init_time(config):
     start         = start_day + recent_cycle * hour
     end           = start
     #config['cycle'] = recent_cycle
-    logger.debug("getting most recent operational case: %s" % start)
+    #logger.debug("getting most recent operational case: %s" % start)
     #logger.debug("system current time and date: %s" % today)
     #logger.debug("but grib delay set is %s" % gm_delay)
     #logger.debug("so current time accounting for delay is: %s" % delayed_time)
@@ -587,7 +576,7 @@ def get_init_times(config):
     """
 
     logger        = get_logger()
-    logger.debug("get_init_times called")
+    #logger.debug("get_init_times called")
     
     operational   = config['operational']
     start         = config['start']
@@ -595,10 +584,18 @@ def get_init_times(config):
     init_interval = config['init_interval']
     freq          = rrule.HOURLY
     
+    logger.debug("get_init_times called:")
+    logger.debug("\t operational: %s" % operational)
+    logger.debug("\t start: %s" % start)
+    logger.debug("\t end: %s" % end)
+    logger.debug("\t freq: %s" % freq)
+    logger.debug("\t init_interval: %s" % init_interval)
+    
+    
     if operational:
         start = get_operational_init_time(config)
         end = start
-        logger.debug('got init_time %s' % start)
+
     if type(start)!=type([]):
         start= [start]
     if type(end)!=type([]):
@@ -606,18 +603,19 @@ def get_init_times(config):
 
 
     if len(start)!=len(end):
-        raise IOError('differenr start and end times specified')
+        raise IOError('different start and end times specified')
 
     init_times = []
-    
+    hour = datetime.timedelta(0,60*60)
     for s, e in zip(start, end):
-        rec           = rrule.rrule(freq, dtstart=s, until=e, interval=init_interval)
+        rec  = rrule.rrule(freq, dtstart=s, until=e, interval=init_interval)
+        logger.debug(list(rec))
         init_times.extend(list(rec))
 
-    logger.debug("got the following initial times: ")
+
     for t in init_times:
-        logger.debug("%s" %t)
-    
+        logger.debug("\t %s" %t)
+    logger.debug("get_init_times done \n")
     return init_times
 
 def get_bdy_times(config):

@@ -3,12 +3,12 @@
 . /etc/profile.d/modules.sh
 
 # Module stuff
-module add gcc
 module load netcdf
 module load szip
 module load sge
 module load openmpi
-module add ncl/nodap
+module add ncl
+module switch ncl/opendap ncl/nodap
 
 #
 # Active comments for SGE 

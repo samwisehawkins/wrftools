@@ -1,7 +1,6 @@
 import logging
 
 def create_logger(config):
-    
 
     logger = create(config['log.name'],config['log.level'], config['log.fmt'],config.get('log.file'), config.get('log.mail'), config.get('log.mail.to'), config.get('log.mail.subject'), config.get('log.mail.level'),config.get('log.mail.buffer'))
     return logger
@@ -10,7 +9,7 @@ def get_logger(name):
     return logging.getLogger(name)
 
 
-def create(name, log_level, log_fmt, log_file=None, log_mail=None, mailto=None, subject=None, mail_level=None, buffer=None):
+def create(name, log_level, log_fmt=None, log_file=None, log_mail=None, mailto=None, subject=None, mail_level=None, buffer=None):
 
     """ Creates a logging instance. If log_file is specified, handler is a
     FileHandler, otherwise StreamHandler"""

@@ -5,17 +5,20 @@ Usage:
 
         
 Options:
-    --log_level=<level>       debug, info or warn
-    --grid_id=<int>           numeric grid id
-    --init_time=<datetime>    initial time"""
+    --log-level=<level>       debug, info or warn
+    --init-time=<datetime>    initial time
+    --pcurve-dir=<dir>        power curve dir
+    """
 
 import os
 import sys
 import numpy as np
+import datetime
 import scipy
 from scipy import interpolate
 import loghelper
 import confighelper as conf
+import ncframe
 import netCDF4
 from netCDF4 import Dataset
 from netCDF4 import netcdftime
@@ -24,8 +27,12 @@ from substitute import expand
 
 LOGGER="power"
 
+class FileInputEror(Exception):
+    pass
+    
+    
 def main():
-    config = conf.config(__doc__, sys.argv[1:], flatten=True)
+    config = conf.config(__doc__, sys.argv[1:])
     power(config)
 
 def power(config):
@@ -67,15 +74,34 @@ def power(config):
             
         
     # Get dimensions
-    dims    = dataset_in.dimensions
-    ntime   = len(dims['time'])
-    nloc    = len(dims['location'])
-    nheight = len(dims['height'])
+    dims      = dataset_in.dimensions
+    nreftime  = len(dims['reftime'])
+    ntime     = len(dims['leadtime'])
+    nloc      = len(dims['location'])
+    nheight   = len(dims['height'])
     loc_str_len = len(dims['loc_str_length'])
     
     # Get coordinate variables
-    nctime    = dataset_in.variables['time']
-    datetimes = netcdftime.num2date(nctime[:], nctime.units)
+    reftime   = dataset_in.variables['reftime']
+    leadtime  = dataset_in.variables['leadtime']
+    
+    refdt     = netcdftime.num2date(reftime[:], reftime.units)
+    
+    if "hour" in leadtime.units:
+        delta = datetime.timedelta(0,60*60)
+    
+    elif "minute" in leadtime.units:
+        delta = datetime.timedelta(0,60)
+
+    else:
+        raise FileInputError("leadtime units of %s not supported" % leadtime.units) 
+    
+    logger.debug(leadtime)
+    logger.debug(type(leadtime[:]))
+    logger.debug(type(leadtime[:]))
+    datetimes = refdt[:] + (leadtime[:] * delta)
+    
+    logger.debug(datetimes)
     location = [''.join(l.filled(' ')).strip() for l in dataset_in.variables['location']]
     height   = dataset_in.variables['height']
 
@@ -113,8 +139,8 @@ def power(config):
 
     
         for h in range(nheight):
-            speed     = dataset_in.variables['SPEED'][:,l,h]
-            direction = dataset_in.variables['DIRECTION'][:,l,h]
+            speed     = dataset_in.variables['SPEED'][0,:,l,h]
+            direction = dataset_in.variables['DIRECTION'][0,:,l,h]
             
             #pwr = pcurve.power(speed,direction)
     
@@ -136,17 +162,27 @@ def power(config):
 
     if dataset_out != dataset_in:
 
-        dataset_out.createDimension('time', None)
-        dataset_out.createVariable('time', 'float', ('time',))
-        dataset_out.variables['time'][:] = nctime[:]
-        dataset_out.variables['time'].units = nctime.units
-        dataset_out.variables['time'].calendar = nctime.calendar
+        dataset_out.createDimension('reftime', None)
+        dataset_out.createVariable('reftime', 'float', ('reftime',))
+        dataset_out.variables['reftime'][:] = reftime[:]
+        dataset_out.variables['reftime'].units = reftime.units
+        dataset_out.variables['reftime'].calendar = reftime.calendar
+        dataset_out.variables['reftime'].long_name = reftime.long_name
+        dataset_out.variables['reftime'].standard_name = reftime.standard_name
+
         
+        dataset_out.createDimension('leadtime', len(leadtime))
+        dataset_out.createVariable('leadtime', 'int', ('leadtime',))
+        dataset_out.variables['leadtime'][:] = leadtime[:]
+        dataset_out.variables['leadtime'].units = leadtime.units
+        dataset_out.variables['leadtime'].long_name = leadtime.long_name
+        dataset_out.variables['leadtime'].standard_name = leadtime.standard_name
         
         dataset_out.createDimension('location', len(use_locs))
         dataset_out.createDimension('loc_str_length', loc_str_len)
         
         loc_data =np.array([list(l.ljust(loc_str_len, ' ')) for l in location])
+        logger.debug(loc_data)
         dataset_out.createVariable('location', 'c', ('location', 'loc_str_length'))
         dataset_out.variables['location'][:] = loc_data[use_inds,:]
         
@@ -171,24 +207,24 @@ def power(config):
             
         
     
-    pavg    = dataset_out.createVariable('POWER','f',('time','location','height'))
+    pavg    = dataset_out.createVariable('POWER','f',('reftime','leadtime','location','height'))
     pavg.units = 'kW'
     pavg.description = 'forecast power output'
-    pavg[:] = pdata[:,:,:,0]
+    pavg[0,:,:,:] = pdata[:,:,:,0]
 
     
     for q, qval in enumerate(quantiles):
 
         varname = 'POWER.P%02d' % qval
         logger.debug("creating variable %s" % varname)
-        var  = dataset_out.createVariable(varname,'f',('time','location','height'))
+        var  = dataset_out.createVariable(varname,'f',('reftime','leadtime','location','height'))
         if pnorm:
             var.units = 'ratio'
         else:
             var.units = 'kW'
         var.description = 'forecast power output'
-        print pdata[:,:,:,q+1]
-        var[:] = pdata[:,:,:,q+1]
+
+        var[0,:,:,:] = pdata[:,:,:,q+1]
     
             
 

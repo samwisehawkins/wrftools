@@ -23,7 +23,6 @@ def qsub(job_script):
     #logger.debug('submitting job %s' % job_script)
     
     cmd  = 'qsub %s ' % job_script
-    logger.debug(cmd)
     
     #
     # The output from PBS is of the format
@@ -32,7 +31,7 @@ def qsub(job_script):
     proc = subprocess.Popen([cmd], stdout=subprocess.PIPE, shell=True)
     output = proc.stdout.read()
     job_id = output.split(' ')[2]
-    logger.debug("job submitted with ID: %s" % job_id)
+    logger.debug("%s ------> %s" % (cmd, job_id))
     return job_id
     
     
@@ -54,7 +53,7 @@ def qstat(job_id):
 
 def test():
     loghelper.get_logger('wrf_forecast')
-    print('running test')
+
     #logger.debug('running test')
     
 

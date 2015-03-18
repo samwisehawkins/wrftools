@@ -109,70 +109,93 @@ begin
     
     ;print(south_north)
     ;print(west_east)
+
+
+    ;******************************************************
+    ; Create the output arrays first
+    ;******************************************************
+    ; if var(time, level, y, x)
+    if (ndims .eq. 4)
+        var_out = new((/1,ntime,nheight,nloc/),"float")
+        var_out!0 = "reftime"
+        var_out!1 = "leadtime"
+        var_out!2 = "height"
+        var_out!3 = "location"
     
-    ;******************************************************
-    ; Enclosing cell interpolation
-    ;******************************************************
-    if (interp_option.eq.0) ; enclosing cell, no interpolation
-        
-        ;******************************************************
-        ; Get ij locations
-        ij   = wrf_user_ll_to_ij(nc_file,lon, lat, True)
-        loc  = ij-1          ; To convert to NCL subscripts
-        ;******************************************************
-        
-        ; if var(time, level, y, x)
-        if (ndims .eq. 4)
+    ; if var(time, y, x)
+    end if
+    
+    if (ndims .eq. 3)
+        ; var_out(reftime, leadtime, location)
+        var_out = new((/1,ntime, nloc/),"float")
+        var_out!0="reftime"
+        var_out!1="leadtime"
+        var_out!2="location"
+    end if 
 
-            ; need to create variable with a shape which can be assigned to easily
-            ; then we can reshape later if needed
-            ; rcm2points replaces the last two dimensions, y and x with location
-            ; perhaps we should mimic that?
-            var_out = new((/ntime,nheight,nloc/),"float")
-
+    
+        
+    ;******************************************************
+    ; Get ij locations
+    ij   = wrf_user_ll_to_ij(nc_file,lon, lat, True)
+    loc  = ij-1          ; To convert to NCL subscripts
+    ;******************************************************
+        
+        
+    ;******************************************************
+    ; 4 Dimensions in input variable(time, level, y, x)
+    ;******************************************************
+    ; if var(time, level, y, x)
+    if (ndims .eq. 4)
+        ;******************************************************
+        ; Enclosing cell (nearest neighbour?) interpolation
+        ;******************************************************
+        if (interp_option.eq.0) 
+            ; loop over locations
             do n=0,nloc-1
                 ;print(loc(:,n))
                 ; if location is outside domain
                 if ( (loc(1,n) .ge. south_north) .or. (loc(0,n) .ge. west_east))
                     print("Warning, location is outside domain, values will be missing")
-                    var_out(n,:,:) = default_fillvalue("float")
+                    var_out(0,:,:,n) = default_fillvalue("float")
                 else
-                    ; var(time, level, y, x)
+                    ; var(reftime, leadtime, level, y, x)
                     y = loc(1,n)
                     x = loc(0,n)
                     ;print(y)
                     ;print(x)
-                    var_out(:,:,n) = var(:,:,y,x)
+                    var_out(0,:,:,n) = var(:,:,y,x)
                 end if
             end do
-        end if
-        
-        ; if var(time, y, x)
-        if (ndims .eq. 3)
-            var_out = new((/ntime, nloc/),"float")
+        ;******************************************************
+        ; Interpolation using rcm2points
+        ;******************************************************
+        else
+            var_out(0,:,:,:) = rcm2points(xlat, xlong,  var, lat, lon, interp_option)
+        end if 
+    end if
+    
+    
+    ;******************************************************
+    ; 3 Dimensions in input variable(time, y, x)
+    ;******************************************************
+    if (ndims .eq. 3)
+        ;******************************************************
+        ; Enclosing cell (nearest neighbour?) interpolation
+        ;******************************************************
+        if (interp_option.eq.0) 
+            ; var_out(reftime, leadtime, location)
             do n=0,nloc-1
                 if ( (loc(1,n) .ge. south_north) .or. (loc(0,n) .ge. west_east))
                     print("Warning, location is outside domain, values will be missing")
-                    var_out(n,:) = default_fillvalue("float")
+                    var_out(0,:,n) = default_fillvalue("float")
                 else
-                    var_out(:,n) = var(:,loc(1,n),loc(0,n))
+                    var_out(0,:,n) = var(:,loc(1,n),loc(0,n))
                 end if
             end do
+        else
+            var_out(0,:,:) = rcm2points(xlat, xlong,  var, lat, lon, interp_option)
         end if
-
-    ;******************************************************
-    ; rcm2points interpolation
-    ;******************************************************
-    else
-        ; rcm2points will replace the last 2 dimensions with 1 dimension, 
-        ; which is the locations
-        printVarSummary(xlat)
-        printVarSummary(xlong)
-        printVarSummary(var)
-        printVarSummary(lat)
-        printVarSummary(lon)
-        printVarSummary(interp_option)
-        var_out = rcm2points(xlat, xlong,  var, lat, lon, interp_option)
     end if        
     
     ;******************************************************
@@ -194,23 +217,16 @@ begin
     var_out@description = var@description
 
     ;******************************************************
-    ; Give dimensions correct names and reorder
+    ; Reorder dimensions
     ;******************************************************
-    if (ndims .eq. 4)     ; var_in(time,height,y, x) --> var_out(time,height,loc)
-        var_out!0="time"
-        var_out!1="height"
-        var_out!2="location"
+    if (ndims .eq. 4)     ; var_in(time,height,y, x) --> var_out(reftime,leadtime,height,loc)
         ;return var_out(location|:,height|:, time|:)
-        return var_out(time|:,location|:,height|:)
+        return var_out(reftime|:, leadtime|:,location|:,height|:)
     end if
         
     if (ndims .eq. 3)     ; var_in(time,y, x) --> var_out(time,loc)
-        var_out!0="time"
-        var_out!1="location"
-        ;return var_out(location|:, time|:)
-        return var_out(time|:, location|:)
+        return var_out(reftime|:, leadtime|:, location|:)
     end if
-
     
 end
 
@@ -321,7 +337,9 @@ begin
     ; Work out if lat and lon are time-invariant
     ;*******************************************************
     dims = getfilevardims(nc_file,"XLAT")        
+
     ndims = dimsizes(dims)
+
     
     if (ndims .eq. 3) ; lat and lon are 3D, lat(time, y, x)
         xlat  = nc_file->XLAT(0,:,:) 
@@ -349,13 +367,29 @@ begin
     end if
     
     
-    
-    time_s    = chartostring(time_c)                     ; string
-    print(time_s)
-    time       = wrf_times_c(time_c, opts@time_units) 
-    init_time  = ut_string(time(0), "%Y-%m-%d_%H:%M:%S")
+    ;**************************************************
+    ; Time units
+    ; 0 units of "hours since" initial time on the current file (type "double")
+    ; 1 returns units of "hours since 1901-01-01 00:00:00" (type "double")
+    ; 2 returns units of "yyyymmddhhmnss" (type "double")
+    ; 3 returns units of "yyyymmddhh" (type "integer")
+    ;**************************************************
 
+        
+    time_s    = chartostring(time_c)                    ; string
+    time      = wrf_times_c(time_c, opts@time_units)    ; valid time in user-specified units
+    leadtime  = toint(wrf_times_c(time_c, 0))           ; time in hours since init_time
+    leadtime@units = "hours"
+    leadtime@standard_name = "forecast_period" 
+    leadtime@long_name = "hours since forecast_reference_time"
     
+    
+    init_time  = ut_string(time(0), "%Y-%m-%d_%H:%M:%S") ; initial time as a string
+    reftime    = time(0)                                 ; initial time as a number
+    reftime@standard_name = "forecast_reference_time" ;
+    reftime@long_name = "Time of model initialization"
+    
+    hgt_out@units = "metres" 
     
     ; t of -1 gets all timesteps, otherwise we are feching one timestep
     dims = dimsizes(time)
@@ -370,6 +404,7 @@ begin
     
     ;******************************************************    
     ; Now we have all the dimensions needed
+    ; nreftime:     0 (degenerate dimension to allow later concatenation)
     ; nheight :     number of vertical levels for 3D vars
     ; nlocation:    number of locations we are interpolating to
     ; ntime:        number of timetseps to extract 
@@ -381,25 +416,29 @@ begin
     ; Create a template for 2D and 3D variables
     ;******************************************************    
 
-    ;v2d_template = new((/nloc,ntime/),"float")
-    ;v3d_template = new((/nloc,nheight,ntime/),"float")
+    ;v2d_template = new((/reftime,nloc,ntime/),"float")
+    ;v3d_template = new((/reftime,nloc,nheight,ntime/),"float")
 
-    v2d_template = new((/ntime,nloc/),"float")
-    v3d_template = new((/ntime,nloc,nheight/),"float")
+    v2d_template = new((/1,ntime,nloc/),"float")
+    v3d_template = new((/1,ntime,nloc,nheight/),"float")
     
     
-    v2d_template!0    = "time"
-    v2d_template!1    = "location"    
-    v2d_template&time = time
-
-    v3d_template!0    = "time"
-    v3d_template!1    = "location"
-    v3d_template!2    = "height"    
+    v2d_template!0    = "reftime"
+    v2d_template!1    = "leadtime"
+    v2d_template!2    = "location"    
+    v2d_template&reftime = reftime
+    v2d_template&leadtime = leadtime
+    
+    v3d_template!0    = "reftime"
+    v3d_template!1    = "leadtime"
+    v3d_template!2    = "location"
+    v3d_template!3    = "height"    
     v3d_template&height = hgt_out
-    v3d_template&time   = time
-
-    dims_2d = (/"time", "location"/)                
-    dims_3d = (/"time", "location", "height"/)                         
+    v3d_template&reftime   = reftime
+    v3d_template&leadtime   = leadtime
+    
+    dims_2d = (/"reftime","leadtime", "location"/)                
+    dims_3d = (/"reftime","leadtime", "location", "height"/)                         
     ;******************************************************    
 
     
@@ -445,9 +484,9 @@ begin
     ; Note: to get an UNLIMITED record dimension, we set the dimensionality
     ; to -1 (or the actual size) and set the dimension name to True.
     ;******************************************************    
-    dimNames = (/"time", "location", "height", "loc_str_length"/)  
-    dimSizes = (/ -1   , nloc,  nheight, loc_str_length/) 
-    dimUnlim = (/ True , False, False, False/)   
+    dimNames = (/"reftime", "leadtime","location", "height", "loc_str_length"/)  
+    dimSizes = (/ -1   ,ntime, nloc,  nheight, loc_str_length/) 
+    dimUnlim = (/ True , False,False, False, False/)   
     filedimdef(fout,dimNames,dimSizes,dimUnlim)
     
     
@@ -462,14 +501,19 @@ begin
     ; filevardef(fout, "PS"   ,typeof(PS) ,(/"TIME","latitude","longitude"/)) 
     ;******************************************************    
 
-    filevardef(fout, "time" ,  typeof(time),(/"time"/)) 
-    filevarattdef(fout,"time" ,time)                    ; copy time attributes
+    filevardef(fout, "reftime" ,  typeof(reftime),(/"reftime"/)) 
+    filevarattdef(fout,"reftime" ,reftime)                    ; copy time attributes
+    
+    filevardef(fout, "leadtime" ,  typeof(leadtime),(/"leadtime"/)) 
+    filevarattdef(fout,"leadtime" ,leadtime)                    ; copy time attributes
         
 
     filevardef(fout, "height", typeof(hgt_out),(/"height"/))                           
     hgt_out@units = "metres"
     hgt_out@description="metres above the ground or water surface"
-
+    filevarattdef(fout,"height", hgt_out)                    ; copy time attributes
+    
+    
     loc_char = stringtochar(location)
     loc_char@description = "site location identified by ID" 
     filevardef(fout, "location",typeof(loc_char),(/"location", "loc_str_length"/))                           
@@ -491,7 +535,8 @@ begin
     ;******************************************************    
     ;printVarSummary(loc_char)
     ;print(loc_str_length)
-    fout->time     = (/time/)     
+    fout->reftime  = (/reftime/)     
+    fout->leadtime = (/leadtime/)     
     fout->location = (/loc_char(:,0:loc_str_length-1)/)
     fout->height   = (/hgt_out/) 
     fout->lat      = (/lat/)
@@ -652,7 +697,8 @@ begin
         ; rename the dimensions, sqrt strips any info
         copy_VarMeta(v3d_template, ws_agl_locs) 
         ws_agl_locs&height = hgt_out
-        ws_agl_locs&time   = time
+        ws_agl_locs&reftime   = reftime
+        ws_agl_locs&leadtime   = leadtime
         ws_agl_locs@description = "wind speed"
         ws_agl_locs@units       = "m/s"
 
@@ -668,7 +714,7 @@ begin
         copy_VarMeta(v3d_template, wd_agl_locs)
         
         wd_agl_locs@description = "Wind direction"
-        wd_agl_locs@units       = "degrees from North"
+        wd_agl_locs@units       = "degrees"
 
         if vars@direction
             filevardef(fout, "DIRECTION",typeof(wd_agl_locs),dims_3d)                           
@@ -796,8 +842,8 @@ begin
         rib_h_upper = hgt_out(rib_i_upper)
         rib_h_lower = hgt_out(rib_i_lower)
         
-        dtheta_v = thetav_agl_locs(:, :,rib_i_upper) - thetav_agl_locs(:, :, rib_i_lower)
-        dspeed   = ws_agl_locs(:, :, rib_i_upper) - ws_agl_locs(:, :, rib_i_lower)
+        dtheta_v = thetav_agl_locs(0,:, :,rib_i_upper) - thetav_agl_locs(0,:, :, rib_i_lower)
+        dspeed   = ws_agl_locs(0,:, :, rib_i_upper) - ws_agl_locs(0,:, :, rib_i_lower)
 
         ; What is the definition of Bulk Richardson in the case where wind speed and thetav is 
         ; the same between two levels? The equation would imply it tends to infinity, 
@@ -806,20 +852,18 @@ begin
         
         ; AMS method. Take virtual temperature from top layer
         if (opts@rib_opt .eq. 1)
-            beta     = g/tv_agl_locs(:, :, rib_i_upper)
+            beta     = g/tv_agl_locs(0,:, :, rib_i_upper)
         
         ; Zilankavitch. Average virtual temperature over profile between layers
         else
-            beta = g/dim_avg_n(thetav_agl_locs(:, :, rib_i_lower:rib_i_upper), 2)
+            beta = g/dim_avg_n(thetav_agl_locs(0,:, :, rib_i_lower:rib_i_upper), 2)
         end if
         
         ; mask speed where the difference is very small 
         dspeed = where(dspeed.lt.0.0001, default_fillvalue("float"), dspeed)
-        printVarSummary(beta)
-        printVarSummary(dspeed)
-        printVarSummary(dtheta_v)
         
-        rib_agl_locs   = beta * dtheta_v * (rib_h_upper - rib_h_lower) / dspeed^2
+        rib_agl_locs   = new((/1,ntime,nloc/), "float")
+        rib_agl_locs(0,:,:)   = beta * dtheta_v * (rib_h_upper - rib_h_lower) / dspeed^2
 
         
         delete(dtheta_v)
@@ -831,6 +875,9 @@ begin
         rib_agl_locs@height_upper = rib_h_upper
         rib_agl_locs@height_lower = rib_h_lower
         rib_agl_locs@units        = "dimensionless"
+
+
+        
         copy_VarMeta(v2d_template, rib_agl_locs)
         filevardef(fout, "RIB",typeof(rib_agl_locs),dims_2d)                           
         fout->RIB     = (/rib_agl_locs/) 
@@ -849,7 +896,7 @@ begin
         ; Convert to rain to accumulation per hour
         do n=1,ntime-2
             k = ntime-n
-            rain_sfc_locs(k, :) = rain_sfc_locs(k,:)-rain_sfc_locs(k-1,:)
+            rain_sfc_locs(0,k, :) = rain_sfc_locs(0,k,:)-rain_sfc_locs(0,k-1,:)
         end do
         
         copy_VarMeta(v2d_template, rain_sfc_locs)
@@ -972,8 +1019,8 @@ begin
         cldfra             = wrf_user_getvar(file_handle, "CLDFRA", t)
         cldfra_locs        = wrf_user_hinterp(nc_file, cldfra, lat, lon, xlat, xlong, opts@interp_option)
 
-        cldfraavg_sfc_locs = dim_avg_n_Wrap(cldfra_locs, 2)
-        cldframax_sfc_locs = dim_max_n(cldfra_locs, 2)
+        cldfraavg_sfc_locs = dim_avg_n_Wrap(cldfra_locs, 3)
+        cldframax_sfc_locs = dim_max_n(cldfra_locs, 3)
         copy_VarMeta(cldfra_locs, cldframax_sfc_locs)
         cldfraavg_sfc_locs@height = 0
         cldfraavg_sfc_locs@description = "CLOUD FRACTION COLUMN AVG"

@@ -26,7 +26,7 @@ Options:
 
 import shared
 import confighelper as conf
-from ncdump import ncdump 
+
 
 import os
 import sys
@@ -172,7 +172,6 @@ def extract_tseries(config):
         cmd  = "NCL_OPT_FILE=%s ncl %s >> %s 2>&1" % (ncl_opt_file,script, ncl_log)
         shared.run_cmd(cmd, config)
 
-    ncdump(config)
     logger.info("*** DONE EXTRACTING TIME SERIES ***\n")
     
 if __name__ == '__main__':
