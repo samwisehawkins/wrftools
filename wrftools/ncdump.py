@@ -1,28 +1,38 @@
-"""ncdump.py dumps data from a netcdf file to text file
+"""ncframe.py creates a DataFrame from a netcdf file and writes the result to disk. 
 
 Usage: 
-    ncdump.py --config=<file> [<files>...] [options] 
+    ncframe.py  [options] [<files>...]
 
 Options:
-    <files>                     input files to operate on
     --config=<file>             config file specifying options
-    --init-time=<datetime>      inital time
-    --output=<dict>             output mapping
-    --file-pattern=<str>        file pattern to become time series
-    --grid_id=<int>             nest id number
+    --file-pattern=<pattern>    file pattern to expand to match input files, can include start time
+    --out=<file>                output file (or file pattern)
+    --start=<time>              time to start from, leave blank to use system time
+    --cycles=<list>             list of cycle hours to round to e.g. [0,6,12]
+    --delay=<hours>             delay to apply to start time
+    --format=<fmt>              output format (csv, hdf5)
+    --float-format=<fmt>        floating point format for text-based output
+    --vars=<vars>               list of variables to read, if blank use all
+    --var-atts=<list>           list of variable attributes to put into each line of output, default all
+    --global-atts=<list>        list of global attributes to put into each line of output, default all
+    --coords=<list>             list of variables to treat as coordinates, included in columns of output
+    --valid-time=<bool>         derive valid time from reftime and leadtime and add to frame
+    --filter=<filter spec>      filter specification as a dictionary mapping columns to filters
+    --concat=<list>             list of columns to string concatenate into a single column before any pivoting
+    --pivot                     if present, pivot on variable name, otherwise leave 'molten' or record-based
+    --sort-by=<list>            list of coordinate names to sort the final output on
+    --split-by=<list>           group and split output into seperate files
+    --order-by=<list>           optional column ordering in the output
     --log.level=<level>         info, debug or warn
+    --log.fmt=<fmt>             log message format
     --log.file=<file>           optionally write to log file
-    --log.mail=<bool>
-    --log.mail.level=<level>    info, debug or warn
-    --log.mail.to=<level>       sam.hawkins@vattenfall.com             # send log email here
-    --log.mail.buffer           10000                                  # how many messages to collate in one email
-    --log.mail.subject          "Operational WRF log"                  # subject to use in email 
     -h |--help                  show this message
-
+    
+    <files>                   input files to operate on
 
    
 Examples:
-    python ncdump.py wrfout_d01_2010-01-* --config=myconfig.json"""
+    python ncframe.py wrfout_d01_2010-01-* --config=myconfig.json"""
 
 import os
 import sys
@@ -34,132 +44,217 @@ import json
 import pandas as pd
 from collections import OrderedDict
 import numpy as np
-import scipy.stats as stats
-from netCDF4 import Dataset
-from netCDF4 import num2date, date2num
+import substitute
+import nctools
 import loghelper
 import confighelper as conf
-from substitute import expand
-import nctools
+
 
 RESERVED_ATTS = ['_index']
 LOGGER        = 'ncdump'
+HGT2DNUM      = 9999   # height to encode 2D variables as (must be numeric and not clash with real heights)
+HGT2DSTR      = "2D"   # how 2D vars are specified in config file (can be string)
+
+# allow filling in of missing attributes
+MISSING_ATTS = {"units" : "missing", "description": ""}
 
 
-FORMATS         = ['csv','txt','json','aot'] # supported output formats
-FILE_DATE_FMT   = '%Y-%m-%d_%H%M'  # Date format for file name
-DATE_FMT        = '%Y-%m-%d %H:%M' # Date format within files
-GLOBAL_ATTS     = ['GRID_ID']  # which global attributes to copy from ncfile to json
-VAR_ATTS        = ['units', 'description']  # which variables attributes to include in json series
-#FULL_SLICE      = {'time': (0,None), 'location': (0,None), 'height':(0,None)} # this represents no slicing
-FULL_SLICE      = {'reftime': (0,None), 'leadtime': (0,None), 'location': (0,None), 'height':(0,None)} # this represents no slicing
+SUPPORTED_FORMATS = ['csv','hdf', 'json'] # supported output formats
 
 
-class UnknownFormat(Exception):
-    pass
+
 
 def main():
     
     config = conf.config(__doc__, sys.argv[1:], flatten=True)
-    logger = loghelper.create_logger(config)
-    logger.debug(config)
+    logger = loghelper.create(LOGGER, config['log.level'], config['log.fmt'], config['log.file'])
     ncdump(config)
     
     
-
 def ncdump(config):
     
-    logger = loghelper.get_logger(config['log.name'])
+    logger = loghelper.get(LOGGER)
     
-    # subset of config to be used for expanding filenames
-    scope = {'init_time' : config['init_time'],
-             'grid_id'   : config['grid_id']}
-             
-    files = config['<files>']
-    frame = nctools.melt(files)
-    
-    
-    logger.debug(type(config['ncdump']))
-    
-    for key,entry in config['ncdump'].items():
-        filter = entry.get('filter')
-        pivot = entry.get('pivot')
+    # _listify ensures arguments are enclosed within a list
+    # to simplify treatement in following code
+    files = nctools._listify(config['<files>'])
+    vars        = nctools._listify(config.get('vars'))
+    global_atts = nctools._listify(config.get('global-atts'))
+    var_atts    = nctools._listify(config.get('var-atts'))
+    coord_vars  = nctools._listify(config.get('coords'))
+    sort_by     = nctools._listify(config.get('sort-by')) 
+    order_by    = nctools._listify(config.get('order-by'))
+    out         = config.get('out')
+    pivot       = config.get('pivot')
+    valid_time  = config.get('valid-time')
+    format      = config.get('format')
+    filter      = config.get('filter')
+    split_by    = config.get('split-by')
+    concat      = config.get('concat')
+    start       = config.get('start')
+    delay       = config.get('delay')
+    cycles      = nctools._listify(config.get('cycles'))
         
+    basetime = start if start else datetime.datetime.today()
+    
+    prior = _prior_time(basetime, delay=delay, hours=cycles)
+
+    logger.debug("using %s as a start time" % prior)
+    
+    if files==[]:
+        logger.info("no files specified, finding using options")
+        file_pattern = config.get('file-pattern')
+        if not file_pattern: raise nctools.ConfigError('either supply files or specify file-pattern')
         
-        #dump(files, entry, scope, log_name=config['log.name'])
+        expanded = substitute.sub_date(file_pattern, init_time=prior)
+        files = glob.glob(expanded)
+
+
+    if files==[]: raise IOError("no files found")
+
+     
+    frame = nctools.melt(files, vars, global_atts, var_atts, coord_vars, missing=MISSING_ATTS)
     
+    if valid_time:
+        logger.debug("adding valid time into frame")
+        frame['valid_time'] = frame['reftime'] + frame['leadtime']*datetime.timedelta(0,60*60)
     
-def dump(files,entry,scope,log_name=LOGGER):
+    if filter:
+        frame = nctools.filter(frame, filter)
     
-    logger = loghelper.get_logger(log_name)
-    vars        = entry['tseries_vars']
-    global_atts = entry['global_atts']
-    var_atts    = entry['var_atts']
-    coord_vars  = entry['coord_vars']
-    format      = entry['format'].strip()
+    if concat:
+        nctools.concat(frame, concat, name='variable', inplace=True)
+    
+    if pivot: 
+        frame = pd.pivot_table(frame, index=['reftime','leadtime','location'], columns='variable', values='value')
+        frame.reset_index(inplace=True)
+        
+    if sort_by: frame.sort(sort_by, inplace=True)
+
+    
+    if order_by:
+        logger.debug(order_by)
+        frame = frame[order_by]
+    
+    if out:
+        out = substitute.sub_date(out, init_time=prior)
    
-    #logger.warn("subsetting at read time is not implemented")
-    # Read all data into memory as pandas Series objects
-    logger.debug("ncdump called with arguments")
-    logger.debug("\t files: %s"       % str(files))
-    logger.debug("\t vars: %s"        % str(vars))
-    logger.debug("\t global_atts: %s" % str(global_atts))
-    logger.debug("\t var_atts: %s"    % str(var_atts))
-    logger.debug("\t coord_vars: %s"  % str(coord_vars))
-    logger.debug("\t log_name: %s"    % str(log_name))
+    if split_by:
+        gb = frame.groupby(split_by)
+        for key,group in gb:
+            if out:
+                new_name = _merge_name(out,key)
+                logger.debug(new_name)
+                save(gb.get_group(key), new_name, config['format'], float_format=config.get('float-format')) 
+            else:
+                print gb.get_group(key).to_string()
+                print '\n\n\n'
+    elif out: 
+        save(frame, out, config['format'], float_format=config.get('float-format')) 
     
-    
-    #for file in files:
-    #logger.debug(file)
-    frame = frame_from_nc(files, vars, global_atts, var_atts, coord_vars,log_name)
+    else: 
+        print frame.to_string()
+
         
-    if format not in FORMATS:
-        logger.error("format %s not understood" % format)
-        raise UnknownFormat("format not understood")
+def save(frame, out, format, float_format=None):
     
-    if format=='txt' :
-        pass
-        #write_txt_files(frame, entry['dir'], entry['dimspec'], log_name)
+    logger = loghelper.get(LOGGER)
+    
+    if format not in SUPPORTED_FORMATS: raise UnknownFormat("%s output format not supported" % format)
+    
+    # append a % sign to float format
+    if float_format: float_format = "%" + float_format
+    
+    if format=="hdf":
+        frame.to_hdf(out, 'w')
         
-    elif format=='json':
-        write_json_files(frame, entry['dir'], expand(entry['fname'], scope), entry['tseries_vars'], entry['dimspec'], entry['drop'], entry['rename'], entry['float_format'], log_name)
+    elif format=="csv":
+        frame.to_csv(out, float_format=float_format, index=False)        
 
-    elif format=='csv':
-        write_csv_files(frame, entry['dir'], expand(entry['fname'], scope), entry['tseries_vars'],entry['dimspec'], entry['drop'], values='value', rows=entry['rows'],cols=entry['cols'],sort_by=entry['sort_by'],rename=entry['rename'],float_format=entry['float_format'], na_rep=entry['na_rep'], log_name=log_name)
-            
-    elif format=='aot':
-        write_aot_files(frame, entry['dir'])
+    elif format=="json":
+        logger.debug(frame)
+        _to_json(frame, out, float_format=float_format) 
+        
+def _prior_time(basetime, hours=None, delay=None):
+    """ Gets the closest prior time to basetime, restricted to to specified hours
+    
+    Arguments:
+        basetime -- a datetime object of the time work from
+        hours    -- a list of integers representing hours to round to
+        
+    Returns a datetime object representing the closest prior time to basetime which 
+    is a whole number of hours """
+
+    hour          = datetime.timedelta(0, 60*60)
+
+    if delay:
+        basetime = basetime - delay*hour
+
+    if hours:
+        start_day     = datetime.datetime(basetime.year, basetime.month, basetime.day, 0, 0)           # throw away all time parts
+        start_hour    = basetime.hour
+        past_hours   = [ h for h in hours if (h <= start_hour)]
+        recent_hour  = past_hours[-1]
+        prior        = start_day + recent_hour * hour
+        return prior
+        
+    else:
+        return basetime
 
 
-      
+def _to_str(element, date_format=None, float_format=None):
 
+    date_fmt = date_format if date_format else "%Y-%m-%d_%H:%M:%S"
+    float_fmt = float_format if float_format else "%0.3f"
     
     
-def write_json_files(frame, out_dir, out_name, variables, dimspec, drop, rename=None, float_format="%0.3f",log_name=LOGGER ):
+    if type(element)==tuple:
+        return '.'.join(map(_to_str, list(element)))
+    
+    if type(element)==string: return element
+    if type(element)==datetime.datetime: return element.strftime(date_fmt)
+    if type(element)== pd.tslib.Timestamp: return element.strftime(date_fmt)
+    
+
+
+
+    
+def _merge_name(filename, key):
+    """Merges a groupby key into an filename, by inserting it before the file extension
+    Arguments:
+        filename -- the base filename to insert into
+        key      -- the groupby key (string or tuple)"""
+    
+    path,name = os.path.split(filename)
+    tokens = name.split('.')
+    
+    logger= loghelper.get(LOGGER)
+    logger.debug(key)
+    flatkey = _to_str(key)
+    
+    logger.debug(flatkey)
+    logger.debug(tokens)
+    tokens.insert(-1,flatkey)
+    newname = '.'.join(tokens)
+    newpath = os.path.join(path, newname)
+    return newpath
+   
+ 
+    
+def _to_json(frame, out_name, float_format="%0.3f" ):
     """ Writes each variable and init_time series into one json file. If vars is None, then all export all variables"""
 
-    logger = loghelper.get_logger(log_name)
+    logger = loghelper.get(LOGGER)
 
     logger.info("*** outputting data as json ***")
-    # drop columns by subsetting to create a view
-    if drop: _drop(frame, drop)
-      
-      
-    # subset based on variable, location, height
-    frame = _filter(frame, variables, dimspec, log_name)
-
-
-    if rename:
-        frame = _rename(frame, rename)
 
         
     # Bit of a hack to ease output formatting, convert init_time to string
-    frame['init_time'] = frame['init_time'].apply(str)
+    frame['reftime'] = frame['reftime'].apply(str)
     
     
-    
-    # we need to group by everything except valid time and value
-    group_by = [c for c in frame.columns if c not in ["valid_time", "value"]]
+    # we need to group by everything except valid time, lead time and value
+    group_by = [c for c in frame.columns if c not in ["valid_time","leadtime", "value"]]
     gb = frame.groupby(group_by)
 
         
@@ -168,13 +263,13 @@ def write_json_files(frame, out_dir, out_name, variables, dimspec, drop, rename=
     
     series = []
     for name, group in gb:
-        #logger.debug("processing %s" % str(name))
+
         # create a dictionary from all the fields except valid time and value
         d = dict(zip(group_by,list(name)))
         
         timestamp = map(convert, group['valid_time'])
         values  = group['value']
-        mvals = np.ma.masked_invalid(np.array(values))
+        mvals   = np.ma.masked_invalid(np.array(values))
         data    = [ (timestamp[n],mvals[n]) for n in range(len(timestamp))]
         ldata   = map(list, data)
         d['data'] = ldata
@@ -193,15 +288,15 @@ def write_json_files(frame, out_dir, out_name, variables, dimspec, drop, rename=
 
     json_str = ','.join(series)
     
-    if not os.path.exists(out_dir):
-        os.makedirs(out_dir)
     
-    fout = open('%s/%s' % (out_dir, out_name), 'w')
+    # if not os.path.exists(out_dir):
+        # os.makedirs(out_dir)
+    
+    fout = open(out_name, 'w')
     fout.write('[')
     fout.write(json_str)
     fout.write(']')
     fout.close()
-    
     
 def write_aot_files(frame, out_dir, log_name=LOGGER):        
     """Writes file format the same as AOTs existing supplier, which is:
@@ -421,9 +516,6 @@ def write_aot_files(frame, out_dir, log_name=LOGGER):
         out_name = '%s/%s.txt' % (d, init_time.strftime('%y%m%d%H'))
         logger.debug("writing times series out to %s" % out_name)
         subset.to_csv(out_name, index=False, float_format='%0.2f')
-    
-        
-        
 
 def frame_from_nc_old(ncfiles, vars, dimspec, global_atts, var_atts, log_name):
 
@@ -535,8 +627,7 @@ def frame_from_nc_old(ncfiles, vars, dimspec, global_atts, var_atts, log_name):
     new_cols = pre_cols + data_cols
     df = df[new_cols]
     return df
-   
-    
+
 def collapse(t):
     """Collapses a three-element tuple representing MultiIndex values into a single column name"""
     if t[1]==HGT2DNUM:
