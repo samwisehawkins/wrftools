@@ -1,7 +1,7 @@
-"""ncframe.py creates a DataFrame from a netcdf file and writes the result to disk. 
+"""ncdump.py creates a DataFrame from a netcdf file and writes the result to disk. 
 
 Usage: 
-    ncframe.py  [options] [<files>...]
+    ncdump.py  [options] [<files>...]
 
 Options:
     --config=<file>             config file specifying options
@@ -133,7 +133,6 @@ def ncdump(config):
 
     
     if order_by:
-        logger.debug(order_by)
         frame = frame[order_by]
     
     if out:
@@ -144,7 +143,6 @@ def ncdump(config):
         for key,group in gb:
             if out:
                 new_name = _merge_name(out,key)
-                logger.debug(new_name)
                 save(gb.get_group(key), new_name, config['format'], float_format=config.get('float-format')) 
             else:
                 print gb.get_group(key).to_string()
@@ -172,7 +170,6 @@ def save(frame, out, format, float_format=None):
         frame.to_csv(out, float_format=float_format, index=False)        
 
     elif format=="json":
-        logger.debug(frame)
         _to_json(frame, out, float_format=float_format) 
         
 def _prior_time(basetime, hours=None, delay=None):
@@ -229,11 +226,8 @@ def _merge_name(filename, key):
     tokens = name.split('.')
     
     logger= loghelper.get(LOGGER)
-    logger.debug(key)
     flatkey = _to_str(key)
-    
-    logger.debug(flatkey)
-    logger.debug(tokens)
+
     tokens.insert(-1,flatkey)
     newname = '.'.join(tokens)
     newpath = os.path.join(path, newname)

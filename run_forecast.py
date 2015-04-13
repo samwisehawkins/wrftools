@@ -398,8 +398,8 @@ for init_time in init_times:
                
                 
     #
-    # Post processing stages
-    #
+    # Verification stage, not currenlty used
+    # Point stat
     if config['post'] and config['post.met']:
         for d in range(1,max_dom+1):        
             try:
@@ -414,25 +414,33 @@ for init_time in init_times:
     # Power prediction 
     #
     if config['power']:
-        from wrftools import power
-        for d in range(1,max_dom+1):
-            try:
-                config['dom'] = d
-                config['grid_id'] = d
-                power.power(config)
-            except Exception, e:
-                logger.error('*** FAIL POWER CONVERSION ***')
-                shared.handle(e, fail_mode, full_trace)
+        logger.warn("power forecaasing from within main forecast cycle is deprecated and will be removed")
+        logger.warn("use power.py as a standalone tool, to preserve modularity")
+        pass
+        #
+        #from wrftools import power
+        #for d in range(1,max_dom+1):
+        #    try:
+        #        config['dom'] = d
+        #        config['grid_id'] = d
+        #        power.power(config)
+        #    except Exception, e:
+        #        logger.error('*** FAIL POWER CONVERSION ***')
+        #        shared.handle(e, fail_mode, full_trace)
 
 
+    # deprecated
     if config['extract'] and config['extract.tseries']:
-        for d in range(1,max_dom+1):
-            try:
-                config['dom'] = d
-                extract.ncdump(config)
-            except Exception, e:
-                logger.error('*** FAIL TIME SERIES DUMPING  ***')
-                shared.handle(e, fail_mode, full_trace)
+        logger.warn("dumping time-series to other formats from within main forecast cycle is deprecated and will be removed")
+        logger.warn("use ncdump.py as a standalone tool, to preserve modularity")
+        pass
+        #for d in range(1,max_dom+1):
+        #    try:
+        #        config['dom'] = d
+        #        extract.ncdump(config)
+        #    except Exception, e:
+        #        logger.error('*** FAIL TIME SERIES DUMPING  ***')
+        #        shared.handle(e, fail_mode, full_trace)
 
 
             
@@ -459,8 +467,6 @@ for init_time in init_times:
                 post.compress(config)
             except Exception, e:
                 shared.handle(e, fail_mode, full_trace)
-        
-        
         
         
         if config['post.metadata']:

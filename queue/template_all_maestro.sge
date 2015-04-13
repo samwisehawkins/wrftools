@@ -8,6 +8,7 @@ module load szip
 module load sge
 module load openmpi
 module add ncl
+module add nco
 module switch ncl/opendap ncl/nodap
 
 #
@@ -24,7 +25,7 @@ module switch ncl/opendap ncl/nodap
 #$ -o <logfile>
 
 
-CMD="$MPI_HOME/bin/mpirun -np $NSLOTS <executable>"
+CMD="$MPI_HOME/bin/mpirun <executable>"
  
 echo $CMD
  

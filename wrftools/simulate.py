@@ -227,27 +227,27 @@ def ungrib_sst(config):
     # link namelist.sst to namelist.wps in WPS run dir
     logger.debug('linking namelist.sst -----> namelist.wps')
     cmd = 'ln -sf %s %s' %(namelist_sst, namelist_run)
-    shared.run_cline(cmd, config)
+    shared.run_cmd(cmd, config)
 
     logger.debug('removing Vtable')
     if os.path.exists(vtable):
         os.remove(vtable)
     logger.debug('linking Vtable.SST ----> Vtable')
     cmd = 'ln -sf %s %s' %(vtable_sst, vtable)
-    shared.run_cline(cmd, config)
+    shared.run_cmd(cmd, config)
 
     # run link_grib to link SST gribs files
     logger.debug('Linking SST GRIB files')
     cmd = '%s/link_grib.csh %s/%s' %(wps_dir, sst_local_dir, sst_filename)
-    shared.run_cline(cmd, config)
+    shared.run_cmd(cmd, config)
 
 
     logger.info('\n*** RUNNING UNGRIB FOR SST ***')
     cmd     =  '%s/ungrib.exe' % wps_run_dir
-    shared.run(cmd, config, wps_run_dir)
+    shared.run_cmd(cmd, config)
 
     cmd = 'grep "Successful completion" ./ungrib.log*' # check for success
-    ret = shared.run_cline(cmd, config)
+    ret = shared.run_cmd(cmd, config)
     if ret!=0:
         raise IOError('Ungrib failed for SST')
     
@@ -257,7 +257,7 @@ def ungrib_sst(config):
         os.remove(namelist_run)
     # link in original (unmodified) namelist.wps
     cmd = 'ln -sf %s %s' %(namelist_wps, namelist_run)    
-    shared.run_cline(cmd, config)
+    shared.run_cmd(cmd, config)
     
 def prepare_ndown(config):
     """Runs a one-way nested simulation using ndown.exe

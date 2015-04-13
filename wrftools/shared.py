@@ -16,18 +16,12 @@ import glob
 import time, datetime
 from dateutil import rrule
 from collections import OrderedDict
-
 from namelist import Namelist, read_namelist
-
 from queue import QueueError
-
 import glob
-
 import loghelper
 from loghelper import create_logger
-
 from substitute import sub_date, expand
-
 import queue
 
 #*****************************************************************
@@ -689,5 +683,38 @@ def get_sst_filename(config):
     return sst_filename
     
     
+def _prior_time(basetime, hours=None, delay=None):
+    """ Gets the closest prior time to basetime, restricted to to specified hours
     
+    Arguments:
+        basetime -- a datetime object of the time work from
+        hours    -- a list of integers representing hours to round to
+        
+    Returns a datetime object representing the closest prior time to basetime which 
+    is a whole number of hours """
+
+    hour          = datetime.timedelta(0, 60*60)
+
+    if delay:
+        basetime = basetime - delay*hour
+
+    if hours:
+        start_day     = datetime.datetime(basetime.year, basetime.month, basetime.day, 0, 0)           # throw away all time parts
+        start_hour    = basetime.hour
+        past_hours   = [ h for h in hours if (h <= start_hour)]
+        recent_hour  = past_hours[-1]
+        prior        = start_day + recent_hour * hour
+        return prior
+        
+    else:
+        return basetime
     
+def _listify(element):
+    """ Ensures elements are contained in a list """
+    
+    # either it is a list already, or it is None
+    if type(element)==type([]) or element==None:
+        return element
+    
+    else:
+        return [element]

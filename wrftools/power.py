@@ -1,14 +1,40 @@
-""" power.py creates power output from wind speed and direction times series 
+""" power.py creates power output from wind speed and direction times series, plus other output 
+variables which may be useful.  The input files must be in netcdf format with dimensions:
 
+    reftime  : forecast reference time
+    leadtime : forecast lead time as offset from reftime
+    location : point location, with coordinate variable naming the location
+    height   : height above surface    
+
+e.g. SPEED(reftime, leadtime, location, height)    
+    
 Usage:
-    power.py [--config=<file>] [options]
+    power.py [--config=<file>] [options] [<files>...]
 
         
+Input files can be specified by giving an file-pattern option, which can use the identifiers
+%iY, %im,%id etc to be expanded to initial year, month, day etc. These will be expanded from the
+start time. 
+
+Output files can be specified by giving a file pattern which can also include the %iY etc. However, 
+these will be expanded from the reftime found in in input files        
+        
 Options:
-    --log-level=<level>       debug, info or warn
-    --init-time=<datetime>    initial time
-    --pcurve-dir=<dir>        power curve dir
-    """
+    --config=<file>             config file specifying options
+    --file-pattern=<pattern>    file pattern to expand to match input files, can include start time
+    --out=<file>                output file (or file pattern)
+    --start=<time>              time to start from, leave blank to use system time
+    --cycles=<list>             list of cycle hours to round to e.g. [0,6,12]
+    --delay=<hours>             delay to apply to start time
+    --pcurve-dir=<dir>          power curve dir
+    --pnorm=<bool>              whether to normalise power to [0,1]
+    --pdist=<n>                 number of samples to generate to create probabilistic power distribution (0=deterministic)
+    --sstd                      standard deviation to apply to wind speed at each step
+    --dstd                      standard deviation to apply to wind direction at each timestep
+    --pquants=<list>            power quantiles to include in outputs
+    --log.level=<level>         debug, info or warn
+    --log.fmt=<fmt>             log message format
+    --log.file=<file>           optionally write to log file"""
 
 import os
 import sys
@@ -18,23 +44,27 @@ import scipy
 from scipy import interpolate
 import loghelper
 import confighelper as conf
-import ncframe
 import netCDF4
 from netCDF4 import Dataset
-from netCDF4 import netcdftime
-from substitute import expand
-
+from netCDF4 import num2date, date2num
+import substitute
+import shared
+import nctools
+import glob
 
 LOGGER="power"
 
 class FileInputEror(Exception):
     pass
-    
+
+class ConfigError(Exception):
+    pass
     
 def main():
     config = conf.config(__doc__, sys.argv[1:])
     power(config)
 
+    
 def power(config):
     """Reads 'time series' from netcdf time series file, and adds power as a variable. """
     
@@ -43,195 +73,212 @@ def power(config):
     else:
         logger = loghelper.get_logger(config['log.name'])
     
+    # listify ensures they are returned as a list, even if it is one file
+    files = shared._listify(config['<files>'])
+    
     # Number of samples to use should be in here
     # Whether to normalise power should be in here    
-    pnorm           = config['pnorm']
-    pdist           = config['pdist']
-    sstd            = config['sstd']
-    dstd            = config['dstd']
-    pquants         = config['pquants']
-    quantiles       = np.array(pquants)
+    start     = config.get('start')
+    delay     = config.get('delay')
+    cycles    = shared._listify(config.get('cycles'))
+    pnorm     = config.get('pnorm')
+    pdist     = config.get('pdist')
+    sstd      = config.get('sstd')
+    dstd      = config.get('dstd')
+    pquants   = config.get('pquants')
+    quantiles = np.array(pquants)
+    pcurve_dir = config.get('pcurve-dir')
+    ts_dir     = config.get('tseries-dir')
+    out        = config.get('out')
+    metadata   = config.get('metadata')
+
+
+    
+    basetime = start if start else datetime.datetime.today()
+    prior = shared._prior_time(basetime, delay=delay, hours=cycles)
+
+    logger.debug("using %s as a start time" % prior)
+
+    if not files:
+        logger.debug("no files specified, finding using options")
+        file_pattern = config.get('file-pattern')
+        if not file_pattern: raise ConfigError('either supply files or specify file-pattern')
+        
+        expanded = substitute.sub_date(file_pattern, init_time=prior)
+        files = glob.glob(expanded)
+        print("hello")
+        logger.debug(files)
+
+    # if we get to this point and there are still no files, then we have a problem
+    if not files: raise IOError("no files found")
+    
+    logger.debug("input files: ")
+    logger.debug(files)
+    for f in files:
+        logger.debug("\t%s" % f)
+    
+    # if pdist 
+    if pdist: n=pdist
     
     
-    logger.debug(pnorm)
+    #grid_id         = config['grid_id']
     
-    if pdist:
-        n=pdist
+    
+    out_pattern     = config.get('out')
+    
+    
+    for tseries_file in files:
+        dataset_in = Dataset(tseries_file, 'a')
             
-    grid_id         = config['grid_id']
-    init_time       = config['init_time']
-    pcurve_dir      = config['pcurve_dir']
-    ts_dir          = config['tseries_dir']
-    
-    tseries_file    = expand(config['tseries_file'], config)
-    power_file      = expand(config['power_file'], config)
-
-    logger.info('Estimating power from time series: %s ' % tseries_file)
-    logger.info('Writing power time series to: %s ' % power_file)
-    
-    dataset_in = Dataset(tseries_file, 'a')
-
-            
+        # Get dimensions
+        dims      = dataset_in.dimensions
+        nreftime  = len(dims['reftime'])
+        ntime     = len(dims['leadtime'])
+        nloc      = len(dims['location'])
+        nheight   = len(dims['height'])
+        loc_str_len = len(dims['loc_str_length'])
         
-    # Get dimensions
-    dims      = dataset_in.dimensions
-    nreftime  = len(dims['reftime'])
-    ntime     = len(dims['leadtime'])
-    nloc      = len(dims['location'])
-    nheight   = len(dims['height'])
-    loc_str_len = len(dims['loc_str_length'])
-    
-    # Get coordinate variables
-    reftime   = dataset_in.variables['reftime']
-    leadtime  = dataset_in.variables['leadtime']
-    
-    refdt     = netcdftime.num2date(reftime[:], reftime.units)
-    
-    if "hour" in leadtime.units:
-        delta = datetime.timedelta(0,60*60)
-    
-    elif "minute" in leadtime.units:
-        delta = datetime.timedelta(0,60)
+        # Get coordinate variables
+        reftime   = dataset_in.variables['reftime']
+        leadtime  = dataset_in.variables['leadtime']
+        validtime = nctools._valid_time(reftime, leadtime)
+        
+        refdt     = num2date(reftime[:], reftime.units)
+        
+        power_file = substitute.sub_date(out, init_time=refdt[0])
+        
 
-    else:
-        raise FileInputError("leadtime units of %s not supported" % leadtime.units) 
-    
-    logger.debug(leadtime)
-    logger.debug(type(leadtime[:]))
-    logger.debug(type(leadtime[:]))
-    datetimes = refdt[:] + (leadtime[:] * delta)
-    
-    logger.debug(datetimes)
-    location = [''.join(l.filled(' ')).strip() for l in dataset_in.variables['location']]
-    height   = dataset_in.variables['height']
-
-    # Get attributes
-    metadata = config['metadata']
-
-    
-    if power_file == tseries_file:
-        dataset_out = dataset_in
-    else:
-        dataset_out = Dataset(power_file, 'w')
+        logger.info('Estimating power from time series: %s ' % tseries_file)
+        logger.info('Writing power time series to: %s ' % power_file)
 
         
-    # Get number of quantiles
-    nq    = len(quantiles)
-    pdata = np.ma.zeros((ntime,nloc,nheight,nq+1), np.float) # mean will be 1st value
-    
-    use_locs = []
-    for l,loc in enumerate(location):
-    
-        pcurve_file = '%s/%s.csv' %(pcurve_dir, loc)
-        
-        # mask power data if no power curve found for this park
-        if not os.path.exists(pcurve_file):
-            #logger.debug("Power curve: %s not found, skipping" % pcurve_file)
-            pdata[:,l,:,:] = np.ma.masked
-            continue
-        
-        logger.info('Predicting power output for %s' % loc )
-        #
-        # Open power curve
-        #
-        use_locs.append(l)
-        pcurve = from_file(pcurve_file)
-
-    
-        for h in range(nheight):
-            speed     = dataset_in.variables['SPEED'][0,:,l,h]
-            direction = dataset_in.variables['DIRECTION'][0,:,l,h]
-            
-            #pwr = pcurve.power(speed,direction)
-    
-            # pdist will create a distribution for each timetep based on sampling
-            # n times from a normal distribution. 
-            pdist   = pcurve.power_dist(speed, direction, sstd=sstd,dstd=dstd,n=n, normalise=pnorm)
-            pmean   = np.mean(pdist, axis=1)
-            pquants = scipy.stats.mstats.mquantiles(pdist, prob=quantiles/100.0,axis=1, alphap=0.5, betap=0.5)
-            
-
-            pdata[:,l,h,0]  = pmean
-            pdata[:,l,h,1:] = pquants[:,:]
-
-        logger.info('finished %s' % loc)            
-
-
-
-    use_inds = np.array(use_locs)
-
-    if dataset_out != dataset_in:
-
-        dataset_out.createDimension('reftime', None)
-        dataset_out.createVariable('reftime', 'float', ('reftime',))
-        dataset_out.variables['reftime'][:] = reftime[:]
-        dataset_out.variables['reftime'].units = reftime.units
-        dataset_out.variables['reftime'].calendar = reftime.calendar
-        dataset_out.variables['reftime'].long_name = reftime.long_name
-        dataset_out.variables['reftime'].standard_name = reftime.standard_name
+        location = [''.join(l.filled(' ')).strip() for l in dataset_in.variables['location']]
+        height   = dataset_in.variables['height']
 
         
-        dataset_out.createDimension('leadtime', len(leadtime))
-        dataset_out.createVariable('leadtime', 'int', ('leadtime',))
-        dataset_out.variables['leadtime'][:] = leadtime[:]
-        dataset_out.variables['leadtime'].units = leadtime.units
-        dataset_out.variables['leadtime'].long_name = leadtime.long_name
-        dataset_out.variables['leadtime'].standard_name = leadtime.standard_name
-        
-        dataset_out.createDimension('location', len(use_locs))
-        dataset_out.createDimension('loc_str_length', loc_str_len)
-        
-        loc_data =np.array([list(l.ljust(loc_str_len, ' ')) for l in location])
-        logger.debug(loc_data)
-        dataset_out.createVariable('location', 'c', ('location', 'loc_str_length'))
-        dataset_out.variables['location'][:] = loc_data[use_inds,:]
-        
-        dataset_out.createDimension('height', nheight)        
-        dataset_out.createVariable('height', 'i', ('height',))
-        dataset_out.variables['height'][:] = height[:]
-        dataset_out.GRID_ID = dataset_in.GRID_ID
-        dataset_out.DX = dataset_in.DX
-        dataset_out.DY = dataset_in.DY
-        
-        try:
-            dataset_out.variables['height'].units = height.units
-        except Exception:
-            logger.warn("height units missing")
-        
-        
-        pdata = pdata[:, use_inds, :, :]
-        for key in metadata.keys():
-            key = key.upper()
-            logger.debug(key)
-            dataset_out.setncattr(key,dataset_in.getncattr(key))
-            
-        
-    
-    pavg    = dataset_out.createVariable('POWER','f',('reftime','leadtime','location','height'))
-    pavg.units = 'kW'
-    pavg.description = 'forecast power output'
-    pavg[0,:,:,:] = pdata[:,:,:,0]
-
-    
-    for q, qval in enumerate(quantiles):
-
-        varname = 'POWER.P%02d' % qval
-        logger.debug("creating variable %s" % varname)
-        var  = dataset_out.createVariable(varname,'f',('reftime','leadtime','location','height'))
-        if pnorm:
-            var.units = 'ratio'
+        if power_file == tseries_file:
+            dataset_out = dataset_in
         else:
-            var.units = 'kW'
-        var.description = 'forecast power output'
+            dataset_out = Dataset(power_file, 'w')
 
-        var[0,:,:,:] = pdata[:,:,:,q+1]
-    
             
+        # Get number of quantiles
+        nq    = len(quantiles)
+        pdata = np.ma.zeros((ntime,nloc,nheight,nq+1), np.float) # mean will be 1st value
+        
+        use_locs = []
+        # loop through locations and look for power-curve file
+        
+        for l,loc in enumerate(location):
+            pcurve_file = '%s/%s.csv' %(pcurve_dir, loc)
+            
+            # mask power data if no power curve found for this park
+            if not os.path.exists(pcurve_file):
+                #logger.debug("Power curve: %s not found, skipping" % pcurve_file)
+                pdata[:,l,:,:] = np.ma.masked
+                continue
+            
+            logger.info('Predicting power output for %s' % loc )
+            #
+            # Open power curve
+            #
+            use_locs.append(l)
+            pcurve = from_file(pcurve_file)
 
-    
-    dataset_in.close()
-    if dataset_out!=dataset_in:
-        dataset_out.close()
+        
+            for h in range(nheight):
+                speed     = dataset_in.variables['SPEED'][0,:,l,h]
+                direction = dataset_in.variables['DIRECTION'][0,:,l,h]
+                
+                #pwr = pcurve.power(speed,direction)
+        
+                # pdist will create a distribution for each timetep based on sampling
+                # n times from a normal distribution. 
+                pdist   = pcurve.power_dist(speed, direction, sstd=sstd,dstd=dstd,n=n, normalise=pnorm)
+                pmean   = np.mean(pdist, axis=1)
+                pquants = scipy.stats.mstats.mquantiles(pdist, prob=quantiles/100.0,axis=1, alphap=0.5, betap=0.5)
+                
+
+                pdata[:,l,h,0]  = pmean
+                pdata[:,l,h,1:] = pquants[:,:]
+
+            #logger.info('finished %s' % loc)            
+
+
+
+        use_inds = np.array(use_locs)
+
+        
+        if dataset_out != dataset_in:
+
+            dataset_out.createDimension('reftime', None)
+            dataset_out.createVariable('reftime', 'float', ('reftime',))
+            dataset_out.variables['reftime'][:] = reftime[:]
+            dataset_out.variables['reftime'].units = reftime.units
+            dataset_out.variables['reftime'].calendar = reftime.calendar
+            dataset_out.variables['reftime'].long_name = reftime.long_name
+            dataset_out.variables['reftime'].standard_name = reftime.standard_name
+
+            
+            dataset_out.createDimension('leadtime', len(leadtime))
+            dataset_out.createVariable('leadtime', 'int', ('leadtime',))
+            dataset_out.variables['leadtime'][:] = leadtime[:]
+            dataset_out.variables['leadtime'].units = leadtime.units
+            dataset_out.variables['leadtime'].long_name = leadtime.long_name
+            dataset_out.variables['leadtime'].standard_name = leadtime.standard_name
+            
+            dataset_out.createDimension('location', len(use_locs))
+            dataset_out.createDimension('loc_str_length', loc_str_len)
+            
+            loc_data =np.array([list(l.ljust(loc_str_len, ' ')) for l in location])
+            dataset_out.createVariable('location', 'c', ('location', 'loc_str_length'))
+            dataset_out.variables['location'][:] = loc_data[use_inds,:]
+            
+            dataset_out.createDimension('height', nheight)        
+            dataset_out.createVariable('height', 'i', ('height',))
+            dataset_out.variables['height'][:] = height[:]
+            dataset_out.GRID_ID = dataset_in.GRID_ID
+            dataset_out.DX = dataset_in.DX
+            dataset_out.DY = dataset_in.DY
+            
+            try:
+                dataset_out.variables['height'].units = height.units
+            except Exception:
+                logger.warn("height units missing")
+            
+            
+            pdata = pdata[:, use_inds, :, :]
+            for key in metadata.keys():
+                key = key.upper()
+                dataset_out.setncattr(key,dataset_in.getncattr(key))
+                
+            
+        
+        pavg    = dataset_out.createVariable('POWER','f',('reftime','leadtime','location','height'))
+        pavg.units = 'kW'
+        pavg.description = 'forecast power output'
+        pavg[0,:,:,:] = pdata[:,:,:,0]
+
+        
+        for q, qval in enumerate(quantiles):
+
+            varname = 'POWER.P%02d' % qval
+
+            var  = dataset_out.createVariable(varname,'f',('reftime','leadtime','location','height'))
+            if pnorm:
+                var.units = 'ratio'
+            else:
+                var.units = 'kW'
+            var.description = 'forecast power output'
+
+            var[0,:,:,:] = pdata[:,:,:,q+1]
+        
+                
+        #logger.debug(dataset_out)
+        
+        dataset_in.close()
+        if dataset_out!=dataset_in:
+            dataset_out.close()
 
     
 class PowerCurve(object):
