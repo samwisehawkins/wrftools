@@ -210,7 +210,6 @@ def power(config):
 
         
         if dataset_out != dataset_in:
-
             dataset_out.createDimension('reftime', None)
             dataset_out.createVariable('reftime', 'float', ('reftime',))
             dataset_out.variables['reftime'][:] = reftime[:]
