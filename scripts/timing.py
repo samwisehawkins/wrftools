@@ -1,20 +1,27 @@
-import sys
+"""timing.py computes timing information from a rsl output file from WRF
+
+Usage: 
+    python timing.py rsl_file [namelist.input]"""
+
+
+import sys, os
+# this is an ugly hack to do a relative import, but it works
+sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'wrftools'))
+import namelist as nl
 import re
 
 def main():
     """Reads a rsl file from WRF and works out timing information
     from that """
 
-    #
-    # Where should we assume to find the rsl file?
-    # In the wrf_working_dir
-    #
     args = sys.argv[1:]
     
     print('*** Computing timing information ***')
     rsl_file = args[0]
+    
     if len(args)>1:
-        timestep = int(args[1])
+        namelist = nl.read_namelist(args[1])
+        timestep = namelist.settings['time_step'][0]
     else:
         timestep=None
     
