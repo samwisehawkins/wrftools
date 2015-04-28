@@ -34,19 +34,19 @@ Suppose we want to run a forecast configuration called `myforecast`, and we want
     $> cp ~/code/wrftools/example/locations.csv ~/myforecast
     ```
  
- 5. Link `run_forecast.py` into working directory 
+5. Link `run_forecast.py` into working directory 
  
     ```
      $>ln ~/code/wrftools/run_forecast.py ~/myforecast
     ```
      
- 6. Copy `example/forecast.yaml` into working directory 
+6. Copy `example/forecast.yaml` into working directory 
     
     ```
     $>cp ~/code/wrftools/example/forecast.yaml ~/myforecast 
     ````
  
- 7. Edit the new `~/myforecast/forecast.yaml` file. In particular set:
+7. Edit the new `~/myforecast/forecast.yaml` file. In particular set:
  
     ```
     working_dir       : $(HOME)/forecasting/%(model_run)            # directory to work from, expects namelist.wps and namelist.input to be here
@@ -55,7 +55,7 @@ Suppose we want to run a forecast configuration called `myforecast`, and we want
     wrf_dir           : $(HOME)/WRF                                 # location of WRF code 
     ```
     
- 8. Run the forecast:
+8. Run the forecast:
  
     ```
     $> cd ~/myforecast
