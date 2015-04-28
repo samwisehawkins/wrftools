@@ -1,20 +1,66 @@
 README
 --------
 
-A framework for running WRF and associated
-programmes, e.g. WPS, NCL etc.
+A framework for running WRF and associated programmes, e.g. WPS, NCL etc.
 
 It is designed to be quickly hackable. There are some tools out there
 which run WRF, but they are not easily modified. This is designed to provide 
 a framework which is easily customised and modified. 
 
-This README file serves as documentation in the (temporary)
-absence of dedicated documentation. For more detailed docs, try the ./doc folder. 
+## Quick start
+
+Suppose we want to run a forecast configuration called `myforecast`, and we want the `wrftools` code in
+`$HOME/code/wrftools`.  WRF is in `$HOME/WRF`, and WPS is in `$HOME/WPS`, and gribmaster is in `$(HOME)/gribmaster`
+
+ 1. Clone wrftools repository 
+ 
+     $>cd ~/code
+     $>git clone https://github.com/samwisehawkins/wrftools.git
+ 
+ 2. Create a local working directory
+ 
+       $>mkdir ~/myforecast
+ 
+ 3. Create `~/myforecast/namelist.wps` and `~/myforecast/namelist.input` files
+ 
+ 
+ 4. Optionally create a `locations.csv` file for time-series extraction
+     $> cp ~/code/wrftools/example/locations.csv ~/myforecast
+ 
+ 
+ 5. Link `run_forecast.py` into working directory 
+ 
+     $>ln ~/code/wrftools/run_forecast.py ~/myforecast
+     
+ 6. Copy `example/forecast.yaml` into working directory 
+     
+     $>cp ~/code/wrftools/example/forecast.yaml ~/myforecast 
+ 
+ 7. Edit the new `~/myforecast/forecast.yaml` file. In particular set:
+ 
+        working_dir       : $(HOME)/forecasting/%(model_run)            # directory to work from, expects namelist.wps and namelist.input to be here
+        wrftools_dir      : $(HOME)/code/wrftools                       # location of local wrftools repository
+        wps_dir           : $(HOME)/WPS                                 # location of WPS code
+        wrf_dir           : $(HOME)/WRF                                 # location of WRF code 
+
+ 8. Run the forecast:
+     $> cd ~/myforecast
+     $> python run_forecast.py --config=forecast.yaml
 
 
+Outputs will be created in:
+
+    ~/myforecast/wps     # all of the logs associated with WPS
+    ~/myforecast/wrf     # all of logs associated with WRF
+    ~/myforecast/wrfout  # final wrfout files
+    ~/myforcecast/plots  # output plots
+    ~/myforecast/tseries # interpolated time-series
+
+ 
+
+# More detailed docs 
+     
 ## Dependencies
-
-### External tools
 
 The following external tools are required. All are findable via your favourite search engine.
 
@@ -35,15 +81,6 @@ python installation. These are:
 * docopt - intelligent parsing of command-line arguments
 * netCDF4 - not needed for core functionality, but used in the `extract` stage
 
-## Quick start
-
- 1. Clone wrftools repository `git clone https://github.com/samwisehawkins/wrftools.git`
- 2. Create a local working directory
- 3. Link `run_forecast.py` into working directory 
- 4. Copy `examples/forecast.yaml` into working directory 
- 5. Edit the new `forecast.yaml` file
- 6. `$> python run_forecast.py --config=forecast.yaml`
-
 
 ## Usage
 
@@ -54,15 +91,14 @@ Basic usage is:
 Any configuration options can also be specified on the command-line, where they will override 
 those in the config file e.g.
 
-    $> python run_forecast.py --config=<config_file> --log_level=debug
+    $> python run_forecast.py --config=<config_file> --log.level=debug
 
 See [example/forecast.yaml](example/forecast.yaml) for an explanation of options
 
 ## Modularity
 
-The design is slowly evolving into a more modular structure, but one that allows all of the modules to be run together if so desired. 
-I will call these modules stages, to distinguish them from pure python modules, and to highlight the fact they
-typically are run sequentially.  There are currently the following stages:
+The forecast process is divided into stages. 
+There are currently the following stages:
 
 * fetch          - a thin wrapper around gribmaster, fetches boundary conditions
 * prepare        - ensures correct files present, does some linking, updates namelist files
@@ -74,7 +110,7 @@ typically are run sequentially.  There are currently the following stages:
 * dispatch       - send out emails, plots etc
 
 
-Each component has an associated python module in the form of a single file within the `wrftools` directory, 
+Each component has an associated python module in the form of a single file within the `wrftools/wrftools` directory, 
 i.e. everything to do with the fetch stage is defined within `wrftools/fetch.py`. 
 Each stage has an associated boolean option within the config file which turns that stage on or off
 e.g. to run the fetch stage, set `fetch : true` in the config file, or use `--fetch=true` at the command line. 
@@ -92,35 +128,10 @@ that a parser is included in standard python distributions.
 However, I prefer YAML since the syntax is clearer, and the files can be commented.
 JSON will not be supported in future, unless there is a great need for it.
 
-Within a config file, environment variables can be specified accessed using `${var}`.
+Within a config file, environment variables can be specified accessed using `$(var)`.
 Local variables defined elsewhere in tht config file can be specified  using `%(var)`.
 If the variable in `${}` or `%()` is not defined within the current environments,
 it will not be expanded. This is not part of standard yaml or json!
-
-Additional files can be included using %(file.json) or %(file.yaml). The default 
-behaviour is to read and merge these directly into the parent scope,  in a manner
-similar to an inlcude directive. That is, suppose we have: 
-
-    config1.yaml
-    option1: value1
-    option2: value2
-    option3: %(config2.yaml)
-    
-    
-and config2.yaml looks like:
-    config2.yaml
-    option2: value3
-    option4: value4
-    
-Then when config1.yaml is read and expanded, config2 will **update** the parent, 
-potentially overwriting values:
-    
-    option1: value1
-    option2: value3
-    option4: value4 
-    
-For that reason, it is recommended that where required, keys are kept unique
-using a hierachical naming convention using '.' as seperators.
 
 Times can be specified using the following syntax, %cX, where c can be:
   
@@ -152,6 +163,13 @@ depending on the initial time of the forecast.
 
 Some options in the configution. e.g. start time, maximum number of nests, 
 ** will override settings in the namelist.input and namelist.wps files **
+
+
+
+
+Additional configuration files can be included using %[file.json] or %[file.yaml]. Wherever the 
+directive is found, the target file will be parsed as a dictionary, and placed into the parent scope. 
+
 
 
 ## Directories
@@ -186,34 +204,24 @@ be replaced by python equivalents to ensure better compatibility.
 
 ## Visualisation / interface with NCL
 
-NCL is used as the primary visualisation tool, and also for extacting time-series at locations and heights. 
-Communication with NCL is done through environment variables, as well as attributes
-within the wrfout netcdf files. The following environment variables are set:
+NCL is used as the primary visualisation and extraction tool.
+Communication with NCL is done via a automatically written an options file, which is a fragment of ncl code, and setting the
+enviroment variable `$NCL_OPT_FILE` to point to this file. 
 
-* FCST_FILE      netcdf file to use
-* NCL_OUT_DIR    directory to write outputs to, used if multiple files get written, e.g. one plot per hour
-* NCL_OUT_FILE   filename to write output to, used if only one output file
-* LOCATIONS_FILE text file with a list of location names, latitudes and longitudes
-* NCL_OPT_FILE   NCL options file. This is a fragment of ncl code which can be imported into an ncl script.
+The ncl options file defines the following variables:
 
-Note, this is gradually being replaced with command line arguments, since environment variables are not very robust
-and tend to dissapear, e.g. when logging into other nodes. Ncl will be executed with the following pseudo command-line
-arguments:
+    ncl_in_file   = ; input file to process
+    ncl_out_dir   = ; directory for outputs (multiple files)
+    ncl_out_file  = ; filename of output (single files)
+    ncl_out_type  = ; output type (png, pdf, nc)
+    ncl_loc_file  = ; csv file with latitude and longitude of points
+    ncl_extract_heights  = ; heights to interpolate to
 
- * ncl_in_file   - the input file to work on
- * ncl_out_dir   - directory for output, used if the rest of filename is coded in the ncl script
- * ncl_out_file  - file name, used if none of the filename is coded in the ncl script
- * ncl_out_type  - workstation type, png, pdf etc
- * ncl_loc_file  - location file with names, latitudes, longitudes of points of interest
- * ncl_opt_file  - additional options. If defined, NCL will load this using `loadscript(ncl_opt_file)`
- * ncl_extract_heights - heights to interpolate to
+Thus, if you want to write an NCL script which 'plugs in' to this, just use put:
+    
+      load "$NCL_OPT_FILE"
 
-
-
-## Time series extraction
-
-
-
+in the script, and the above variables shoudl magically be defined.
 
 
  
