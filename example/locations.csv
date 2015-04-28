@@ -1,0 +1,8 @@
+#***********************************************************************
+# Locations file for extraction of time-series, plotting, etc
+# Header should contain at least location_id,name,latitude,longitude
+# Other fields may be present
+# Values within fields seperated by :
+#***********************************************************************
+location_id,name,latitude,longitude
+EDI,Edinburgh,55.8,-3.22
