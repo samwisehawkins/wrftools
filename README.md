@@ -10,7 +10,7 @@ a framework which is easily customised and modified.
 ## Quick start
 
 Suppose we want to run a forecast configuration called `myforecast`, and we want the `wrftools` code in
-`$HOME/code/wrftools`.  WRF is in `$HOME/WRF`, and WPS is in `$HOME/WPS`, and gribmaster is in `$(HOME)/gribmaster`
+`$HOME/code/wrftools`. In this example, assume WRF is in `$HOME/WRF`, and WPS is in `$HOME/WPS`, and gribmaster is in `$(HOME)/gribmaster`
 
 1. Clone wrftools repository 
     
@@ -49,7 +49,7 @@ Suppose we want to run a forecast configuration called `myforecast`, and we want
 7. Edit the new `~/myforecast/forecast.yaml` file. In particular set:
  
     ```
-    working_dir       : $(HOME)/forecasting/%(model_run)            # directory to work from, expects namelist.wps and namelist.input to be here
+    working_dir       : $(HOME)/myforecast                          # directory to work from, expects namelist.wps and namelist.input to be here
     wrftools_dir      : $(HOME)/code/wrftools                       # location of local wrftools repository
     wps_dir           : $(HOME)/WPS                                 # location of WPS code
     wrf_dir           : $(HOME)/WRF                                 # location of WRF code 
