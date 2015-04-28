@@ -181,7 +181,7 @@ poll_interval:                  # is queuing system used, status of submmitted j
   ndown.exe    : 1
   wrf.exe      : 5
   ncl          : 1
-  nccopy       : 5
+  nccopy       : 10
   ncks         : 1
 
 
@@ -193,7 +193,7 @@ max_job_time:
   ndown.exe   : 5
   wrf.exe     : 60
   ncl         : 10
-  nccopy      : 60
+  nccopy      : 90
   ncks        : 30
 
 queue_log:                                       # if queue system used, name of log files

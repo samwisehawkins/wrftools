@@ -8,8 +8,139 @@ of options.
 
 Usage:
     run_forecast.py [--config=<file>] [options]
+    
+Options:
+    --config=<file>
+    --only=<stage>
+    --delay=<hours>
+    --bdy_conditions=<opt>
+    --bdy_interval=<opt>
+    --cmd_timing=<opt>
+    --compression_level=<opt>
+    --convert_grb=<opt>
+    --cycles=<opt>
+    --dispatch=<opt>
+    --dispatch.list=<opt>
+    --domain=<opt>
+    --dry_run=<opt>
+    --end=<opt>
+    --extract=<opt>
+    --extract.tseries=<opt>
+    --extract_hgts=<opt>
+    --fail_mode=<opt>
+    --fcst_hours=<opt>
+    --fetch=<opt>
+    --fetch.gribmaster=<opt>
+    --fetch.sst=<opt>
+    --finalise=<opt>
+    --finalise.copy=<opt>
+    --finalise.create=<opt>
+    --finalise.link=<opt>
+    --finalise.move=<opt>
+    --finalise.remove=<opt>
+    --finalise.run=<opt>
+    --full_trace=<opt>
+    --geo_em_dir=<opt>
+    --gm_dataset=<opt>
+    --gm_dir=<opt>
+    --gm_log=<opt>
+    --gm_max_attempts=<opt>
+    --gm_sleep=<opt>
+    --gm_transfer=<opt>
+    --grb_dir=<opt>
+    --grb_fmt=<opt>
+    --grb_input_delay=<opt>
+    --grb_input_fmt=<opt>
+    --history_interval=<opt>
+    --host_file=<opt>
+    --init_interval=<opt>
+    --job_script=<opt>
+    --job_template=<opt>
+    --locations_file=<opt>
+    --log.file=<opt>
+    --log.fmt=<opt>
+    --log.level=<opt>
+    --log.mail=<opt>
+    --log.mail.buffer=<opt>
+    --log.mail.level=<opt>
+    --log.mail.subject=<opt>
+    --log.mail.to=<opt>
+    --log.name=<opt>
+    --max_dom=<opt>
+    --max_job_time=<opt>
+    --met_em_dir=<opt>
+    --metadata=<opt>
+    --model=<opt>
+    --model_run=<opt>
+    --namelist_input=<opt>
+    --namelist_wps=<opt>
+    --ncl_code=<opt>
+    --ncl_code_dir=<opt>
+    --ncl_log=<opt>
+    --ncl_ol_code=<opt>
+    --ncl_ol_out_dir=<opt>
+    --ncl_opt_file=<opt>
+    --ncl_opt_template=<opt>
+    --ncl_out_dir=<opt>
+    --ncl_out_type=<opt>
+    --num_procs=<opt>
+    --operational=<opt>
+    --poll_interval=<opt>
+    --post=<opt>
+    --post.compress=<opt>
+    --post.hyperslab=<opt>
+    --post.hyperslab.dimspec=<opt>
+    --post.met=<opt>
+    --post.metadata=<opt>
+    --post.upp=<opt>
+    --prepare=<opt>
+    --prepare.copy=<opt>
+    --prepare.create=<opt>
+    --prepare.link=<opt>
+    --prepare.remove=<opt>
+    --queue=<opt>
+    --queue_log=<opt>
+    --run_level=<opt>
+    --simulate=<opt>
+    --simulate.geogrid=<opt>
+    --simulate.metgrid=<opt>
+    --simulate.ndown=<opt>
+    --simulate.real=<opt>
+    --simulate.status=<opt>
+    --simulate.timing=<opt>
+    --simulate.ungrib=<opt>
+    --simulate.wps=<opt>
+    --simulate.wrf=<opt>
+    --sst=<opt>
+    --sst_delay=<opt>
+    --sst_filename=<opt>
+    --sst_local_dir=<opt>
+    --sst_server=<opt>
+    --sst_server_dir=<opt>
+    --sst_vtable=<opt>
+    --start=<opt>
+    --status_file=<opt>
+    --tmp_dir=<opt>
+    --tseries_code=<opt>
+    --tseries_dir=<opt>
+    --tseries_file=<opt>
+    --upp_dir=<opt>
+    --visualise=<opt>
+    --visualise.ncl=<opt>
+    --visualise.ol=<opt>
+    --vtable=<opt>
+    --web_dir=<opt>
+    --working_dir=<opt>
+    --wps_dir=<opt>
+    --wps_run_dir=<opt>
+    --wrf_dir=<opt>
+    --wrf_run_dir=<opt>
+    --wrfout_dir=<opt>
+    --wrftools_dir=<opt>
+ 
+Any option which occurs in example/forecast.yaml can be supplied at the command-line, where it will take precedence.
 
-See examples/forecast.yaml for an annotated list of options. A forecast is run in a series of stages
+A forecast is run in a series of stages
 the main stages are: 
 
 * fetch          - fetch boundary conditions
@@ -24,146 +155,7 @@ the main stages are:
 These are all available as boolean options e.g. `--fetch=false` will not run anything in the fetch stage.
 Alternatively, individual stage(s) can be selected by passing it as an argument(s) to the `--only` option, e.g.
 `--only=fetch`, will only run the fetch stage, even if other options contradict this. `--only=fetch,simulate` will 
-run fetch and simulate stages.
-
-
-Options:
-    --archive_mode=<str>
-    --bdy_conditions=<str>
-    --bdy_interval=<int>
-    --cmd_timing=<bool>
-    --compress=<bool>
-    --compression_level=<int>
-    --config=<str>
-    --convert_grb=<bool>
-    --create_dirs=<list>
-    --cycles=<str>
-    --delay=<int>
-    --dispatch=<bool>
-    --dispatch_json=<str>
-    --domain=<str>
-    --dstd=<float>
-    --end=<datetime.datetime>
-    --extract=<bool>
-    --extract.tseries=<bool>
-    --extract_hgts=<str>
-    --fail_mode=<str>
-    --fcst_hours=<int>
-    --fetch=<bool>
-    --fetch.gribmaster=<bool>
-    --fetch.sst=<bool>
-    --finalise=<bool>
-    --finalise.link=<list>
-    --finalise.move=<list>
-    --finalise.remove=<list>
-    --full_trace=<bool>
-    --geo_em_dir=<str>
-    --gm_dataset=<str>
-    --gm_delay=<int>
-    --gm_dir=<str>
-    --gm_log=<str>
-    --gm_max_attempts=<int>
-    --gm_sleep=<int>
-    --gm_transfer=<str>
-    --grb_dir=<str>
-    --grb_fmt=<str>
-    --grb_input_fmt=<str>
-    --history_interval=<int>
-    --host_file=<str>
-    --init_interval=<int>
-    --job_script=<str>
-    --job_template=<str>
-    --json_dir=<str>
-    --json_web_dir=<str>
-    --link=<list>
-    --locations_file=<str>
-    --log_file=<str>
-    --log_fmt=<str>
-    --log_level=<str>
-    --mail_buffer=<int>
-    --mail_level=<str>
-    --mail_subject=<str>
-    --mailto=<str>
-    --max_dom=<int>
-    --max_job_time=<dict>
-    --met_em_dir=<str>
-    --metadata=<bool>
-    --model=<str>
-    --model_run=<str>
-    --namelist_input=<str>
-    --namelist_wps=<str>
-    --ncdump=<str>
-    --ncl_code=<str>
-    --ncl_code_dir=<str>
-    --ncl_log=<str>
-    --ncl_ol_code=<str>
-    --ncl_ol_out_dir=<str>
-    --ncl_ol_web_dir=<str>
-    --ncl_opt_file=<str>
-    --ncl_out_dir=<str>
-    --ncl_out_type=<str>
-    --ncl_web_dir=<str>
-    --num_procs=<dict>
-    --only=<string>
-    --operational=<bool>
-    --pcurve_dir=<str>
-    --pdist=<int>
-    --pnorm=<bool>
-    --poll_interval=<dict>
-    --post=<bool>
-    --post.upp=<bool>
-    --post.compress=<bool>
-    --post.metadata=<bool>
-    --post.hyperslab=<bool>
-    --power=<bool>
-    --power_file=<str>
-    --pquants=<str>
-    --pre_clean=<list>
-    --prepare=<bool>
-    --queue=<bool>
-    --queue_name=<dict>
-    --run_level=<str>
-    --simulate=<bool>
-    --simulate.geogrid=<bool>
-    --simulate.metgrid=<bool>
-    --simulate.ndown=<bool>
-    --simulate.real=<bool>
-    --simulate.status=<bool>
-    --simulate.timing=<bool>
-    --simulate.ungrib=<bool>
-    --simulate.wps=<bool>
-    --simulate.wrf=<bool>
-    --sst=<bool>
-    --sst_delay=<int>
-    --sst_filename=<str>
-    --sst_local_dir=<str>
-    --sst_server=<str>
-    --sst_server_dir=<str>
-    --sst_vtable=<str>
-    --sstd=<float>
-    --start=<datetime.datetime>
-    --status_file=<str>
-    --tansfer.dispatch=<bool>
-    --tmp_dir=<str>
-    --transfer=<bool>
-    --transfer.archive=<bool>
-    --transfer_files=<list>
-    --tseries_code=<str>
-    --tseries_dir=<str>
-    --tseries_fmt=<str>
-    --upp_dir=<str>
-    --visualise=<bool>
-    --visualise.ol=<bool>
-    --visualise.ncl=<bool>
-    --vtable=<dict>
-    --web_dir=<str>
-    --working_dir=<str>
-    --wps_dir=<str>
-    --wps_run_dir=<str>
-    --wrf_dir=<str>
-    --wrf_run_dir=<str>
-    --wrfout_dir=<str>
-    --wrftools_dir=<str>"""
+run fetch and simulate stages."""
 
 
 import sys
@@ -180,11 +172,10 @@ from wrftools import extract
 from wrftools import finalise
 
 # these are the registered stages which can be turned on or off with config file and/or commad-line options
-STAGES = ['fetch', 'prepare', 'simulate','post', 'visualise', 'extract', 'power', 'finalise', 'dispatch']
+STAGES = ['fetch', 'prepare', 'simulate','post', 'visualise', 'extract', 'finalise', 'dispatch']
 
 # Get configuration from command line and file, and merge the two
 config = conf.config(__doc__, sys.argv[1:], flatten=True, format="yaml")
-
 
 # horrible hack to ensure if start and end arguments 
 # are supplied by the shell, they are parsed as datrtimes
@@ -407,42 +398,7 @@ for init_time in init_times:
                 post.run_point_stat(config)
             except Exception, e:
                 shared.handle(e, fail_mode, full_trace)
-
-   
     
-    #
-    # Power prediction 
-    #
-    if config['power']:
-        logger.warn("power forecaasing from within main forecast cycle is deprecated and will be removed")
-        logger.warn("use power.py as a standalone tool, to preserve modularity")
-        pass
-        #
-        #from wrftools import power
-        #for d in range(1,max_dom+1):
-        #    try:
-        #        config['dom'] = d
-        #        config['grid_id'] = d
-        #        power.power(config)
-        #    except Exception, e:
-        #        logger.error('*** FAIL POWER CONVERSION ***')
-        #        shared.handle(e, fail_mode, full_trace)
-
-
-    # deprecated
-    if config['extract'] and config['extract.tseries']:
-        logger.warn("dumping time-series to other formats from within main forecast cycle is deprecated and will be removed")
-        logger.warn("use ncdump.py as a standalone tool, to preserve modularity")
-        pass
-        #for d in range(1,max_dom+1):
-        #    try:
-        #        config['dom'] = d
-        #        extract.ncdump(config)
-        #    except Exception, e:
-        #        logger.error('*** FAIL TIME SERIES DUMPING  ***')
-        #        shared.handle(e, fail_mode, full_trace)
-
-
             
     if config['dispatch']:
         from wrftools import dispatch
@@ -474,7 +430,6 @@ for init_time in init_times:
                 post.add_metadata(config)
             except Exception, e:
                 shared.handle(e, fail_mode, full_trace)
-        
    
     
         if config['post.upp']:
