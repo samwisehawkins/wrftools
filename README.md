@@ -12,41 +12,55 @@ a framework which is easily customised and modified.
 Suppose we want to run a forecast configuration called `myforecast`, and we want the `wrftools` code in
 `$HOME/code/wrftools`.  WRF is in `$HOME/WRF`, and WPS is in `$HOME/WPS`, and gribmaster is in `$(HOME)/gribmaster`
 
- 1. Clone wrftools repository 
- 
+1. Clone wrftools repository 
+    
+    ```
      $>cd ~/code
      $>git clone https://github.com/samwisehawkins/wrftools.git
+    ```
+    
+2. Create a local working directory
+
+    ```
+    $>mkdir ~/myforecast
+    ```
+
+3. Create `~/myforecast/namelist.wps` and `~/myforecast/namelist.input` files
  
- 2. Create a local working directory
  
-       $>mkdir ~/myforecast
- 
- 3. Create `~/myforecast/namelist.wps` and `~/myforecast/namelist.input` files
- 
- 
- 4. Optionally create a `locations.csv` file for time-series extraction
-     $> cp ~/code/wrftools/example/locations.csv ~/myforecast
- 
+4. Optionally create a `locations.csv` file for time-series extraction
+
+    ```
+    $> cp ~/code/wrftools/example/locations.csv ~/myforecast
+    ```
  
  5. Link `run_forecast.py` into working directory 
  
+    ```
      $>ln ~/code/wrftools/run_forecast.py ~/myforecast
+    ```
      
  6. Copy `example/forecast.yaml` into working directory 
-     
-     $>cp ~/code/wrftools/example/forecast.yaml ~/myforecast 
+    
+    ```
+    $>cp ~/code/wrftools/example/forecast.yaml ~/myforecast 
+    ````
  
  7. Edit the new `~/myforecast/forecast.yaml` file. In particular set:
  
-        working_dir       : $(HOME)/forecasting/%(model_run)            # directory to work from, expects namelist.wps and namelist.input to be here
-        wrftools_dir      : $(HOME)/code/wrftools                       # location of local wrftools repository
-        wps_dir           : $(HOME)/WPS                                 # location of WPS code
-        wrf_dir           : $(HOME)/WRF                                 # location of WRF code 
-
+    ```
+    working_dir       : $(HOME)/forecasting/%(model_run)            # directory to work from, expects namelist.wps and namelist.input to be here
+    wrftools_dir      : $(HOME)/code/wrftools                       # location of local wrftools repository
+    wps_dir           : $(HOME)/WPS                                 # location of WPS code
+    wrf_dir           : $(HOME)/WRF                                 # location of WRF code 
+    ```
+    
  8. Run the forecast:
-     $> cd ~/myforecast
-     $> python run_forecast.py --config=forecast.yaml
-
+ 
+    ```
+    $> cd ~/myforecast
+    $> python run_forecast.py --config=forecast.yaml
+    ```
 
 Outputs will be created in:
 
