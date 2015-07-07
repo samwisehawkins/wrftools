@@ -1,14 +1,15 @@
 """find_gaps.py finds missing files in a sequence based on date
 
-Usage: find_gaps.py --start=<YYYY-mm-dd_HHMM> --end=<YYYY-mm-dd_HHMM> --freq=<hours> --fmt=<str> [--verbose]  <file_pattern>
+Usage: find_gaps.py --chars=<start,end> [--fmt=<fmt>] [--start=<YYYY-mm-dd_HHMM>] [--end=<YYYY-mm-dd_HHMM>]  [--freq=<str>] [--verbose]  <files>...
 
     Options:
-        --start=<output>    start date of file sequence
-        --end=<m>           end date of file sequence
-        --freq=<g>          number of hours between file times
-        --fmt=<str>         date format to parse start and end argumments [default: %Y-%m-%d_%H]
+        --chars=<start,end> start and end index of date within filenames
+        --start=<start>     start date of file sequence, if None, first file is use
+        --end=<end>         end date of file sequence, if None, last file is used
+        --freq=<hours>      number of hours between file times, if None, difference between first two files is used
+        --fmt=<fmt>         date format to parse start and end argumments [default: "%Y-%m-%d %H"]
         --verbose           print more information
-        <file_pattern> pattern which would render filename when date substited in
+        <files>             files to check for gaps
 
 
 """
@@ -19,36 +20,63 @@ import sys
 import time,datetime
 from dateutil import rrule
 
+def parsedate(token, fmt):
+    ttuple = time.strptime(token, fmt)[0:6]
+    return datetime.datetime(*ttuple)
+
+        
 def main(args):
-    ttuple = time.strptime(args['--start'], args['--fmt'])[0:6]
-    start = datetime.datetime(*ttuple)
-    ttuple = time.strptime(args['--end'], args['--fmt'])[0:6]
-    end   = datetime.datetime(*ttuple)
-    freq  = int(args['--freq'])
-    #path  = args['<path>'] 
-    #files = args['<files>']
-    rule = rrule.rrule(dtstart=start, until=end, freq=rrule.HOURLY, interval=freq)
-
-    pattern = args['<file_pattern>'].replace('~', os.environ['HOME'])
-    expected = [d.strftime(pattern) for d in rule]
-
+    files = map(os.path.basename, args['<files>'])
+    chars = map(int, args['--chars'].split(','))
+    assert len(chars)==2
     
-    #print ' %d files checked'   % len(actual)
+    # start index, end index
+    si = chars[0]
+    ei = chars[1]
+    
+    # supply format argument to parser function
+    fmt = args['--fmt']
+    parse = lambda s: parsedate(s, fmt)
 
-    nmissing = 0
+    dateparts = [f[si:ei] for f in files]
+    filedates = [parse(d) for d in dateparts]
+   
+   
+    if args.get('--start'):
+        start=parse(args['--start'])
+    else:
+        start = filedates[0]
 
-    for f in expected:
-        if not os.path.exists(f):
-            print f
-            nmissing+=1
+    if args.get('--end'):
+        end=parse(args['--end'])
+    else:
+        end = filedates[-1]
+
+
+    if args.get('--freq'):
+        freq  = int(args['--freq'])
+    else:
+        delta = filedates[1] - filedates[0]
+        freq = delta.days*24+delta.seconds/(60*60)
+    
+
+    rule = rrule.rrule(dtstart=start, until=end, freq=rrule.HOURLY, interval=freq)
+    alldates = list(rule)
+
+    missing = [d for d in alldates if d not in filedates]
+
+
+    for d in missing:
+        print d.strftime(fmt)
+    
+
 
     if args['--verbose']:
         print '********************************'
         print ' sequence start: %s' % start
         print ' sequence end: %s'   % end
-        print ' file pattern: %s'   % pattern
-        print ' %d files expected'  % len(expected)
-        print ' %d files missing'   % nmissing
+        print ' %d files expected'  % len(alldates)
+        print ' %d files missing'   % len(missing)
         print '********************************'
 
 if __name__ == '__main__':

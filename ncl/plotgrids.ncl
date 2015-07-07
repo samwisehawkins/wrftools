@@ -72,19 +72,19 @@ begin
   end if
   mpres@stand_lon = stringtofloat(systemfunc("grep stand_lon  " +filename+ " | cut -f2 -d'=' | cut -f1 -d','" ) )
 
-  test = systemfunc("grep lambert " +filename ) 
+  test = systemfunc("grep map_proj.*lambert " +filename ) 
   if ( .not. ismissing(test) )
     mpres@map_proj          = "lambert"
   end if
-  test = systemfunc("grep mercator " +filename ) 
+  test = systemfunc("grep map_proj.*mercator " +filename ) 
   if ( .not. ismissing(test) )
     mpres@map_proj          = "mercator"
   end if
-  test = systemfunc("grep polar " +filename ) 
+  test = systemfunc("grep map_proj.*polar " +filename ) 
   if ( .not. ismissing(test) )
     mpres@map_proj          = "polar"
   end if
-  testa = systemfunc("grep 'lat-lon' " +filename ) 
+  testa = systemfunc("grep map_proj.*'lat-lon' " +filename ) 
   if ( .not. ismissing(testa) )
     mpres@map_proj          = "lat-lon"
     mpres@pole_lat = stringtofloat(systemfunc("grep pole_lat  " +filename+ " | cut -f2 -d'=' | cut -f1 -d','" ) )

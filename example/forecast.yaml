@@ -342,6 +342,7 @@ tseries_dir    : "%(working_dir)/tseries"                                       
 tseries_file   : "%(tseries_dir)/tseries_d%dd_%iY-%im-%id_%iH.nc"
 locations_file : "%(working_dir)/locations.csv"
 tseries_code   : ["%(wrftools_dir)/ncl/extract_time_series.ncl"]                       # location of NCL code to extract time series
+json_dir       : "%(working_dir)/json"
 extract_hgts   : [20,50,60,70,80,90,100,110,150,200]                                   # heights to extract time series 
 
 

@@ -137,7 +137,7 @@ def extract_tseries(config):
     ncl_loc_file   = config['locations_file']
     ncl_code       = config['tseries_code']
     extract_hgts   = config['extract_hgts']
-    tseries_fmt    = config['tseries_fmt']
+    #tseries_fmt    = config['tseries_fmt']
     ncl_log        = config['ncl_log']
     ncl_opt_template = config['ncl_opt_template']
     ncl_opt_file     = config['ncl_opt_file']
