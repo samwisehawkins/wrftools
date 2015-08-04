@@ -20,7 +20,7 @@ module switch ncl/opendap ncl/nodap
 #$ -v LD_LIBRARY_PATH
 #$ -cwd
 #$ -q <qname>
-#$ -pe mpi <nprocs>
+#$ -pe ompi <nprocs>
 #$ -j yes
 #$ -o <logfile>
 
