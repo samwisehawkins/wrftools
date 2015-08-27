@@ -25,7 +25,7 @@ module switch ncl/opendap ncl/nodap
 #$ -o <logfile>
 
 
-CMD="$MPI_HOME/bin/mpirun <executable>"
+CMD="$MPI_HOME/bin/mpirun --report-bindings <executable>"
  
 echo $CMD
  

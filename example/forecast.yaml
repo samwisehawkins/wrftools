@@ -19,6 +19,7 @@
 #
 #***************************************************************
 
+
 #***************************************************************
 # Timing
 # To run as operational forecast, set operational to true
@@ -55,12 +56,12 @@ metadata          :                        # everything inside "metadata" will b
 #************************************************
 # Directory locations  
 #************************************************
-working_dir       : $(HOME)/forecasting/%(model_run)            # directory to work from, expects namelist.wps and namelist.input to be here
-wrftools_dir      : $(HOME)/code/wrftools/devel                 # location of local wrftools repository
-tmp_dir           : $(HOME)/forecasting/tmp                     # temporary directory
-web_dir           : $(HOME)/WWW/forecast                        # convenience for copying plots
-wps_dir           : /prog/WPS/3.5                               # location of WPS code
-wrf_dir           : /prog/WRF/3.5                               # location of WRF code 
+working-dir       : $(HOME)/forecasting/%(model_run)/%iY-%im-%id_%iH  
+wrftools-dir      : $(HOME)/code/wrftools/devel                       # location of local wrftools repository
+tmp_dir           : $(HOME)/forecasting/tmp                           # temporary directory
+web_dir           : $(HOME)/WWW/forecast                              # convenience for copying plots
+wps_dir           : /prog/WPS/3.5                                     # location of WPS code
+wrf_dir           : /prog/WRF/3.5                                     # location of WRF code 
 
 #************************************************
 # Components to run.
@@ -244,7 +245,8 @@ prepare.create    :
     - "%(working_dir)/plots"
     - "%(working_dir)/rsl"
     - "%(working_dir)/wrf"
-    - "%(working_dir)/wps"
+    - "%(working_dir)/wps
+    - "%(working-dir)/log"
     - "%(working_dir)/namelist"
 
 prepare.remove    :                                                          # list of arguments to consecutive linux rm commands. Be careful!
@@ -381,6 +383,5 @@ finalise.move: []
 finalise.remove: 
   - "%(wps_run_dir)/GFS*"
   - "-r %(met_em_dir)"
-  - "%(wrfout_dir)/wrfout*"
 
 finalise.run: []

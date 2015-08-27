@@ -56,7 +56,7 @@ def prepare_wps(config):
     
     wps_dir       = config['wps_dir']          # the base installation of WPS
     wps_run_dir   = config['wps_run_dir']      # the directory to run WPS from
-    working_dir = config['working_dir']    # model run directory 
+    working_dir   = config['working_dir']    # model run directory 
     met_em_dir    = config['met_em_dir']
     init_time     = config['init_time']
 
@@ -259,94 +259,7 @@ def ungrib_sst(config):
     cmd = 'ln -sf %s %s' %(namelist_wps, namelist_run)    
     shared.run_cmd(cmd, config)
     
-def prepare_ndown(config):
-    """Runs a one-way nested simulation using ndown.exe
-    We assume the coarse resolution run has been done, 
-    and we have wrfout_d01.date files.
-    
-    We only need to run metgrid for the initial forecast time.
-    
-    We have two options, either we force the user to do all the renaming themselves, 
-    or we allow them to utilise the original namelist.input file, and add effectivley
-    add a column onto that. This could be done via a bunch of smaller utility steps.
-    e.g. shift_namelist namelist.input 3 > namelist.input
-    
-    Which would rotate the columns of a namelist.input file so that the n-th column 
-    becomes the first column.
-    
-        
-    Therefore we have to run ungrib, geogrid, metgrid
-    Assume the geo_em files exist for both domains.
-    What """
 
-    logger =shared.get_logger()
-    logger.info('*** PREPARING NDOWN ***')
-    namelist_wps   = config['namelist_wps']
-    namelist_input = config['namelist_input']
-    max_dom        = config['max_dom']
-    wrf_run_dir    = config['wrf_run_dir']
-    
-    
-    if max_dom!=2:
-        raise ConfigError("max_dom must equal 2 when doing ndown runs")
-    
-    bdy_times = shared.get_bdy_times(config)
-    ndown_fmt = config['ndown_fmt']
-    
-    wrfout_d01_files = [shared.sub_date(ndown_fmt, init_time=bdy_times[0], valid_time=t) for t in bdy_times]
-    for f in wrfout_d01_files:
-        if not os.path.exists(f):
-            raise MissingFile("File: %s missing" % f)
-        cmd = 'ln -sf %s %s' % (f, wrf_run_dir)
-        shared.run_cmd(cmd, config)
-    
-    
-    # Check for wrfinput_d02
-    wrfinput_d02 = '%s/wrfinput_d02' % wrf_run_dir
-    if not os.path.exists(wrfinput_d02):
-        raise MissingFile("wrfinput_d02 is missing")
-    
-    os.rename('%s/wrfinput_d02' % wrf_run_dir, '%s/wrfndi_d02' % wrf_run_dir)
-    
-    
-    namelist         = read_namelist(namelist_input)
-    
-    # History interval is in minutes
-    history_interval = namelist.settings['history_interval']
-    interval_seconds = history_interval[0] * 60
-    namelist.update('interval_seconds', interval_seconds)
-    namelist.insert('io_form_auxinput2', 2, 'time_control')
-    namelist.to_file(namelist_input)
-    
-    logger.info('*** DONE PREPARE NDOWN ***')
-    
-def run_ndown(config):
-    logger =shared.get_logger()
-    logger.info('*** RUNNING NDOWN ***')
-    
-    wrf_run_dir = config['wrf_run_dir']
-    queue       = config['queue']
-    log_file    = '%s/ndown.log' % wrf_run_dir
-    
-    cmd = '%s/ndown.exe' % wrf_run_dir
-    
-    nprocs = config['num_procs']
-    poll_interval = config['poll_interval']
-    logger.debug(poll_interval)
-    logger.debug(nprocs)
-    logger.debug(nprocs['ndown.exe'])
-    
-    shared.run(cmd, config, wrf_run_dir)
-        
-    cmd = 'grep "Successful completion" %s' % log_file # check for success
-    ret =shared.run_cmd(cmd,config)
-    if ret!=0:
-        raise IOError('ndown.exe did not complete')
-    
-    logger.info('*** SUCESS NDOWN ***')
-
-    
-    
     
     
 def run_ungrib(config):
@@ -359,7 +272,7 @@ def run_ungrib(config):
     config -- dictionary specifying configuration options
     
     """
-    logger        =shared.get_logger()
+    logger        = shared.get_logger()
     wps_dir       = config['wps_dir']
     wps_run_dir   = config['wps_run_dir']
     namelist_wps  = config['namelist_wps']
@@ -381,7 +294,7 @@ def run_ungrib(config):
     
     namelist = shared.read_namelist(namelist_wps)
     
-    bdy_times     = shared.get_bdy_times(config)
+    bdy_times = shared.get_bdy_times(config)
     
 
     if type(grb_input_fmt)!=type({}):

@@ -9,9 +9,9 @@ import subprocess
 from customexceptions import QueueError
 
 
-     
+LOGGER='wrftools'     
 
-def qsub(job_script):
+def qsub(job_script, after_job=None, cwd=None):
     """Submits a PBS job via qsub
     
     Arguments:
@@ -19,18 +19,23 @@ def qsub(job_script):
     Returns:
         @job_id -- the job id returned by the PBS system """
  
-    logger = loghelper.get_logger('wrf_forecast')
+    logger = loghelper.get_logger(LOGGER)
     #logger.debug('submitting job %s' % job_script)
     
-    cmd  = 'qsub %s ' % job_script
+    after_arg = ''
+    if after_job:
+        after_arg = '-hold_jid %s' % after_job
+    
+    cmd  = 'qsub %s %s ' % (after_arg,job_script)
     
     #
     # The output from PBS is of the format
     # "Your job 3681 ("TEST") has been submitted"
     #
-    proc = subprocess.Popen([cmd], stdout=subprocess.PIPE, shell=True)
+    proc = subprocess.Popen([cmd], stdout=subprocess.PIPE, shell=True, cwd=cwd)
     output = proc.stdout.read()
     job_id = output.split(' ')[2]
+    
     logger.debug("%s ------> %s" % (cmd, job_id))
     return job_id
     

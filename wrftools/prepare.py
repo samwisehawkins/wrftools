@@ -2,13 +2,11 @@ import shared
 import os
 import glob
 
-def prepare(config):
-    """Removes files specified in pre_clean. Creates subdirectories specfied in create_dirs,
-    links files specified in wrf_links into wrf_working_dir."""
+def prepare(target_dir, wrf_dir, wps_dir, sub_dirs):
+    """Creates target directory and specified subdirecties"""
 
    
     working_dir    = config['working_dir']
-    
     links          = config['prepare.link']
     pre_clean      = config['prepare.remove'] 
     subdirs        = config['prepare.create']
@@ -16,6 +14,7 @@ def prepare(config):
     logger         = shared.get_logger()
     logger.info('\n*** PREPARING ***')
 
+    
     if not os.path.exists(working_dir):
         os.makedirs(working_dir)
     

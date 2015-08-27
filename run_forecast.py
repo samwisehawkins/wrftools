@@ -7,7 +7,7 @@ the configuration file. See example/forecast.yaml for an annotated list
 of options. 
 
 Usage:
-    run_forecast.py [--config=<file>] [options]
+    prepare.py [--config=<file>] [options]
     
 Options:
     --config=<file>

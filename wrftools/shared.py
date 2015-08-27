@@ -1,8 +1,4 @@
-""" 
-=====================================
-shared helper functions for wrftools
-=====================================
-"""
+""" shared helper functions for wrftools"""
 
 import os
 import subprocess
@@ -20,14 +16,13 @@ from namelist import Namelist, read_namelist
 from queue import QueueError
 import glob
 import loghelper
-from loghelper import create_logger
-from substitute import sub_date, expand
+import substitute
 import queue
 
 #*****************************************************************
 # Constants
 #*****************************************************************
-LOGGER         = 'wrf_forecast'
+LOGGER = 'wrftools'
 HOUR = datetime.timedelta(0, 60*60)                 
 
 
@@ -142,8 +137,6 @@ def fill_template(template, output, replacements):
      o.write(content)
      o.close()
      i.close()
-     return output     
-
 
         
 #******************************************************************************
@@ -271,16 +264,22 @@ def mpirun(cmd, num_procs, hostfile, run_level, cmd_timing=False, env_vars=None)
 
         
 
-def run_cmd(cmd, config, env_vars=None):
-    """Executes and logs a shell command. If config['run_level']=='DUMMY', then
-    the command is logged but not executed."""
+def run_cmd(cmd, dry_run=False, cwd=None, env_vars=None, timing=False, log=True):
+    """Executes and logs a shell command
+    
+    Arguments:
+        cmd     -- the command to execute
+        dry_run -- log but don't execute commands (default false)
+        env_vars -- dictionary of environment vars to prefix, e.g. ENV=value cmd
+        timing   -- log elapsed time default False"""
     
     logger = get_logger()
     
-    run_level   = config['run_level'].upper()
-    cmd_timing  = config['cmd_timing']
+
     t0          = time.time()
-    logger.debug(cmd)
+    
+    if log:
+        logger.debug(cmd)
     
     env_var_str = ""
     if env_vars:
@@ -292,14 +291,15 @@ def run_cmd(cmd, config, env_vars=None):
     # Only execute command if run level is 'RUN', 
     # otherwise return a non-error 0. 
     #
-    if run_level=='RUN':
-        ret = subprocess.call(cmd_str, shell=True)
+    if not dry_run:
+        ret = subprocess.call(cmd_str, cwd=cwd, shell=True)
     else:
         ret = 0
     
     telapsed = time.time() - t0
-    if cmd_timing:
+    if timing and log:
         logger.debug("done in %0.1f seconds" %telapsed)
+        
     
     return ret
 
@@ -409,7 +409,7 @@ def run_queue(cmd,config, run_from_dir, log_file, env_vars=None):
 #*****************************************************************
 # File manipulation/linking
 #*****************************************************************
-def link(pattern):
+def link(pattern, dry_run=False):
     """ Processes a link specified in the format
     source --> dest, and creates links.
     
@@ -419,7 +419,14 @@ def link(pattern):
     cmd = 'ln -sf %s ' % arg
     logger.debug(cmd)
     subprocess.call(cmd, shell=True)
+
     
+def copy(pattern, dry_run=False):
+    logger = get_logger()
+    cmd = 'cp %s ' % pattern
+    logger.debug(cmd)
+    if not dry_run:
+        subprocess.call(cmd, shell=True)
     
     
 def transfer(flist, dest, mode='copy', debug_level='NONE'):
@@ -450,7 +457,27 @@ def transfer(flist, dest, mode='copy', debug_level='NONE'):
         n+=1
 
     #logger.info(' *** %d FILES TRANSFERRED ***' % n )
+    
+    
+def remove(pattern, dry_run=False):
+    logger = get_logger()
+    flist = glob.glob(pattern)
+    for f in flist:
+        if os.path.exists(f):
+            logger.debug('removing file: %s' % f )
+            if not dry_run:
+                pass
+                #os.remove(f)    
 
+def create(subdir, dry_run=False):                
+    logger = get_logger()
+    if not os.path.exists(subdir):
+        logger.debug('creating directory %s ' % subdir)
+        if not dry_run: 
+            os.mkdir(subdir) 
+                
+                
+                
 def rsync(source, target, config):
     """ Calls rysnc to transfer files from source to target.
     If config['archive_mode']=='MOVE', then source files will be deleted
@@ -469,169 +496,106 @@ def rsync(source, target, config):
     cmd = base_cmd %(source, target)    
     run_cmd(cmd, config)
     
-    
-    
-#*****************************************************************
-# Datetime/filename generation functions
-#*****************************************************************
 
-def get_fcst_times(config):
-    """ Return a list of datetimes representing forecast times 
-    
-    Reads the init_time, fcst_hours and history_interval entries 
-    from config and returns a list of datetime objects representing the 
-    forecast times.
 
-    Arguments:
-    config -- dictionary od configuration settings
+def ordered_set(items):
+    """create and ordered set from the iterable"""
+    
+    odict = OrderedDict([(item,None) for item in items])
+    return odict.keys()
 
-    """
-    logger           = get_logger()
-    logger.debug("get_fcst_times called")
     
-    init_time        = config['init_time']
-    fcst_hours       = config['fcst_hours']
-    history_interval = config['history_interval']
-    hour             = datetime.timedelta(0, 60*60)
-    minute           = datetime.timedelta(0, 60) 
-    end_time         = init_time + fcst_hours*hour
-    
-    
-    logger.debug('init_time: %s'  %init_time)
-    logger.debug('fcst_hours: %s' %fcst_hours)
-    logger.debug('history_interval: %s' % history_interval)
-   
-    freq          = rrule.MINUTELY
-    rec           = rrule.rrule(freq, dtstart=init_time, until=end_time+minute, interval=history_interval)
-    fcst_times    = list(rec)
-    logger.debug("Forecast start: %s \t end: %s" %(fcst_times[0], fcst_times[-1]))
-    return fcst_times
     
 
-def get_operational_init_time(config):
-    """ Returns a list of most recent init times for an operational forecast 
     
-    Updated, if config['operational']==True
+
+def get_time(base_time=None, delay=None, round=None):
+    """ Returns base_time minus a delay in hours, rounded down to the nearest hour given in round.
+    Warning - works by rounding back to the beginning of the day, and does not currently work for the 
+    case where you request a cycle time which is later than the base_time
     
     Arguments:
-    config -- dictionary of configuration settings            
+        base_time  -- base time to calculate from
+        delay  -- optional delay in hours to apply 
+        round  -- a list of integer hours to restrict the return value to e.g. [0,6,12,18]"""
     
-    """
-    
-    logger        = get_logger()
+    logger = loghelper.get(LOGGER)
 
-    fcst_hours    = config['fcst_hours']
-    operational   = config['operational']
-    cycles        = config['cycles']
-    gm_delay      = int(config['delay'])
+    hour  = datetime.timedelta(0, 60*60)
+
+    base_time = base_time if base_time else datetime.datetime.today()
     
-   
-        
-    #
-    # We want to find the most recent set of boundary conditions. Ie the nearest 6-hours
-    # we could either use gribmaster to check and then get the relevant times from the 
-    # filenames, or we could work out which files we want first.  Either way we need to avoid 
-    # running the same forecast multiple times.
-    #
-    # We may want to implement a delay here to avoid asking for grib files we know don't exist
-    #
-    #
-    #
-    hour          = datetime.timedelta(0, 60*60)
-    today         = datetime.datetime.today()
-    delayed_time  = today - gm_delay * hour
-        
-    start_day     = datetime.datetime(delayed_time.year, delayed_time.month, delayed_time.day, 0, 0)           # throw away all time parts
-    start_hour    = delayed_time.hour
-    past_cycles   = [ c for c in cycles if (c <= start_hour)]
-    recent_cycle  = past_cycles[-1]
-    start         = start_day + recent_cycle * hour
-    end           = start
-    #config['cycle'] = recent_cycle
-    #logger.debug("getting most recent operational case: %s" % start)
-    #logger.debug("system current time and date: %s" % today)
-    #logger.debug("but grib delay set is %s" % gm_delay)
-    #logger.debug("so current time accounting for delay is: %s" % delayed_time)
-    #logger.debug("start of the that day is: %s" % start_day)
-    #logger.debug("most recent cycle of interest: %s" % recent_cycle)
-    #logger.debug("and setting end time to be the same: %s" % end)
+    delay = delay if delay else 0
+    delayed_time  = base_time - delay * hour
+
+    start = delayed_time
+    if round:
+        start_day   = datetime.datetime(delayed_time.year, delayed_time.month, delayed_time.day, 0, 0)           # throw away all time parts
+        start_hour  = delayed_time.hour
+        past_hours  = [ h for h in round if (h <= start_hour)]
+        recent_hour = past_hours[-1]
+        start       = start_day + recent_hour * hour
+    
 
     return start
-
-def get_init_times(config):
+    
+def get_init_times(start, end, interval):
     """ Returns a list of datetimes representing initial times in a forecast test case
     
-    Reads the start, end and init_interval from config and returns a list of 
-    datetime objects representing the initial times
+    Start and end can be lists of start and end times, in which case they must the same length,
+    each pair of start and end times will define a simulation block.
     
     Arguments:
-    config -- dictionary of configuration settings            
+        start -- single start time or list of start times
+        end -- single end time or list of end times same length as start
+        interval -- integer interval in hours between initialsation times
     
-    """
+    Returns:
+        a list of intital times"""
 
-    logger        = get_logger()
-    #logger.debug("get_init_times called")
+    logger = loghelper.get(LOGGER)
     
-    operational   = config['operational']
-    start         = config['start']
-    end           = config['end']
-    init_interval = config['init_interval']
-    freq          = rrule.HOURLY
-    
-    logger.debug("get_init_times called:")
-    logger.debug("\t operational: %s" % operational)
-    logger.debug("\t start: %s" % start)
-    logger.debug("\t end: %s" % end)
-    logger.debug("\t freq: %s" % freq)
-    logger.debug("\t init_interval: %s" % init_interval)
-    
-    
-    if operational:
-        start = get_operational_init_time(config)
-        end = start
+    freq = rrule.HOURLY
 
-    if type(start)!=type([]):
-        start= [start]
-    if type(end)!=type([]):
-        end = [end]
-
-
+    # even if start and end are single elements, package them into lists 
+    # to make the following code generic
+    start = _listify(start)
+    end = _listify(end) 
+    
     if len(start)!=len(end):
         raise IOError('different start and end times specified')
 
     init_times = []
     hour = datetime.timedelta(0,60*60)
+    
+    
     for s, e in zip(start, end):
-        rec  = rrule.rrule(freq, dtstart=s, until=e, interval=init_interval)
-        logger.debug(list(rec))
+        rec  = rrule.rrule(freq, dtstart=s, until=e, interval=interval)
         init_times.extend(list(rec))
 
 
-    for t in init_times:
-        logger.debug("\t %s" %t)
-    logger.debug("get_init_times done \n")
+    logger.debug("get_init_times done")
     return init_times
 
-def get_bdy_times(config):
+    
+def get_interval_times(start, freq, count, inclusive=False):    
+    rec = rrule.rrule(freq, dtstart=start, count=count)
+    return list(rec)
+
+
+def get_bdy_times(init_time, fcst_hours, bdy_interval):
     """ Returns a list of datetime objects representing the times of boundary conditions.
     
     Read the init_time, fcst_hours and bdy_interval from config
     and returns a list of datetime objects representing the 
     boundary condition times. 
     
-    Arguments:
-    config -- dictionary of configuration settings    
-    
-    """
+    Arguments:"""
     
     logger        = get_logger()
     logger.debug("get_bdy_times called")
-    init_time     = config['init_time']
-    fcst_hours    = config['fcst_hours']
-    bdy_interval  = config['bdy_interval']
     hour          = datetime.timedelta(0, 60*60) 
     end_time      = init_time + datetime.timedelta(0, fcst_hours*60*60)
-    
     
     #
     # Get the range of files representing boundary condition files
@@ -641,13 +605,33 @@ def get_bdy_times(config):
     freq         = rrule.HOURLY
     rec          = rrule.rrule(freq, dtstart=init_time,until=end_time+hour, interval=bdy_interval)
     bdy_times    = list(rec)
-    #logger.debug("got the following boundary condition times:")
-    #for t in bdy_times:
-    #    logger.debug("%s" %t)
     
     return bdy_times
-    
 
+def get_fcst_times(init_time, fcst_hours, history_interval):
+    """ Return a list of datetimes representing forecast times 
+    
+    Arguments:
+        init_time
+        fcst_hours
+        history_interval
+    Returns:
+    of datetime objects representing the forecast output times"""
+    
+    logger           = get_logger()
+    logger.debug("get_fcst_times called")
+    
+    hour             = datetime.timedelta(0, 60*60)
+    minute           = datetime.timedelta(0, 60) 
+    end_time         = init_time + fcst_hours*hour
+   
+    freq          = rrule.MINUTELY
+    rec           = rrule.rrule(freq, dtstart=init_time, until=end_time+minute, interval=history_interval)
+    fcst_times    = list(rec)
+    logger.debug("Forecast start: %s \t end: %s" %(fcst_times[0], fcst_times[-1]))
+    return fcst_times
+
+    
 def get_bdy_filenames(grb_fmt, bdy_times):
     """ Creates a list of boundary conditions filenames
     based on the information in config. In general this will 
@@ -665,16 +649,15 @@ def get_bdy_filenames(grb_fmt, bdy_times):
     filelist = [sub_date(grb_fmt, init_time=bdy_times[0], valid_time=b) for b in bdy_times]
     logger.debug(filelist)
     return filelist    
-    
-def get_sst_time(config):
 
-    init_time      = config['init_time']    
-    sst_delay      = config['sst_delay']    
+def get_sst_time(init_time, delay):
     delta          = datetime.timedelta(0, sst_delay*60*60)
     delayed_time   = init_time - delta
     # we need to make sure this is only 00 hour
     sst_time       = datetime.datetime(delayed_time.year, delayed_time.month, delayed_time.day, 0, 0, 0) 
     return sst_time
+
+   
 
 def get_sst_filename(config):
     base_filename  = config['sst_filename']
@@ -683,31 +666,7 @@ def get_sst_filename(config):
     return sst_filename
     
     
-def _prior_time(basetime, hours=None, delay=None):
-    """ Gets the closest prior time to basetime, restricted to to specified hours
-    
-    Arguments:
-        basetime -- a datetime object of the time work from
-        hours    -- a list of integers representing hours to round to
-        
-    Returns a datetime object representing the closest prior time to basetime which 
-    is a whole number of hours """
 
-    hour          = datetime.timedelta(0, 60*60)
-
-    if delay:
-        basetime = basetime - delay*hour
-
-    if hours:
-        start_day     = datetime.datetime(basetime.year, basetime.month, basetime.day, 0, 0)           # throw away all time parts
-        start_hour    = basetime.hour
-        past_hours   = [ h for h in hours if (h <= start_hour)]
-        recent_hour  = past_hours[-1]
-        prior        = start_day + recent_hour * hour
-        return prior
-        
-    else:
-        return basetime
     
 def _listify(element):
     """ Ensures elements are contained in a list """
