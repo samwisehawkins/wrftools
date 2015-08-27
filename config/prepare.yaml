@@ -64,24 +64,24 @@ metadata          :                        # everything inside "metadata" will b
 #************************************************
 # Directory locations  
 #************************************************
-base-dir          : $(HOME)/forecasting/%(model_run)
-working-dir       : "%(base-dir)/%iY-%im-%id_%iH"  
-wrftools-dir      : $(HOME)/code/wrftools/devel                       # location of local wrftools repository
+base_dir          : $(HOME)/forecasting/%(model_run)
+working_dir       : "%(base_dir)/%iY-%im-%id_%iH"  
+wrftools_dir      : $(HOME)/code/wrftools/devel                       # location of local wrftools repository
 tmp_dir           : $(HOME)/forecasting/tmp                           # temporary directory
 web_dir           : $(HOME)/WWW/forecast                              # convenience for copying plots
 wps_dir           : /prog/WPS/3.5                                     # location of WPS code
 wrf_dir           : /prog/WRF/3.5                                     # location of WRF code 
-wrfout_dir        : "%(working-dir)/wrfout"                           # move wrfout files here after WRF has completed 
-wps_run_dir       : "%(working-dir)/wps"                              # subdirectory to run WPS from; namelists and grib files will be linked here
-real_run_dir      : "%(working-dir)/real"
-geogrid_run_dir   : "%(working-dir)/geogrid"
-metgrid_run_dir   : "%(working-dir)/metgrid"
-wrf_run_dir       : "%(working-dir)/wrf"                        # subdirectoty to run WRF from; namelists and met_em files will be linked here   
-geo_em_dir        : "%(working-dir)/geogrid"                    # location of geo_em files
-met_em_dir        : "%(working-dir)/metgrid"                    # location of met_em files
-namelist_wps      : "%(base-dir)/namelist.wps"                  # location of namelist.wps template to use
-namelist_input    : "%(base-dir)/namelist.input"                # location of namelist.input template to use
-template_dir      : "%(wrftools-dir)/templates"                 # location of script templates
+wrfout_dir        : "%(working_dir)/wrfout"                           # move wrfout files here after WRF has completed 
+wps_run_dir       : "%(working_dir)/wps"                              # subdirectory to run WPS from; namelists and grib files will be linked here
+real_run_dir      : "%(working_dir)/real"
+geogrid_run_dir   : "%(working_dir)/geogrid"
+metgrid_run_dir   : "%(working_dir)/metgrid"
+wrf_run_dir       : "%(working_dir)/wrf"                        # subdirectoty to run WRF from; namelists and met_em files will be linked here   
+geo_em_dir        : "%(working_dir)/geogrid"                    # location of geo_em files
+met_em_dir        : "%(working_dir)/metgrid"                    # location of met_em files
+namelist_wps      : "%(base_dir)/namelist.wps"                  # location of namelist.wps template to use
+namelist_input    : "%(base_dir)/namelist.input"                # location of namelist.input template to use
+template_dir      : "%(wrftools_dir)/templates"                 # location of script templates
 grb_dir           : $(HOME)/forecasting/GFS/operational
 
 
@@ -91,7 +91,7 @@ grb_dir           : $(HOME)/forecasting/GFS/operational
 #************************************************
 log.name          : wrf_forecast                           # name of logger object
 log.level         : DEBUG                                  # log level to write to file   
-log.file          : "%(base-dir)/forecast.log"             # file to write to
+log.file          : "%(base_dir)/forecast.log"             # file to write to
 log.fmt           : "%(message)s"                          # see logging module for format codes
 log.mail          : true                                   # send an email of log
 log.mail.to       : sam.hawkins@vattenfall.com
@@ -105,19 +105,19 @@ log.mail.subject  : "Maestro WRF log"                      # subject to use in e
 #*************************************************************************************************************************
 
 prepare.create:
-    - "%(working-dir)" 
-    - "%(working-dir)/ungrib"
-    - "%(working-dir)/ungrib_sst"
-    - "%(working-dir)/geogrid"
-    - "%(working-dir)/metgrid"
-    - "%(working-dir)/real"
-    - "%(working-dir)/wrf"
-    - "%(working-dir)/tseries"
-    - "%(working-dir)/json"
-    - "%(working-dir)/plots"
-    - "%(working-dir)/rsl"
-    - "%(working-dir)/wps"
-    - "%(working-dir)/log"
+    - "%(working_dir)" 
+    - "%(working_dir)/ungrib"
+    - "%(working_dir)/ungrib_sst"
+    - "%(working_dir)/geogrid"
+    - "%(working_dir)/metgrid"
+    - "%(working_dir)/real"
+    - "%(working_dir)/wrf"
+    - "%(working_dir)/tseries"
+    - "%(working_dir)/json"
+    - "%(working_dir)/plots"
+    - "%(working_dir)/rsl"
+    - "%(working_dir)/wps"
+    - "%(working_dir)/log"
 
 prepare.remove:                                                          # list of arguments to consecutive linux rm commands. Be careful!
     - "%(ncl_log)"
@@ -126,27 +126,27 @@ prepare.remove:                                                          # list 
     - "%(wps_run_dir)/ungrib.log*"
     - "%(wps_run_dir)/metgrid.log*"
     - "%(wps_run_dir)/geogrid.log*"
-    - "%(working-dir)/plots/%iHZ/*.*"
-    - "%(working-dir)/plots/%iHZ/*.*"
+    - "%(working_dir)/plots/%iHZ/*.*"
+    - "%(working_dir)/plots/%iHZ/*.*"
 
 prepare.link:                                                          # list of arguments to consecutive linux ln -sf commands
   - "%(wrf_dir)/run/*.exe            %(wrf_run_dir)"
   - "%(wrf_dir)/run/RRTM*            %(wrf_run_dir)"
   - "%(wrf_dir)/run/*.TBL            %(wrf_run_dir)"
   - "%(wps_dir)/*.exe                %(wps_run_dir)"
-  - "%(wps_dir)/ungrib.exe           %(working-dir)/ungrib/"
-  - "%(wps_dir)/ungrib.exe           %(working-dir)/ungrib_sst/"
-  - "%(wps_dir)/metgrid.exe          %(working-dir)/metgrid/"
-  - "%(wps_dir)/geogrid.exe          %(working-dir)/geogrid/"
-  - "%(wps_dir)/link_grib.csh        %(working-dir)/ungrib/"
-  - "%(wps_dir)/link_grib.csh        %(working-dir)/ungrib_sst/"
+  - "%(wps_dir)/ungrib.exe           %(working_dir)/ungrib/"
+  - "%(wps_dir)/ungrib.exe           %(working_dir)/ungrib_sst/"
+  - "%(wps_dir)/metgrid.exe          %(working_dir)/metgrid/"
+  - "%(wps_dir)/geogrid.exe          %(working_dir)/geogrid/"
+  - "%(wps_dir)/link_grib.csh        %(working_dir)/ungrib/"
+  - "%(wps_dir)/link_grib.csh        %(working_dir)/ungrib_sst/"
   - "%(wps_dir)/metgrid/METGRID.TBL  %(metgrid_run_dir)"
   - "%(wps_dir)/geogrid/GEOGRID.TBL  %(geogrid_run_dir)"
   - "%(wps_dir)/metgrid/METGRID.TBL  %(metgrid_run_dir)"
   - "%(wps_dir)/geogrid/GEOGRID.TBL  %(geogrid_run_dir)"
-  - "%(working-dir)/namelist.wps     %(geogrid_run_dir)"
-  - "%(working-dir)/namelist.input   %(wrf_run_dir)"
+  - "%(working_dir)/namelist.wps     %(geogrid_run_dir)"
+  - "%(working_dir)/namelist.input   %(wrf_run_dir)"
   
 prepare.copy:                                                           # list of arguments to consecutive linux cp commands
-  - "%(namelist_wps)                %(working-dir)"
-  - "%(namelist_input)              %(working-dir)"
+  - "%(namelist_wps)                %(working_dir)"
+  - "%(namelist_input)              %(working_dir)"

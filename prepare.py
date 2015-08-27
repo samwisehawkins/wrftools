@@ -17,12 +17,12 @@ Options:
     --delay=<hours>         number of hours delay to apply to start time
     --cycles=<hours>        list of hours to restrict start times to e.g. [0,12]
     --end=<time>            an end time for the simulation blocks
-    --init-interval=<hours>     number of hours between initialistions
-    --working-dir=<dir>     working directory specifier which may contain date and time placeholders, see below
+    --init-interval=<hours> number of hours between initialistions
+    --working_dir=<dir>     working directory specifier which may contain date and time placeholders, see below
     --wps-dir=<dir>         base directory of the WPS installation
     --wrf-dir=<dir>         base directory of the WRF installation
-    --namelist-wps=<file>   location of namelist.wps template to use, a modified copy will be placed into working-dir
-    --namelist-input=<file> location of namelist.input template to use, a modified copy will be places into working-dir
+    --namelist-wps=<file>   location of namelist.wps template to use, a modified copy will be placed into working_dir
+    --namelist-input=<file> location of namelist.input template to use, a modified copy will be places into working_dir
     --rmtree                remove working directory tree first - use with caution!
     --dry-run               log but don't execute commands
     --log.level=<level>     log level info, debug or warn (see python logging modules)
@@ -92,7 +92,7 @@ def main():
         # one-argument function to do initial-time substitution in strings
         expand = lambda s : substitute.sub_date(s, init_time=init_time) if type(s)==type("") else s
         
-        working_dir = expand(config['working-dir'])
+        working_dir = expand(config['working_dir'])
 
         if rmtree:
             safe_remove(working_dir, dry_run)
