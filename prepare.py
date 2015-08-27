@@ -87,8 +87,7 @@ def main():
     else:
         init_times = [init_time]
 
-    
-    logger.debug(init_times)
+
     for init_time in init_times:
         # one-argument function to do initial-time substitution in strings
         expand = lambda s : substitute.sub_date(s, init_time=init_time) if type(s)==type("") else s
@@ -132,49 +131,52 @@ def main():
     
         # link in input files for all ungrib jobs
         # update namelist.wps to modify start and end time
-        for key,entry in config['ungrib'].items():
-            # apply any delay and rounding to the init_time to get correct time for dataset
-            # note that sometimes it is necessary to use a different time e.g. for SST field is delayed by one day
-            base_time = shared.get_time(init_time, delay=entry.get('delay'), round=entry.get('cycles'))
-            fcst_hours = entry['fcst_hours']
-            bdy_times = shared.get_bdy_times(base_time, fcst_hours, bdy_interval)
-            
-            file_pattern = entry['files']
-            
-            # create an ordered set to ensure filenames only appear once
-            filenames = shared.ordered_set([substitute.sub_date(file_pattern, init_time=base_time, valid_time=t) for t in bdy_times])
-            for f in filenames:
-                if not os.path.exists(f): 
-                    raise IOError("%s does not exist" % f)
-            
-            run_dir = expand(entry['run_dir'])
-            namelist = shared.read_namelist(run_dir+"/namelist.wps")
-            start_str  = base_time.strftime("%Y-%m-%d_%H:%M:%S")
-            end_str    = bdy_times[-1].strftime("%Y-%m-%d_%H:%M:%S")
+        
+        if config.get('ungrib'):
+            for key,entry in config['ungrib'].items():
+                # apply any delay and rounding to the init_time to get correct time for dataset
+                # note that sometimes it is necessary to use a different time e.g. for SST field is delayed by one day
+                base_time = shared.get_time(init_time, delay=entry.get('delay'), round=entry.get('cycles'))
+                fcst_hours = entry['fcst_hours']
+                bdy_times = shared.get_bdy_times(base_time, fcst_hours, bdy_interval)
+                
+                file_pattern = entry['files']
+                
+                # create an ordered set to ensure filenames only appear once
+                filenames = shared.ordered_set([substitute.sub_date(file_pattern, init_time=base_time, valid_time=t) for t in bdy_times])
+                for f in filenames:
+                    if not os.path.exists(f): 
+                        raise IOError("%s does not exist" % f)
+                
+                run_dir = expand(entry['run_dir'])
+                namelist = shared.read_namelist(run_dir+"/namelist.wps")
+                start_str  = base_time.strftime("%Y-%m-%d_%H:%M:%S")
+                end_str    = bdy_times[-1].strftime("%Y-%m-%d_%H:%M:%S")
 
 
-            namelist.update('start_date', [start_str]*max_dom)
-            namelist.update('end_date',   [end_str]*max_dom)
-            namelist.to_file(run_dir+"/namelist.wps")
+                namelist.update('start_date', [start_str]*max_dom)
+                namelist.update('end_date',   [end_str]*max_dom)
+                namelist.to_file(run_dir+"/namelist.wps")
 
 
-            args = ' '.join(filenames)
-            cmd = '%s/link_grib.csh %s' %(run_dir,args)
-            shared.run_cmd(cmd, dry_run=dry_run, cwd=run_dir, log=False)
-            
-            # link in vtable
-            vtable = entry['vtable']
-            cmd = "%s %s/Vtable" % (vtable, run_dir)
-            shared.link(cmd, dry_run=dry_run)
-            
-            # update namlist.wps
-            namelist.update('prefix', entry['prefix'])
-            namelist.to_file(run_dir+'/namelist.wps')
+                args = ' '.join(filenames)
+                cmd = '%s/link_grib.csh %s' %(run_dir,args)
+                shared.run_cmd(cmd, dry_run=dry_run, cwd=run_dir, log=False)
+                
+                # link in vtable
+                vtable = entry['vtable']
+                cmd = "%s %s/Vtable" % (vtable, run_dir)
+                shared.link(cmd, dry_run=dry_run)
+                
+                # update namlist.wps
+                namelist.update('prefix', entry['prefix'])
+                namelist.to_file(run_dir+'/namelist.wps')
         
         
         template_expr = config['template-expr'] if config.get('template-expr') else DEFAULT_TEMPLATE_EXPR
         
-        jobs = config['jobs']
+        jobs = config['jobs'] if config.get('jobs') else {}
+        
         for key in sorted(jobs.keys()):
             entry = jobs[key]
             template = expand(entry['template'])
