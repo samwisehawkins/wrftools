@@ -1,0 +1,516 @@
+#***************************************************************
+# WRF Forecast Configuration File 
+# 
+# This is the top level configuration file for running 
+# automated WRF forecasts. This will overide a small number
+# of  settings in 'namelist.wps' and 'namelist.input'
+#
+# Environment variables can be accessed using $(var) syntax
+# Local variables defined elswhere in this configuration file can be 
+# accessed using %(var) syntax.  If the variable inside $() or %() 
+# is not defined within the current environment, it will not be expanded.
+#
+# Due to the syntax of yaml, entries cannot begin with %; 
+# to start an entry with a local variable reference, enclose 
+# the entry in quotation marks, see examples below.
+# 
+# Although the file is nominally divided into sections by comments,
+# logically it is a single dictionary 
+#
+#***************************************************************
+
+
+#***************************************************************
+# Timing
+# To run as operational forecast, set operational to true
+# To reforecast, use start and end time.
+#***************************************************************
+delay              : 3                       # delay in hours to apply to system time
+cycles             : [00, 12]                # round start time to the nearest one of these hours
+start              : 2013-06-14 00:00:00     # first initial time, ignored if operational is true 
+end                : 2013-06-14 00:00:00     # final *inital time*, not forecast end time
+max_dom            : 2                       # maximum number of nests, this will override namelists
+fcst_hours         : 72                      # length of forecast in hours
+history_interval   : 60                      # minutes between history writes
+bdy_interval       : 3                       # hours between boundary conditions
+
+
+
+#************************************************
+# Metadata. 
+# Used to help compose directory names, and
+# are also added as attributes to the output netcdf
+# files. 
+#************************************************
+domain            : baseline_europe 
+model             : WRF
+model_run         : test
+bdy_conditions    : GFS
+
+metadata          :                        # everything inside "metadata" will be copied into attributes in the wrfout files
+    domain        : "%(domain)"
+    model         : "%(model)"
+    model_run     : "%(model_run)"
+    bdy_conditions : "%(bdy_conditions)"
+
+#************************************************
+# Directory locations  
+#************************************************
+base-dir          : $(HOME)/forecasting/%(model_run)
+working-dir       : "%(base-dir)/%iY-%im-%id_%iH"  
+wrftools-dir      : $(HOME)/code/wrftools/devel                       # location of local wrftools repository
+tmp_dir           : $(HOME)/forecasting/tmp                           # temporary directory
+web_dir           : $(HOME)/WWW/forecast                              # convenience for copying plots
+wps_dir           : /prog/WPS/3.5                                     # location of WPS code
+wrf_dir           : /prog/WRF/3.5                                     # location of WRF code 
+wps_run_dir       : "%(working-dir)/wps"                              # subdirectory to run WPS from; namelists and grib files will be linked here
+real_run_dir      : "%(working-dir)/real"
+geogrid_run_dir   : "%(working-dir)/geogrid"
+metgrid_run_dir   : "%(working-dir)/metgrid"
+wrf_run_dir       : "%(working-dir)/wrf"                        # subdirectoty to run WRF from; namelists and met_em files will be linked here   
+geo_em_dir        : "%(working-dir)/geogrid"                    # location of geo_em files
+met_em_dir        : "%(working-dir)/metgrid"                    # location of met_em files
+namelist_wps      : "%(base-dir)/namelist.wps"                  # location of namelist.wps template to use
+namelist_input    : "%(base-dir)/namelist.input"                # location of namelist.input template to use
+template_dir      : "%(wrftools-dir)/templates"                 # location of script templates
+grb_dir           : $(HOME)/forecasting/GFS/operational
+
+
+
+# one potential way of doing things, define all namelist updates here
+# will have to extend via an expression to deal with entried which need to be entered max_dom number of times
+# beware, we have no sytnax for specifying end time!
+# also beware incremental namelist updates, as there is no guarantee on the ordering
+#
+namelist_updates:
+    1:
+        template : "%(working-dir)/namelist.wps"
+        target   : "%(working-dir)/namelist.wps"
+        update:
+            constants_name                 : "SST:yesterday"
+            opt_output_from_geogrid_path   : "%(geogrid_run_dir)"
+            opt_output_from_metgrid_path   : "%(metgrid_run_dir)"
+            opt_geogrid_tbl_path           : "%(geogrid_run_dir)"
+            opt_metgrid_tbl_path           : "%(metgrid_run_dir)"
+
+    2:
+        template : "%(working-dir)/namelist.wps"
+        target   : "%(working-dir)/ungrib/namelist.wps"
+        update   :
+            prefix : GFS
+
+    3:
+        template : "%(working-dir)/namelist.wps"
+        target   : "%(working-dir)/ungrib_sst/namelist.wps"
+        update   :
+            prefix: SST
+            
+            
+    4: 
+        template : "%(working-dir)/namelist.wps"
+        target   : "%(working-dir)/metgrid/namelist.wps"
+        update   :
+            fg_name: GFS','SST            # note the weird syntax if using a list, this could do with being changed
+
+
+ungrib:
+    GFS: 
+        files     : "%(grb_dir)/GFS_Global_0p5deg_%iy%im%id_%iH%iM_fh%fH.grb"
+        delay     : 0
+        cycles    : [0,6,12,18]
+        fcst_hours: 72
+        vtable    : "%(wps_dir)/ungrib/Variable_Tables/Vtable.GFS_new"  
+        run_dir   : "%(working-dir)/ungrib"
+        prefix    : GFS
+
+    SST: 
+        files     : "$(HOME)/forecasting/domains/SST/rtg_sst_grb_hr_0.083.%iY%im%id"
+        delay     : 24
+        cycles    : [0]
+        fcst_hours: 0
+        run_dir   : "%(working-dir)/ungrib_sst"
+        vtable    :  "%(wps_dir)/ungrib/Variable_Tables/Vtable.SST"
+        prefix    : SST 
+
+            
+#
+# Bit of a hack. Pyaml is not correctly parsing lists of mappings, and mappings are not guaranteed to be ordered
+# so an easy way to ensure jobs are ordered is to give them a numerical key
+#            
+            
+jobs:
+    1: 
+        jobname  : ungrib 
+        run      : true
+        template : "%(template_dir)/template_mpi.sge"
+        target   : "%(working-dir)/ungrib/ungrib.sh"
+        run_dir  : "%(working-dir)/ungrib"
+        executable: ungrib.exe
+        queue    : all.q
+        nprocs   : 1
+        logfile  : "%(working-dir)/ungrib/ungrib.log"
+
+    2: 
+        jobname  : ungrib.post
+        run      : true
+        template : "%(template_dir)/template_serial.sge"
+        target   : "%(working-dir)/ungrib/ungrib.post.sh"
+        run_dir  : "%(working-dir)/ungrib"
+        cmd      : "mv GFS:* ../metgrid"
+        queue    : all.q
+        nprocs   : 1
+        logfile  : "%(working-dir)/ungrib/ungrib.post.log"
+        
+    3:
+        jobname  : ungrib.sst
+        run      : true
+        template : "%(template_dir)/template_mpi.sge"
+        target   : "%(working-dir)/ungrib_sst/ungrib.sh"
+        run_dir  : "%(working-dir)/ungrib_sst"
+        executable: ungrib.exe
+        queue    : all.q
+        nprocs   : 1
+        logfile  : "%(working-dir)/ungrib_sst/ungrib.log"
+
+    4:
+        jobname  : ungrib.sst.post
+        run      : true
+        template : "%(template_dir)/template_serial.sge"
+        target   : "%(working-dir)/ungrib_sst/ungrib.post.sh"
+        run_dir  : "%(working-dir)/ungrib_sst"
+        cmd      : "rename SST:????-??-??_?? SST:yesterday SST*; mv SST:yesterday ../metgrid;"
+        queue    : all.q
+        nprocs   : 1
+        logfile  : "%(working-dir)/ungrib_sst/ungrib.log"
+
+    5:
+        jobname  : geogrid
+        run      : true
+        template : "%(template_dir)/template_mpi.sge"
+        target   : "%(working-dir)/geogrid/geogrid.sh"
+        run_dir  : "%(working-dir)/geogrid"
+        executable: geogrid.exe
+        queue    : all.q
+        nprocs   : 1
+        logfile  : "%(working-dir)/geogrid/geogrid.log"        
+
+    6:
+        jobname  : metgrid
+        run      : true
+        template : "%(template_dir)/template_mpi.sge"
+        target   : "%(working-dir)/metgrid/metgrid.sh"
+        run_dir  : "%(working-dir)/metgrid"
+        executable: metgrid.exe
+        queue    : all.q
+        nprocs   : 1
+        logfile  : "%(working-dir)/metgrid/metgrid.log"                
+
+    7:
+        jobname  : metgrid.post
+        run      : true
+        template : "%(template_dir)/template_serial.sge"
+        target   : "%(working-dir)/metgrid/metgrid.post.sh"
+        run_dir  : "%(working-dir)/metgrid"
+        cmd      : "mv met_em* ../wrf"
+        queue    : all.q
+        nprocs   : 1
+        logfile  : "%(working-dir)/metgrid/metgrid.post.log"
+
+        
+    8:
+        jobname  : real
+        run      : true
+        template : "%(template_dir)/template_mpi.sge"
+        target   : "%(working-dir)/wrf/real.sh"
+        run_dir  : "%(working-dir)/wrf"
+        executable: real.exe
+        queue    : all.q
+        nprocs   : 1
+        logfile  : "%(working-dir)/wrf/real.log"                        
+        
+    9:
+        jobname  : wrf
+        run      : true
+        template : "%(template_dir)/template_mpi.sge"
+        target   : "%(working-dir)/wrf/wrf.sh"
+        run_dir  : "%(working-dir)/wrf"
+        executable: wrf.exe
+        queue    : all.q
+        nprocs   : 40
+        logfile  : "%(working-dir)/wrf/wrf.log"                                
+        
+
+        
+#************************************************
+# Components to run.
+# This is hierachical, so setting simulate to false
+# will turn off simulate.* 
+#************************************************
+sst               : true     # fetch SST field from seperate source
+fetch             : true     # fetch external files
+fetch.gribmaster  : true     # see gribmaster section
+fetch.sst         : true     # fetch SST fields 
+
+prepare           : true     # links boundary condition files
+
+simulate          : true     # main simulation routines
+simulate.wps      : true     # WPS components ungrib, geogrid, metgrid
+simulate.ungrib   : true     
+simulate.geogrid  : true
+simulate.metgrid  : true
+simulate.real     : true
+simulate.wrf      : true     # run main wrf.exe 
+simulate.ndown    : false
+simulate.timing   : true     # compute timing information from rsl files
+simulate.status   : true     # write json status file specifying time of last update etc
+
+post              : true     # run post-processing steps, see section post
+post.upp          : false    # Universal Post Processor
+post.metadata     : true     # add metadata as attributes to netcdf files
+post.compress     : true     # compress wrfout files using NCO
+post.hyperslab    : false    # hyperslab using ncks
+
+visualise         : true     # see visualise section
+visualise.ncl     : true     # run ncl visualisation scripts
+visualise.ol      : false    # run openlayers visualisation (requiress VAPOR, ImageMagik)
+
+extract           : true     # see tseries section
+extract.tseries   : true     # extract time series of variables to points
+finalise          : true     # remove files, move, archive
+dispatch          : true     # See dispatch section
+
+
+
+#************************************************
+# Logging
+#************************************************
+log.name          : wrf_forecast                           # name of logger object
+log.level         : DEBUG                                  # log level to write to file   
+log.file          : "%(base-dir)/forecast.log"             # file to write to
+log.fmt           : "%(message)s"                          # see logging module for format codes
+log.mail          : true                                   # send an email of log
+log.mail.to       : sam.hawkins@vattenfall.com
+log.mail.level    : INFO                                   # level to mail
+log.mail.buffer   : 100000                                 # maximum number of lines in one email
+log.mail.subject  : "Maestro WRF log"                      # subject to use in email 
+
+
+#************************************************
+# Status file
+#************************************************
+status_file       : "%(working-dir)/json/status.json"      # write various status fields such as time completed etc
+
+
+#************************************************
+# Running/exception handling
+#************************************************
+dry_run           : false                                  # don't run commands, just log them
+full_trace        : true                                   # log a full stack trace of exceptions
+fail_mode         : exit                                   # CONTINUE, EXIT
+run_level         : run                                    # dummy is equivalent to dry_run
+cmd_timing        : false                                  # print timing information for each command
+
+
+#************************************************
+# Processors, job submission, queuing.
+#
+# queue controls whether jobs are run using the job submission system (SGE)
+# or just run directly using mpirun. To run a job via the queing sytem, 
+# set the entry to the queue name.  If you run jobs directly, then you should
+# set host_file to point to an mpirun hostfile.
+# 
+#************************************************
+queue:                         
+  ungrib.exe  : false          # use a named queue to submit via SGE
+  geogrid.exe : false          # or set to false to run directly
+  metgrid.exe : false
+  real.exe    : false
+  ndown.exe   : false
+  wrf.exe     : all.q
+  ncl         : all.q
+  nccopy      : all.q
+  ncks        : all.q
+
+
+host_file         : "%(working-dir)/hostfile"                # host file to use for mpirun, not needed if using SGE submission
+
+job_template:                                                # each queue can have its own job template  
+    all.q         : "%(wrftools_dir)/queue/template_all_maestro.sge"
+    post.q        : "%(wrftools_dir)/queue/template_post.sge"
+
+
+job_script        : "%(working-dir)/job.sge"                 # expanded template gets written here
+
+    
+
+wrfout_dir        : "%(working-dir)/wrfout"                     # move wrfout files here after WRF has completed 
+
+
+#*************************************************************************************************************************
+# Internals, only modify if you know what you are doing
+#*************************************************************************************************************************
+
+prepare.create:
+    - "%(working-dir)" 
+    - "%(working-dir)/ungrib"
+    - "%(working-dir)/ungrib_sst"
+    - "%(working-dir)/geogrid"
+    - "%(working-dir)/metgrid"
+    - "%(working-dir)/real"
+    - "%(working-dir)/wrf"
+    - "%(working-dir)/tseries"
+    - "%(working-dir)/json"
+    - "%(working-dir)/plots"
+    - "%(working-dir)/rsl"
+    - "%(working-dir)/wps"
+    - "%(working-dir)/log"
+
+prepare.remove:                                                          # list of arguments to consecutive linux rm commands. Be careful!
+    - "%(ncl_log)"
+    - "%(gm_log)"
+    - "%(wrf_run_dir)/rsl.*"  
+    - "%(wps_run_dir)/ungrib.log*"
+    - "%(wps_run_dir)/metgrid.log*"
+    - "%(wps_run_dir)/geogrid.log*"
+    - "%(working-dir)/plots/%iHZ/*.*"
+    - "%(working-dir)/plots/%iHZ/*.*"
+
+prepare.link:                                                          # list of arguments to consecutive linux ln -sf commands
+  - "%(wrf_dir)/run/*.exe            %(wrf_run_dir)"
+  - "%(wrf_dir)/run/RRTM*            %(wrf_run_dir)"
+  - "%(wrf_dir)/run/*.TBL            %(wrf_run_dir)"
+  - "%(wps_dir)/*.exe                %(wps_run_dir)"
+  - "%(wps_dir)/ungrib.exe           %(working-dir)/ungrib/"
+  - "%(wps_dir)/ungrib.exe           %(working-dir)/ungrib_sst/"
+  - "%(wps_dir)/metgrid.exe          %(working-dir)/metgrid/"
+  - "%(wps_dir)/geogrid.exe          %(working-dir)/geogrid/"
+  - "%(wps_dir)/link_grib.csh        %(working-dir)/ungrib/"
+  - "%(wps_dir)/link_grib.csh        %(working-dir)/ungrib_sst/"
+  - "%(wps_dir)/metgrid/METGRID.TBL  %(metgrid_run_dir)"
+  - "%(wps_dir)/geogrid/GEOGRID.TBL  %(geogrid_run_dir)"
+  - "%(wps_dir)/metgrid/METGRID.TBL  %(metgrid_run_dir)"
+  - "%(wps_dir)/geogrid/GEOGRID.TBL  %(geogrid_run_dir)"
+  - "%(working-dir)/namelist.wps     %(geogrid_run_dir)"
+  - "%(working-dir)/namelist.input   %(wrf_run_dir)"
+  
+  
+  
+prepare.copy:                                                           # list of arguments to consecutive linux cp commands
+  - "%(namelist_wps)                %(working-dir)"
+  - "%(namelist_input)              %(working-dir)"
+
+
+#************************************************
+# Post
+#************************************************
+upp_dir                 : $(HOME)/UPPV1.0
+compression_level       : 9                # Compresion level passed to -L flag
+post.met                : false            # MET verification tool
+post.hyperslab.dimspec  : "-d bottom_top,0,25 -d bottom_top_stag,0,26"                 # d argument to ncks
+
+#************************************************
+# Gribmaster settings
+# Note that most gribmaster settings are defined in the gribmaster/conf directory
+# these are just the command line options
+#************************************************
+gm_dir            : "$(HOME)/gribmaster"
+gm_log            : "%(working-dir)/gribmaster.log"
+gm_dataset        : gfs004grb2
+gm_transfer       : http
+grb_fmt           : grib2
+gm_sleep          : 10         # number of minutes to wait after failure
+gm_max_attempts   : 6
+convert_grb       : false
+
+#*****************************************************
+# SST settings
+#*****************************************************
+sst_delay           : 24                    # number of hours SST field is delayed
+sst_server          : polar.ncep.noaa.gov
+sst_server_dir      : /pub/history/sst/ophi
+sst_local_dir       : "$(HOME)/forecasting/domains/SST"
+sst_filename        : rtg_sst_grb_hr_0.083.%iY%im%id
+sst_vtable          : "%(wps_dir)/ungrib/Variable_Tables/Vtable.SST"
+
+
+#*******************************************************
+# Visualisation settings
+# Python will set the following environment
+# variables which can be used within NCL
+# FCST_FILE       - the full WRF filename 
+# NCL_OUT_DIR     - output directory for plots
+# LOCATIONS_FILE  - file containing locations of interest
+# NEST_ID         - 2-digit integer indentifiying nest
+#********************************************************
+ncl_opt_template: "%(wrftools_dir)/ncl/ncl_opt_template.ncl"                             # ncl options template
+ncl_opt_file    : "%(working-dir)/options.ncl"                                          # filled template will be writtem here
+ncl_out_type    : png                                                                   # png, pdf etc
+ncl_code_dir    : "%(wrftools_dir)/ncl" 
+ncl_out_dir     : "%(working-dir)/plots/%iHZ"                                           # inital time will be substitued in
+ncl_code        : 
+    - "%(ncl_code_dir)/wrf_surface.ncl"
+#    - "%(ncl_code_dir)/wrf_time_series.ncl"
+    - "%(ncl_code_dir)/wrf_precip.ncl"
+    - "%(ncl_code_dir)/wrf_t2.ncl"
+    - "%(ncl_code_dir)/wrf_sst.ncl"
+    - "%(ncl_code_dir)/wrf_w10.ncl"
+
+ncl_ol_code    :                                                                      # code for producing plots for openlayers 
+#    - "%(ncl_code_dir)/wrf_precip_vapor.ncl"
+#    - "%(ncl_code_dir)/wrf_slp_vapor.ncl"
+#    - "%(ncl_code_dir)/wrf_w10_vapor.ncl"
+#    - "%(ncl_code_dir)/wrf_wspd_vapor.ncl"
+#    - "%(ncl_code_dir)/wrf_sst_vapor.ncl"
+
+ncl_ol_out_dir : "%(working-dir)/ol/%iHZ"                                              # location to put openlayers compatible plots
+ncl_log        : "%(working-dir)/ncl.log"
+
+
+#**************************************************************
+# Extaction/time series
+#***************************************************************
+tseries_dir    : "%(working-dir)/tseries"                                              # extract time-series here 
+tseries_file   : "%(tseries_dir)/tseries_d%dd_%iY-%im-%id_%iH.nc"
+locations_file : "%(working-dir)/locations.csv"
+tseries_code   : ["%(wrftools_dir)/ncl/extract_time_series.ncl"]                       # location of NCL code to extract time series
+json_dir       : "%(working-dir)/json"
+extract_hgts   : [20,50,60,70,80,90,100,110,150,200]                                   # heights to extract time series 
+
+
+#**************************************************************
+# Dispatch
+#***************************************************************
+dispatch.list:
+  slha : 
+    mailto     : "sam.hawkins@vattenfall.com"
+    from       : "sam.hawkins@vattenfall.com"
+    subject    : "WRF %iHZ forecast"
+    body       : "%(working-dir)/body.txt"
+    attach     : 
+        - "%(working-dir)/plots/%iHZ/pp_d01_01.png"
+        - "%(working-dir)/plots/%iHZ/pp_d01_12.png"
+        - "%(working-dir)/plots/%iHZ/pp_d01_24.png"
+        - "%(working-dir)/plots/%iHZ/pp_d01_48.png"
+        - "%(working-dir)/plots/%iHZ/pp_d01_72.png"
+
+  
+#************************************************
+# Finalise
+#************************************************
+
+finalise.create : []
+
+finalise.copy:
+  - "%(working-dir)/plots/%iHZ/*.png %(web_dir)/img/%iHZ"
+  - "%(working-dir)/json/*.json      %(web_dir)/data"
+  - "%(working-dir)/plots/%iHZ/*.png $(HOME)/forecast/img/%iHZ"
+  - "%(working-dir)/json/*.json      $(HOME)/forecast/data"
+
+  
+finalise.link: []
+finalise.move: []
+finalise.remove: 
+  - "%(wps_run_dir)/GFS*"
+  - "-r %(met_em_dir)"
+
+finalise.run: []
