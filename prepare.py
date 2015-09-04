@@ -23,6 +23,7 @@ Options:
     --wrf-dir=<dir>         base directory of the WRF installation
     --namelist-wps=<file>   location of namelist.wps template to use, a modified copy will be placed into working_dir
     --namelist-input=<file> location of namelist.input template to use, a modified copy will be places into working_dir
+    --link-boundaries       try to expand ungrib sections and link in appropriate boundary conditions
     --rmtree                remove working directory tree first - use with caution!
     --dry-run               log but don't execute commands
     --log.level=<level>     log level info, debug or warn (see python logging modules)
@@ -36,19 +37,19 @@ import os
 import shutil
 import subprocess
 import glob
-import loghelper
 import datetime
 import collections
 from dateutil import rrule
 from wrftools import namelist
 from wrftools import substitute
+from wrftools import templater
 from wrftools.confighelper import confighelper as conf
+from wrftools import loghelper
 from wrftools import shared
 
-DEFAULT_TEMPLATE_EXPR = '<%s>'   
 
 class UnsafeDeletion(Exception):
-    """Exception rasied when something code looks like it may cause an usafe deletion"""
+    """Exception rasied when code looks like it may cause an usafe deletion"""
     pass
 
 
@@ -57,9 +58,8 @@ def main():
     # merge command-line and file-specified arguments
     config = conf.config(__doc__, sys.argv[1:])
 
-    # note = we can't create a file handler until the subdirectories have been created
+
     logger = loghelper.create(LOGGER, log_level=config.get('log.level'), log_fmt=config.get('log.format'))
-    # now we can add a file handler and start logging to a file
     if config.get('log.file'):
         log_file = config['log.file']
         logger.addHandler(loghelper.file_handler(log_file, config['log.level'], config['log.format']))
@@ -71,7 +71,7 @@ def main():
     bdy_interval = config['bdy_interval']
     fcst_hours = config['fcst_hours']
     history_interval = config['history_interval'] 
-
+    link_boundaries = config.get('link-boundaries')
     
     # either the start time is exactly specified, or else we calculate it
     if config.get('start'):
@@ -91,6 +91,7 @@ def main():
     for init_time in init_times:
         # one-argument function to do initial-time substitution in strings
         expand = lambda s : substitute.sub_date(s, init_time=init_time) if type(s)==type("") else s
+        date_replacements = substitute.date_replacements(init_time=init_time)
         
         working_dir = expand(config['working_dir'])
 
@@ -98,6 +99,14 @@ def main():
             safe_remove(working_dir, dry_run)
         
         create_directory_structure(expand, remove=config.get('prepare.remove'), create=config.get('prepare.create'), copy=config.get('prepare.copy'), link=config.get('prepare.link'), dry_run=dry_run)    
+        if config.get('prepare.template'):
+            for entry in config['prepare.template']:
+                tokens = expand(entry).split()
+                source = tokens[0]
+                target = tokens[1] if len(tokens)>1 else tokens[0]
+                templater.fill_template(source, target, date_replacements)
+
+        
         bdy_times = shared.get_bdy_times(init_time, fcst_hours, bdy_interval)
         working_namelist = working_dir+"/namelist.wps"
     
@@ -132,7 +141,7 @@ def main():
         # link in input files for all ungrib jobs
         # update namelist.wps to modify start and end time
         
-        if config.get('ungrib'):
+        if link_boundaries and config.get('ungrib'):
             for key,entry in config['ungrib'].items():
                 # apply any delay and rounding to the init_time to get correct time for dataset
                 # note that sometimes it is necessary to use a different time e.g. for SST field is delayed by one day
@@ -173,28 +182,7 @@ def main():
                 namelist.to_file(run_dir+'/namelist.wps')
         
         
-        template_expr = config['template-expr'] if config.get('template-expr') else DEFAULT_TEMPLATE_EXPR
         
-        jobs = config['jobs'] if config.get('jobs') else {}
-        
-        for key in sorted(jobs.keys()):
-            entry = jobs[key]
-            template = expand(entry['template'])
-            target = expand(entry['target'])
-            logger.debug('%s ----->\t%s' % (template.split('/')[-1].ljust(20), target))
-            replacements = generate_replacements(entry, template_expr, expand)
-            date_replacements = substitute.date_replacements(init_time=init_time)
-            replacements.update(date_replacements)
-            shared.fill_template(template,target,replacements)
-        
-    
-def prepare_simulation(expand, fcst_hours, working_dir, max_dom, namelist_wps, namelist_input, namelist_updates, 
-                        remove, create, copy, link, bdy_interval, history_interval, 
-                        jobs, metadata=None, template_expr=None, rmtree=False, dry_run=False):
-    pass
-    
-    
-    
         
 def update_namelist_input(template, target, max_dom, init_time, fcst_hours, history_interval, interval_seconds, metadata=None):    
     """ Updates the namelist.input file to reflect updated settings in config.
@@ -378,7 +366,7 @@ def safe_remove(path, dry_run=False):
         raise UnsafeDeletion("Unsafe deletion detected with path %s") % path
     
     logger.warn("removing path %s" % path)
-    if not dry_run:
+    if not dry_run and os.path.exists(path):
         shutil.rmtree(path)        
 
 
