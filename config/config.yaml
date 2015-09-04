@@ -1,8 +1,8 @@
-#***************************************************************
-# WRF Forecast Configuration File 
+#**********************************************************************************************
+# WRF Simulation Preparation File 
 # 
-# This is the top level configuration file for running 
-# automated WRF forecasts. This will overide a small number
+# This is the top level configuration file for preparing 
+# WRF simulations. This will overide a small number
 # of  settings in 'namelist.wps' and 'namelist.input'
 #
 # Environment variables can be accessed using $(var) syntax
@@ -17,23 +17,37 @@
 # Although the file is nominally divided into sections by comments,
 # logically it is a single dictionary 
 #
-#***************************************************************
+#**********************************************************************************************
+
+        
+#************************************************
+# Logging
+#************************************************
+log.name          : wrf_forecast                           # name of logger object
+log.level         : DEBUG                                  # log level to write to file   
+log.file          : "%(base-dir)/forecast.log"             # file to write to
+log.fmt           : "%(message)s"                          # see logging module for format codes
+log.mail          : false                                  # send an email of logfile
+log.mail.to       : sam.hawkins@vattenfall.com
+log.mail.level    : INFO                                   # level to mail
+log.mail.buffer   : 100000                                 # maximum number of lines in one email
+log.mail.subject  : "Maestro WRF log"                      # subject to use in email 
 
 
 #***************************************************************
 # Timing
-# To run as operational forecast, set operational to true
+# If start not specified, most recent time based on cycles and delay used
 # To reforecast, use start and end time.
 #***************************************************************
-delay              : 3                       # delay in hours to apply to system time
-cycles             : [00, 12]                # round start time to the nearest one of these hours
-start              : 2015-08-06 00:00:00     # first initial time, ignored if operational is true 
-end                : 2015-08-07 00:00:00     # final *inital time*, not forecast end time
-max_dom            : 2                       # maximum number of nests, this will override namelists
-fcst_hours         : 72                      # length of forecast in hours
-history_interval   : 60                      # minutes between history writes
-bdy_interval       : 3                       # hours between boundary conditions
-init_interval      : 24                      # hours betweeen initialisation times
+delay              : 3                                      # delay in hours to apply to system time
+cycles             : [00, 12]                               # round start time to the nearest one of these hours
+start              : 2015-08-06 00:00:00                    # first initial time, ignored if operational is true 
+end                : 2015-08-07 00:00:00                    # final *inital time*, not forecast end time
+max_dom            : 2                                      # maximum number of nests, this will override namelists
+fcst_hours         : 72                                     # length of forecast in hours
+history_interval   : 60                                     # minutes between history writes
+bdy_interval       : 3                                      # hours between boundary conditions
+init_interval      : 24                                     # hours betweeen initialisation times
 
 #************************************************
 # Running/exception handling
@@ -49,47 +63,47 @@ cmd_timing        : false                                  # print timing inform
 # are also added as attributes to the output netcdf
 # files. 
 #************************************************
-domain            : baseline_europe 
+domain            : NEurope 
 model             : WRF
 model_run         : test
 bdy_conditions    : GFS
 
-metadata          :                        # everything inside "metadata" will be copied into attributes in the wrfout files
+metadata          :                                             # everything inside "metadata" will be copied into attributes in the wrfout files
     domain        : "%(domain)"
     model         : "%(model)"
     model_run     : "%(model_run)"
     bdy_conditions : "%(bdy_conditions)"
 
+    
+    
 #************************************************
 # Directory locations  
 #************************************************
-base-dir          : $(HOME)/forecasting/%(model_run)
-working-dir       : "%(base-dir)/%iY-%im-%id_%iH"  
-wrftools-dir      : $(HOME)/code/wrftools/devel                       # location of local wrftools repository
-tmp_dir           : $(HOME)/forecasting/tmp                           # temporary directory
-web_dir           : $(HOME)/WWW/forecast                              # convenience for copying plots
-wps_dir           : /prog/WPS/3.5                                     # location of WPS code
-wrf_dir           : /prog/WRF/3.5                                     # location of WRF code 
-wrfout_dir        : "%(working-dir)/wrfout"                           # move wrfout files here after WRF has completed 
-wps_run_dir       : "%(working-dir)/wps"                              # subdirectory to run WPS from; namelists and grib files will be linked here
-real_run_dir      : "%(working-dir)/real"
+base-dir          : $(HOME)/forecasting/%(model_run)            # base directory defining the general model set-up
+working-dir       : "%(base-dir)/%iY-%im-%id_%iH"               # indidividual simulations run in this directory
+wrftools-dir      : $(HOME)/code/wrftools/devel                 # location of local wrftools repository
+namelist_wps      : "%(base-dir)/namelist.wps"                  # location of namelist.wps template to use
+namelist_input    : "%(base-dir)/namelist.input"                # location of namelist.input template to use
+wps_dir           : /prog/WPS/3.5                               # location of WPS code
+wrf_dir           : /prog/WRF/3.5                               # location of WRF code 
+wrfout_dir        : "%(working-dir)/wrfout"                     # move wrfout files here after WRF has completed 
+real_run_dir      : "%(working-dir)/wrf"
 geogrid_run_dir   : "%(working-dir)/geogrid"
 metgrid_run_dir   : "%(working-dir)/metgrid"
 wrf_run_dir       : "%(working-dir)/wrf"                        # subdirectoty to run WRF from; namelists and met_em files will be linked here   
 geo_em_dir        : "%(working-dir)/geogrid"                    # location of geo_em files
 met_em_dir        : "%(working-dir)/metgrid"                    # location of met_em files
-namelist_wps      : "%(base-dir)/namelist.wps"                  # location of namelist.wps template to use
-namelist_input    : "%(base-dir)/namelist.input"                # location of namelist.input template to use
+
 template_dir      : "%(wrftools-dir)/templates"                 # location of script templates
 grb_dir           : $(HOME)/forecasting/GFS/operational
 
 
-
-# one potential way of doing things, define all namelist updates here
+#**********************************************************************************************
+# Namelist updates
 # will have to extend via an expression to deal with entried which need to be entered max_dom number of times
 # beware, we have no sytnax for specifying end time!
-# also beware incremental namelist updates, as there is no guarantee on the ordering
-#
+#**********************************************************************************************
+
 namelist_updates:
     1:
         template : "%(working-dir)/namelist.wps"
@@ -120,6 +134,13 @@ namelist_updates:
             fg_name: GFS','SST            # note the weird syntax if using a list, this could do with being changed
 
 
+#**********************************************************************************************
+# Ungrib bondary condition job specifications
+# 
+# 
+#**********************************************************************************************
+            
+            
 ungrib:
     GFS: 
         files     : "%(grb_dir)/GFS_Global_0p5deg_%iy%im%id_%iH%iM_fh%fH.grb"
@@ -140,10 +161,13 @@ ungrib:
         prefix    : SST 
 
             
+#**********************************************************************************************
+# Create job files from templates
 #
-# Bit of a hack. Pyaml is not correctly parsing lists of mappings, and mappings are not guaranteed to be ordered
+# Pyaml is not correctly parsing lists of mappings, and mappings are not guaranteed to be ordered
 # so an easy way to ensure jobs are ordered is to give them a numerical key
 #            
+#**********************************************************************************************
             
 jobs:
     1: 
@@ -152,21 +176,24 @@ jobs:
         template : "%(template_dir)/template_mpi.sge"
         target   : "%(working-dir)/ungrib/ungrib.sh"
         run_dir  : "%(working-dir)/ungrib"
-        executable: ungrib.exe
-        queue    : all.q
-        nprocs   : 1
-        logfile  : "%(working-dir)/ungrib/ungrib.log"
-
+        replacements:
+            <executable>: ungrib.exe
+            <queue>    : all.q
+            <nprocs>   : 1
+            <logfile>  : "%(working-dir)/ungrib/ungrib.log"
+            <jobname>  : ungrib
+            
     2: 
         jobname  : ungrib.post
         run      : true
-        template : "%(template_dir)/template_serial.sge"
+        template : "%(template_dir)/ungrib.post.sge"
         target   : "%(working-dir)/ungrib/ungrib.post.sh"
         run_dir  : "%(working-dir)/ungrib"
-        cmd      : "mv GFS:* ../metgrid"
-        queue    : all.q
-        nprocs   : 1
-        logfile  : "%(working-dir)/ungrib/ungrib.post.log"
+        replacements:
+            <jobname>  : ungrib.post
+            <queue>    : all.q
+            <nprocs>   : 1
+            <logfile>  : "%(working-dir)/ungrib/ungrib.post.log"
         
     3:
         jobname  : ungrib.sst
@@ -174,21 +201,25 @@ jobs:
         template : "%(template_dir)/template_mpi.sge"
         target   : "%(working-dir)/ungrib_sst/ungrib.sh"
         run_dir  : "%(working-dir)/ungrib_sst"
-        executable: ungrib.exe
-        queue    : all.q
-        nprocs   : 1
-        logfile  : "%(working-dir)/ungrib_sst/ungrib.log"
+        replacements:
+            <jobname>  : ungrib.sst
+            <queue>    : all.q
+            <nprocs>   : 1
+            <logfile>  : "%(working-dir)/ungrib/ungrib.sst.log"
+
 
     4:
         jobname  : ungrib.sst.post
         run      : true
-        template : "%(template_dir)/template_serial.sge"
-        target   : "%(working-dir)/ungrib_sst/ungrib.post.sh"
+        template : "%(template_dir)/ungrib_sst.post.sh"
+        target   : "%(working-dir)/ungrib_sst/ungrib_sst.post.sh"
         run_dir  : "%(working-dir)/ungrib_sst"
-        cmd      : "rename SST:????-??-??_?? SST:yesterday SST*; mv SST:yesterday ../metgrid;"
-        queue    : all.q
-        nprocs   : 1
-        logfile  : "%(working-dir)/ungrib_sst/ungrib.log"
+        replacements:
+            <jobname>  : ungrib_sst.post
+            <queue>    : all.q
+            <nprocs>   : 1
+            <logfile>  : "%(working-dir)/ungrib/ungrib_sst.post.log"
+        
 
     5:
         jobname  : geogrid
@@ -246,25 +277,18 @@ jobs:
         logfile  : "%(working-dir)/wrf/wrf.log"                                
         
 
-#************************************************
-# Logging
-#************************************************
-log.name          : wrf_forecast                           # name of logger object
-log.level         : DEBUG                                  # log level to write to file   
-log.file          : "%(base-dir)/forecast.log"             # file to write to
-log.fmt           : "%(message)s"                          # see logging module for format codes
-log.mail          : true                                   # send an email of log
-log.mail.to       : sam.hawkins@vattenfall.com
-log.mail.level    : INFO                                   # level to mail
-log.mail.buffer   : 100000                                 # maximum number of lines in one email
-log.mail.subject  : "Maestro WRF log"                      # subject to use in email 
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
 
 
-#************************************************
-# Status file
-#************************************************
-status_file       : "%(working-dir)/json/status.json"      # write various status fields such as time completed etc
-host_file         : "%(working-dir)/hostfile"                # host file to use for mpirun, not needed if using SGE submission
 
 
 
