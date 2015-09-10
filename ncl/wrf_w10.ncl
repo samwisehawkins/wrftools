@@ -26,6 +26,10 @@ begin
     ; ncl_opt_file
     ;**************************************************************
     load "$NCL_OPT_FILE"
+    load "$NCL_OPT_FILE"
+    ncl_in_file = getenv("NCL_IN_FILE")
+    ncl_out_dir = getenv("NCL_OUT_DIR")
+    ncl_loc_file = getenv("NCL_LOC_FILE")
     prefix   = "w10"
 
 ;******************************************************

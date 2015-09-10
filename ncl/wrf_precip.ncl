@@ -16,7 +16,7 @@ begin
   ;*************************************************************
   ; NCL expects some or all of the following to be defined,
   ; either on the command line, or in a single options file
-  ; specified in an environment variable
+  ; specified in an environment variable. 
   ; ncl_in_file
   ; ncl_out_dir
   ; ncl_out_file
@@ -24,11 +24,14 @@ begin
   ; ncl_loc_file
     
   load "$NCL_OPT_FILE"
+  ncl_in_file = getenv("NCL_IN_FILE")
+  ncl_out_dir = getenv("NCL_OUT_DIR")
+  ncl_loc_file = getenv("NCL_LOC_FILE")
   prefix = "pp"
 
   print("reading file "+ncl_in_file)
   a = addfile(ncl_in_file,"r")
-  
+  ;*************************************************************  
   
   res = True
   res@MainTitle = "REAL-TIME WRF"

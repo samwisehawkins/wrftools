@@ -10,12 +10,11 @@ load "$NCARG_ROOT/lib/ncarg/nclscripts/wrf/WRFUserARW.ncl"
 ;******************************************************
 ; Fetch some settings from environment variables
 ;******************************************************
-  fcst_file    = getenv("FCST_FILE")
-  domain       = getenv("NEST_ID")
-  out_dir      = getenv("NCL_OUT_DIR")
-  type         = getenv("NCL_OUT_TYPE")
-  prefix       = "radar"
-
+  load "$NCL_OPT_FILE"
+  ncl_in_file = getenv("NCL_IN_FILE")
+  ncl_out_dir = getenv("NCL_OUT_DIR")
+  ncl_loc_file = getenv("NCL_LOC_FILE")
+  prefix="radar"
 ;******************************************************
 ; Add WRF ARW input file.  
 ;******************************************************

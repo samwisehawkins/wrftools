@@ -8,16 +8,19 @@ load "$NCARG_ROOT/lib/ncarg/nclscripts/wrf/WRFUserARW.ncl"
 begin
 ;
 ;******************************************************
-; NCL expects some or all of the following to be defined on 
-; the command-line
+; NCL expects some or all of the following to be defined 
+; either at the command line or as environment variables
 ; ncl_in_file
 ; ncl_out_dir
-; ncl_out_file
-; ncl_out_ncl_out_type
-; ncl_ncl_loc_file
+; ncl_out_type
+; ncl_loc_file
 ; ncl_opt_file
 ;******************************************************
   load "$NCL_OPT_FILE"
+  ncl_in_file  = getenv("NCL_IN_FILE")
+  ncl_out_dir  = getenv("NCL_OUT_DIR")
+  ncl_loc_file = getenv("NCL_LOC_FILE") 
+
   prefix   = "t2"
 
 ;******************************************************
