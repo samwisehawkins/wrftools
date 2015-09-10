@@ -70,7 +70,8 @@ metadata          :                        # everything inside "metadata" will b
 base_dir          : $(HOME)/forecasting/%(model_run)
 working_dir       : "%(base_dir)/%iY-%im-%id_%iH"  
 wrftools_dir      : $(HOME)/code/wrftools/devel  
-scripts_dir       : "%(base_dir)/scripts"                             # location of job submission template scripts
+#scripts_dir       : "%(base_dir)/scripts"                             # location of job submission template scripts
+ncl_scripts       : "%(wrftools_dir)/ncl"
 tmp_dir           : $(HOME)/forecasting/tmp                           # temporary directory
 web_dir           : $(HOME)/WWW/forecast                              # convenience for copying plots
 wps_dir           : /prog/WPS/3.5                                     # location of WPS code
@@ -118,8 +119,7 @@ prepare.create:
     - "%(working_dir)/wrf"
     - "%(working_dir)/tseries"
     - "%(working_dir)/json"
-    - "%(working_dir)/plots"
-    - "%(working_dir)/rsl"
+    - "%(working_dir)/ncl"
     - "%(working_dir)/wps"
     - "%(working_dir)/log"
 
@@ -127,11 +127,9 @@ prepare.remove:                                                          # list 
     - "%(ncl_log)"
     - "%(gm_log)"
     - "%(wrf_run_dir)/rsl.*"  
-    - "%(wps_run_dir)/ungrib.log*"
-    - "%(wps_run_dir)/metgrid.log*"
-    - "%(wps_run_dir)/geogrid.log*"
-    - "%(working_dir)/plots/%iHZ/*.*"
-    - "%(working_dir)/plots/%iHZ/*.*"
+    - "%(working_dir)/ungrib/ungrib.log*"
+    - "%(working_dir)/metgrid/metgrid.log*"
+    - "%(working_dir)/geogrid/geogrid.log*"
 
 prepare.link:                                                          # list of arguments to consecutive linux ln -sf commands
   - "%(wrf_dir)/run/*.exe            %(wrf_run_dir)"
@@ -158,7 +156,8 @@ prepare.copy:                                                           # list o
   - "%(namelist_wps)                %(working_dir)/ungrib_sst"
   - "%(namelist_wps)                %(working_dir)/metgrid"
   - "-r %(template_dir)/*           %(working_dir)"
-
+  - "-r %(ncl_scripts)/*            %(working_dir)/ncl"
+  
 # modify any scripts which need initial times and dates in them
 #prepare.template:
 #  - "%(working_dir)/ungrib/ungrib.sh  %(working_dir)/ungrib/ungrib.sh"
