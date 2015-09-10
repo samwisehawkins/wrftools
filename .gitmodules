@@ -1,3 +1,6 @@
 [submodule "wrftools/confighelper"]
 	path = wrftools/confighelper
 	url = /project/slha/code/confighelper
+[submodule "wrftools/loghelper"]
+	path = wrftools/loghelper
+	url = /project/slha/code/loghelper

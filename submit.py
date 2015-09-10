@@ -37,6 +37,7 @@ import loghelper
 from collections import OrderedDict
 from dateutil import rrule
 from wrftools.confighelper import confighelper as conf
+from wrftools.loghelper import loghelper
 from wrftools import shared
 from wrftools import queue
 from wrftools import substitute

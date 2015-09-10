@@ -122,6 +122,11 @@ jobs:
         run     : true
         script  : "%(working-dir)/wrf/wrf.sh"
         after   : 8
+
+    10:
+        run    : true
+        script : "%(working-dir)/wrf/ncl.sh"
+        
         
     10:
         run     : true

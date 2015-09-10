@@ -15,7 +15,7 @@ from collections import OrderedDict
 from namelist import Namelist, read_namelist
 from queue import QueueError
 import glob
-import loghelper
+from loghelper import loghelper
 import substitute
 import queue
 
@@ -75,7 +75,7 @@ def set_only_stages(config, stages):
 # Logging
 #*****************************************************************
 def get_logger():
-    return loghelper.get_logger(LOGGER)
+    return loghelper.get(LOGGER)
 
 
 def shutdown():

@@ -44,7 +44,7 @@ from wrftools import namelist
 from wrftools import substitute
 from wrftools import templater
 from wrftools.confighelper import confighelper as conf
-from wrftools import loghelper
+from wrftools.loghelper import loghelper
 from wrftools import shared
 
 
@@ -131,9 +131,10 @@ def main():
                 target = expand(entry['target'])
                 logger.debug('%s\t---->\t%s' %(template.ljust(20), target.ljust(20)))
                 namelist = shared.read_namelist(template)
-                for old,new in entry['update'].items():
-                    logger.debug('\t%s\t:\t%s' %(old.ljust(20), expand(new).ljust(20)))
-                    namelist.update(old,expand(new))
+                if entry.get('update'):
+                    for old,new in entry['update'].items():
+                        logger.debug('\t%s\t:\t%s' %(old.ljust(20), expand(new).ljust(20)))
+                        namelist.update(old,expand(new))
                 namelist.to_file(target)
     
     

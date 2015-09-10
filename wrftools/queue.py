@@ -4,12 +4,10 @@
 
 import os
 import time
-import loghelper
+from loghelper import loghelper
 import subprocess
 import random
 from customexceptions import QueueError
-
-
 
 LOGGER='wrftools'     
 
@@ -25,7 +23,7 @@ def qsub(job_script, after_job=None, cwd=None, array=None, dry_run=False):
     Returns:
         @job_id -- the job id returned by the sheduling system system """
  
-    logger = loghelper.get_logger(LOGGER)
+    logger = loghelper.get(LOGGER)
     
     if not os.path.exists(job_script): 
         raise IOError("%s not found" % job_script)
@@ -73,43 +71,6 @@ def qstat(job_id):
     output = proc.stdout.read().rstrip('\n')
     return output
 
-
-
-def test():
-    loghelper.get_logger('wrf_forecast')
-
-    #logger.debug('running test')
-    
-
-    template   = '/home/slha/code/wrftools/devel/queue/template.sge'
-    job_script = '/home/slha/code/wrftools/devel/queue/job.sge'
-    executable = '/home/slha/forecasting/development/run/wrf.exe'
-    run_dir    = '/home/slha/forecasting/development/run'
-    jobname    = 'WRF'
-    qname      = 'all.q'
-    nprocs     = 8
- 
-    replacements = {'<executable>': executable,
-                    '<jobname>': jobname,
-                    '<qname>'  : qname,
-                    '<nprocs>' : nprocs}
-    
-    fill_template(template, job_script, replacements)
-
-    os.chdir(run_dir)
-    job_id = qsub(job_script)
-    
-    for i in range(3):
-        status = qstat(job_id)
-        print status
-        if status==None:
-            'print job not in queue, presume complete'
-            break
-        if 'E' in status:
-            raise QueueError('job %s has queue status of %s' %(job_id, status))
-        
-
-        time.sleep(5)
 
 if __name__ == "__main__":
     test()        
