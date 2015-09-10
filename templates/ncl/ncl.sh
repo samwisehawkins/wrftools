@@ -11,7 +11,7 @@ module add ncl
 module add nco
 module switch ncl/opendap ncl/nodap
 
-
+dom=d`printf "%02d" $SGE_TASK_ID`
 
 #
 # Active comments for SGE 
@@ -24,24 +24,23 @@ module switch ncl/opendap ncl/nodap
 #$ -q all.q
 #$ -pe ompi 1
 #$ -j yes
-#$ -o post.log
+#$ -o visualise.<job-id>.log
 
-dom=d`printf "%02d" $SGE_TASK_ID`
-comp_level=9
-tmp_name="wrfout.tmp"
-wrf_file="wrfout_${dom}*"
+wrf_file="../wrfout_${dom}*"
+ncl_options="../options.ncl"
+
 
 # check we should have exactly one file
 nfiles=`ls -l ${wrf_file} | wc -l`
-if [ $nfiles -eq 1 ]
+if [ $nfiles -ne 1 ]
 then 
-    CMD="nccopy -k4 -d ${comp_level} ${wrf_file} ${tmp_name}"
-    $CMD
-    CMD="mv ${tmp_name} ${wrf_file}"
-    $CMD
-else
     echo "expected one wrfoutput file"
     exit 1
 fi
+
+for script in *.ncl
+do
+    NCL_IN_FILE=${wf_file NCL_OPT_FILE={ncl_options} ncl $script
+done
 
 

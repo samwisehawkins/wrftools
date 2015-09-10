@@ -22,7 +22,7 @@ module switch ncl/opendap ncl/nodap
 #$ -q all.q
 #$ -pe ompi 1
 #$ -j yes
-#$ -o /project/slha/forecasting/test/%iY-%im-%id_%iH/ungrib/ungrib.log
+#$ -o ungrib.log
 
 
 CMD="$MPI_HOME/bin/mpirun --report-bindings ungrib.exe"
