@@ -7,7 +7,20 @@ It is designed to be quickly hackable. There are some tools out there
 which run WRF, but they are not easily modified. This is designed to provide 
 a framework which is easily customised and modified. 
 
-## Quick start
+## Overview
+
+There are two main scripts [prepare.py](prepare.py) and [submit.py](submit.py). 
+[prepare.py](prepare.py) creates the directory structure, updates `namelist.wps` and 
+`namelist.input` files, and puts all of the job-submission scripts into the right place.
+`submit.py` then submits a series of jobs to the scheduler.
+
+A simulation is performed by running:
+```
+python prepare.py --config=<configuration_file> <optional_command_line_args>
+python submit.py --config=<configuration_file> <optional_command_line_args>
+```
+
+## Quick start example
 
 Suppose we want to run a simulation configuration called `myforecast`. Assume WRF is in `$HOME/WRF`, and WPS is in `$HOME/WPS`.
 
@@ -16,11 +29,12 @@ Suppose we want to run a simulation configuration called `myforecast`. Assume WR
     ```
      $>cd ~/code
      $>git clone https://github.com/samwisehawkins/wrftools.git
-     $>git chekout async
+     $>cd wrftools
+     $>git checkout development
     
     ```
     
-2. Create a local base directory
+2. Create a local base directory to hold all simulations
 
     ```
     $>mkdir ~/myforecast
@@ -38,23 +52,36 @@ Suppose we want to run a simulation configuration called `myforecast`. Assume WR
 5. Edit the new `~/myforecast/forecast.yaml` file. In particular set:
  
     ```
-    base_dir          : $(HOME)/forecasting/myforecast
-    working_dir       : "%(base_dir)/%iY-%im-%id_%iH"
+    base_dir          : $(HOME)/forecasting/myforecast              # the base of the directory tree
+    working_dir       : "%(base_dir)/%iY-%im-%id_%iH"               # simulation subdirectories will get named according to initial time
     namelist_wps      : "%(base_dir)/namelist.wps"                  # location of namelist.wps template to use
     namelist_input    : "%(base_dir)/namelist.input"                # location of namelist.input template to use
     wps_dir           : /prog/WPS/3.5                               # location of WPS code
     wrf_dir           : /prog/WRF/3.5        
     ```
     
+Note that some of the settings defined here are not used directly, but are defined for convenience fow when they are used later.  
+I should improve the docs to mark which ones are essential.
+    
+    
 8. Prepare the directories:
+ 
+ Try this without the `--link-boundaries` option first. It is less likely to fail then.
  
     ```
     $> cd ~/myforecast
-    $> python ~/code/wrftools/prepare.py --config=prepare.yaml
+    $> python ~/code/wrftools/prepare.py --config=prepare.yaml --start="%Y-%m-%d %H:%M:%S" --end="%Y-%m-%d %H:%M:%S" --init_interval=<hours>
     ```
 
+Then try with the  `--link-boundaries` flag. 
+    ```
+    $> cd ~/myforecast
+    $> python ~/code/wrftools/prepare.py --config=prepare.yaml --link-boundaries --start="%Y-%m-%d %H:%M:%S" --end="%Y-%m-%d %H:%M:%S" --init_interval=<hours>
+    ```    
 
 ## Configuration
+
+Command-line arguments override config file arguments. 
 
 For explanation of configuration options, see [config/prepare.yaml](config/prepare.yaml).
 

@@ -26,25 +26,27 @@
 
 #***************************************************************
 # Timing
-# To run as operational forecast, set operational to true
-# To reforecast, use start and end time.
+# If no start time is specified, the latest time is calculated
+# from the system time, minus the delay in hours, rounded to the
+# closest cycle time.
+#
+# To run a reforecast or a reanalysis, use start and end time.
 #***************************************************************
 delay              : 3                       # delay in hours to apply to system time
 cycles             : [00, 12]                # round start time to the nearest one of these hours
-start              : 2015-08-06 00:00:00     # first initial time, ignored if operational is true 
+start              : 2015-08-06 00:00:00     # first initial time. Comment out or set to null to use system time
 end                : 2015-08-07 00:00:00     # final *inital time*, not forecast end time
+init_interval      : 24                      # hours betweeen initialisation times
 max_dom            : 2                       # maximum number of nests, this will override namelists
 fcst_hours         : 72                      # length of forecast in hours
 history_interval   : 60                      # minutes between history writes
 bdy_interval       : 3                       # hours between boundary conditions
-init_interval      : 24                      # hours betweeen initialisation times
+
 
 #************************************************
-# Running/exception handling
+# Running
 #************************************************
-dry_run           : false                                  # don't run commands, just log them
-full_trace        : true                                   # log a full stack trace of exceptions
-cmd_timing        : false                                  # print timing information for each command
+dry_run           : false                   # if true don't run commands, just log them
 
 
 #************************************************
@@ -55,10 +57,10 @@ cmd_timing        : false                                  # print timing inform
 #************************************************
 domain            : baseline_europe 
 model             : WRF
-model_run         : test
+model_run         : myforecast
 bdy_conditions    : GFS
 
-metadata          :                        # everything inside "metadata" will be copied into attributes in the wrfout files
+metadata          :                        # no longer used, but could be useful later e.g. for adding attributes to the wrfout files
     domain        : "%(domain)"
     model         : "%(model)"
     model_run     : "%(model_run)"
@@ -70,7 +72,6 @@ metadata          :                        # everything inside "metadata" will b
 base_dir          : $(HOME)/forecasting/%(model_run)
 working_dir       : "%(base_dir)/%iY-%im-%id_%iH"  
 wrftools_dir      : $(HOME)/code/wrftools/devel  
-#scripts_dir       : "%(base_dir)/scripts"                             # location of job submission template scripts
 ncl_scripts       : "%(wrftools_dir)/ncl"
 tmp_dir           : $(HOME)/forecasting/tmp                           # temporary directory
 web_dir           : $(HOME)/WWW/forecast                              # convenience for copying plots
@@ -95,20 +96,20 @@ sst_dir           : /project/data/grib/SST
 #************************************************
 log.name          : wrf_forecast                           # name of logger object
 log.level         : DEBUG                                  # log level to write to file   
-log.file          : "%(base_dir)/forecast.log"             # file to write to
+log.file          : "%(base_dir)/prepare.log"              # file to write to
 log.fmt           : "%(message)s"                          # see logging module for format codes
-log.mail          : true                                   # send an email of log
+log.mail          : false                                  # send an email of logfile
 log.mail.to       : sam.hawkins@vattenfall.com
 log.mail.level    : INFO                                   # level to mail
 log.mail.buffer   : 100000                                 # maximum number of lines in one email
-log.mail.subject  : "Maestro WRF log"                      # subject to use in email 
+log.mail.subject  : "WRF preparation log"                  # subject to use in email 
 
 
 #*************************************************************************************************************************
 # Internals, only modify if you know what you are doing
 #*************************************************************************************************************************
 
-     
+# these subdirectoies will get created     
 prepare.create:
     - "%(working_dir)" 
     - "%(working_dir)/ungrib"
@@ -167,8 +168,10 @@ prepare.copy:                                                           # list o
   
 #**********************************************************************************************
 # Namelist updates
-# will have to extend via an expression to deal with entried which need to be entered max_dom number of times
-# beware, we have no sytnax for specifying end time!
+# This allows custom namelist updates to be defined. It was implemented to allow the flexibility of 
+# working with alternative SST source, which requires ungrib to be run with different prefixes.
+# It currently does not automatically know which updates need to be entered max_dom number of times
+# Also we have no sytnax for specifying end time!
 #**********************************************************************************************
 
 namelist_updates:

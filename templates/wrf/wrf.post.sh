@@ -17,7 +17,7 @@ module switch ncl/opendap ncl/nodap
 # Active comments for SGE 
 #
 #$ -S /bin/bash
-#$ -N visualise
+#$ -N wrf.post
 #$ -v MPI_HOME
 #$ -v LD_LIBRARY_PATH
 #$ -cwd
