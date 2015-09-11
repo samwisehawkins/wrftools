@@ -24,7 +24,7 @@ python submit.py --config=<configuration_file> <optional_command_line_args>
 
 Suppose we want to run a simulation configuration called `myforecast`. Assume WRF is in `$HOME/WRF`, and WPS is in `$HOME/WPS`.
 
-1. Clone wrftools repository and **switch to the async branch** :
+1. Clone wrftools repository and **switch to the development branch** :
     
     ```
      $>cd ~/code
