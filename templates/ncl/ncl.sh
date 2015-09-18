@@ -40,7 +40,7 @@ fi
 
 for script in *.ncl
 do
-    NCL_IN_FILE=${wf_file NCL_OPT_FILE={ncl_options} ncl $script
+    NCL_IN_FILE=${wf_file} NCL_OPT_FILE={ncl_options} ncl $script
 done
 
 

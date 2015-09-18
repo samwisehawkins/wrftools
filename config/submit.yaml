@@ -42,7 +42,7 @@ log.mail.subject  : "Maestro WRF log"                      # subject to use in e
 delay              : 3                       # delay in hours to apply to system time
 cycles             : [00, 12]                # round start time to the nearest one of these hours
 start              : 2015-08-06 00:00:00     # first initial time, ignored if operational is true 
-end                : 2015-08-06 00:00:00     # final *inital time*, not forecast end time
+end                : 2015-08-07 00:00:00     # final *inital time*, not forecast end time
 max_dom            : 2                       # maximum number of nests, this will override namelists
 fcst_hours         : 72                      # length of forecast in hours
 history_interval   : 60                      # minutes between history writes

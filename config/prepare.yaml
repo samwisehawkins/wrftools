@@ -35,7 +35,7 @@
 delay              : 3                       # delay in hours to apply to system time
 cycles             : [00, 12]                # round start time to the nearest one of these hours
 start              : 2015-08-06 00:00:00     # first initial time. Comment out or set to null to use system time
-end                : 2015-08-07 00:00:00     # final *inital time*, not forecast end time
+end                : 2015-08-08 00:00:00     # final *inital time*, not forecast end time
 init_interval      : 24                      # hours betweeen initialisation times
 max_dom            : 2                       # maximum number of nests, this will override namelists
 fcst_hours         : 72                      # length of forecast in hours
@@ -57,7 +57,7 @@ dry_run           : false                   # if true don't run commands, just l
 #************************************************
 domain            : baseline_europe 
 model             : WRF
-model_run         : myforecast
+model_run         : test
 bdy_conditions    : GFS
 
 metadata          :                        # no longer used, but could be useful later e.g. for adding attributes to the wrfout files
