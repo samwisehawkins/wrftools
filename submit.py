@@ -2,7 +2,7 @@
 
 Config comes from a file, specified as --config argument. Some configuration options (listed below) 
 can also be given at the command line, where they will override the configuration file. 
-See example/templater.yaml for a full list of configuration options. 
+See config/submit.yaml for a full list of configuration options. 
 
 
 Usage:
@@ -17,9 +17,8 @@ Options:
     --end=<time>            an end time for the simulation blocks
     --init-interval=<hours> number of hours between initialistions
     --working-dir=<dir>     working directory specifier which may contain date and time placeholders, see below
-    --template-expr=<expr>  expression in templates which indicates placeholder to be expanded (default <%s>)
     --after-job=<job>       initial job id or job name to be given as as dependency for the first job
-    --parallel-sims=<N>     allow N seperate simulations to be submitted in parrallel, default is 0 (seqential) NOT IMPLEMENTED
+    --parallel              submit simulations in parallel 
     --dry-run               log but don't execute commands
     --log.level=<level>     log level info, debug or warn (see python logging modules)
     --log.format=<fmt>      log format code (see python logging module)
@@ -74,25 +73,36 @@ def main():
         init_times = [init_time]
 
     jobs = config['jobs']
-    import json
-    logger.debug(json.dumps(jobs, indent=4))
+
+    # Note that yaml does not preserve ordering of a dictionary's keys.
+    # So we need to use keys which can be sorted.
     run_jobs = OrderedDict([ (j,jobs[j]) for j in sorted(jobs.keys()) if jobs[j]['run']==True])
-    logger.debug(json.dumps(run_jobs, indent=4))
+
     
-    for init_time in init_times:
+    parallel = config.get('parallel')
+
+    
+    for n,init_time in enumerate(init_times):
         # one-argument function to do initial-time substitution in strings
         expand = lambda s : substitute.sub_date(str(s), init_time=init_time)
-
-        after_job = submit(run_jobs, expand, after_job=after_job, array_job=max_dom, dry_run=dry_run)
+    
+        if parallel:
+            submit(run_jobs, expand, array_job=max_dom, dry_run=dry_run)
+        else:
+            after_job = submit(run_jobs, expand, after_job=after_job, array_job=max_dom, dry_run=dry_run)
         
 
 def submit(jobs, expand, after_job=None, array_job=None, dry_run=False):    
-    """Arguments:
-        jobs: job entry specification as a dictionary
-        expand: function to expand any placeholders in strings
-        after_id: initial job id to specify as depenpency
-        array_job: number of array jobs to submit where specified"""
+    """Submits specicfied jobs to a scheduling engine e.g. SGE
+    
+    Arguments:
+        jobs     : job entry specification as a dictionary
+        expand   : function to expand any placeholders in strings
+        after_id : initial job id to specify as depenpency
+        array_job : number of array jobs to submit where specified
         
+    Returns:
+        The final job_id submitted"""
         
     job_ids = {}
     first=True
