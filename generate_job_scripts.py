@@ -2,7 +2,7 @@
 
 Config comes from a file, specified as --config argument. Some configuration options (listed below) 
 can also be given at the command line, where they will override the configuration file. 
-See example/templater.yaml for a full list of configuration options. 
+
 
 
 Usage:
@@ -24,7 +24,7 @@ LOGGER="wrftools"
 
 import os
 import sys
-import loghelper
+from wrftools.loghelper import loghelper
 from wrftools.confighelper import confighelper as conf
 from wrftools import templater as tm
 
@@ -49,8 +49,8 @@ def main():
         if not os.path.exists(path):
             os.makedirs(path)
         
-        replacements = entry['replacements']
-        tm.fill_template(template,target,replacements)
+        if entry.get('replacements'):
+            tm.fill_template(template,target,entry['replacements'])
         
 if '__main__' in __name__:
     main()

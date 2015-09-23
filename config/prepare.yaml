@@ -47,8 +47,8 @@ bdy_interval       : 3                       # hours between boundary conditions
 # Running
 #************************************************
 dry_run           : false                   # if true don't run commands, just log them
-
-
+link-boundaries   : true                    # if true, look for boundary conditions specified by ungrib sections
+rmtree            : false                   # remove working directories completely 
 #************************************************
 # Metadata. 
 # Used to help compose directory names, and
@@ -87,7 +87,7 @@ geo_em_dir        : "%(working_dir)/geogrid"                    # location of ge
 met_em_dir        : "%(working_dir)/metgrid"                    # location of met_em files
 namelist_wps      : "%(base_dir)/namelist.wps"                  # location of namelist.wps template to use
 namelist_input    : "%(base_dir)/namelist.input"                # location of namelist.input template to use
-template_dir      : "%(wrftools_dir)/templates"                 # location of script templates
+template_dir      : "%(base_dir)/scripts"                       # location of job script templates
 grb_dir           : /project/data/grib/GFS
 sst_dir           : /project/data/grib/SST
 

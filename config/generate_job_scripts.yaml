@@ -20,11 +20,11 @@
 #************************************************
 # Logging
 #************************************************
-log.name          : wrf_forecast                           # name of logger object
+log.name          : generate                               # name of logger object
 log.level         : DEBUG                                  # log level to write to file   
-log.file          : "%(base-dir)/forecast.log"             # file to write to
+log.file          : "%(base-dir)/generate.log"             # file to write to
 log.fmt           : "%(message)s"                          # see logging module for format codes
-log.mail          : true                                   # send an email of log
+log.mail          : false                                  # send an email of log
 log.mail.to       : sam.hawkins@vattenfall.com
 log.mail.level    : INFO                                   # level to mail
 log.mail.buffer   : 100000                                 # maximum number of lines in one email
@@ -34,9 +34,8 @@ log.mail.buffer   : 100000                                 # maximum number of l
 #************************************************
 wrftools-dir      : $(HOME)/code/wrftools/devel
 template-dir      : "%(wrftools-dir)/templates"                 # location of script templates
-base-dir          : $(HOME)/forecasting/test
-target-dir        : "%(base-dir)/scripts"
-working-dir       : "%(base-dir)/%iY-%im-%id_%iH"  
+base-dir          : $(HOME)/forecasting/test                    
+target-dir        : "%(base-dir)/scripts"                       # create job scripts here
 queue             : all.q
 
 jobs:
@@ -45,55 +44,89 @@ jobs:
         target   : "%(target-dir)/ungrib/ungrib.sh"
         replacements: 
             <jobname>    : ungrib
-            <executable> : ungrib.exe
+            <cmd> : ungrib.exe
             <nprocs>     : 1
             <queue>      : "%(queue)"
-            <logfile>    : "%(working-dir)/ungrib/ungrib.log"
+            <logfile>    : "ungrib.log"
 
-            
     2: 
+        template : "%(template-dir)/template_serial.sge"
+        target   : "%(target-dir)/ungrib/ungrib.post.sh"
+        replacements: 
+            <jobname>    : ungrib.post
+            <cmd>        : "mv ???\\:* ../metgrid"
+            <nprocs>     : 1
+            <queue>      : "%(queue)"
+            <logfile>    : "ungrib.post.log"
+            
+            
+    3: 
         template : "%(template-dir)/template_mpi.sge"
         target   : "%(target-dir)/ungrib_sst/ungrib.sh"
         replacements: 
             <jobname>    : ungrib_sst
-            <executable> : ungrib.exe
+            <cmd>        : ungrib.exe
             <nprocs>     : 1
             <queue>      : "%(queue)"
-            <logfile>    : "%(working-dir)/ungrib_sst/ungrib.log"            
+            <logfile>    : "ungrib.log"            
+
+    4: 
+        template : "%(template-dir)/template_mpi.sge"
+        target   : "%(target-dir)/ungrib_sst/ungrib.sh"
+        replacements: 
+            <jobname>    : ungrib_sst
+            <cmd>        : ungrib.exe
+            <nprocs>     : 1
+            <queue>      : "%(queue)"
+            <logfile>    : "ungrib.log"            
             
-    3: 
+    5: 
+        template : "%(template-dir)/template_serial.sge"
+        target   : "%(target-dir)/ungrib_sst/ungrib_sst.post.sh"
+        replacements: 
+            <jobname>    : ungrib_sst.post
+            <nprocs>     : 1
+            <queue>      : "%(queue)"
+            <logfile>    : "ungrib.post.log"
+
+
+            
+    6: 
         template : "%(template-dir)/template_mpi.sge"
         target   : "%(target-dir)/metgrid/metgrid.sh"
         replacements: 
             <jobname>    : metgrid
-            <executable> : metgrid.exe
+            <cmd>        : metgrid.exe
             <nprocs>     : 1
             <queue>      : "%(queue)"
-            <logfile>    : "%(working-dir)/metgrid/metgrid.log"            
+            <logfile>    : "metgrid.log"            
 
-    4: 
+    7: 
         template : "%(template-dir)/template_mpi.sge"
         target   : "%(target-dir)/wrf/real.sh"
         replacements: 
             <jobname>    : real
-            <executable> : real.exe
+            <cmd>        : real.exe
             <nprocs>     : 1
             <queue>      : "%(queue)"
-            <logfile>    : "%(working-dir)/wrf/real.log"            
+            <logfile>    : "real.log"            
 
-    5: 
+    8: 
         template : "%(template-dir)/template_mpi.sge"
         target   : "%(target-dir)/wrf/wrf.sh"
         replacements: 
             <jobname>    : wrf
-            <executable> : wrf.exe
+            <cmd>        : wrf.exe
             <nprocs>     : 40
             <queue>      : "%(queue)"
-            <logfile>    : "%(working-dir)/wrf/wrf.log"
+            <logfile>    : "wrf.log"
             
-    6: 
-        template : "%(template-dir)/template_mpi.sge"
-        target   : "%(target-dir)/options.ncl"
-        replacements: 
-            <base-dir>    : wrf
+    9: 
+        template : "%(template-dir)/wrf/wrf.post.sh"
+        target   : "%(target-dir)/wrf/wrf.post.sh"
+
+
+    10: 
+        template : "%(template-dir)/ncl/ncl.sh"
+        target   : "%(target-dir)/ncl/ncl.sh"
             
