@@ -61,13 +61,11 @@ dry-run           : false                                  # don't run commands,
 # are also added as attributes to the output netcdf
 # files. 
 #************************************************
-domain            : baseline_europe 
 model             : WRF
-model_run         : test
+model_run         : $(PWD)
 bdy_conditions    : GFS
 
 metadata          :                        # everything inside "metadata" will be copied into attributes in the wrfout files
-    domain        : "%(domain)"
     model         : "%(model)"
     model_run     : "%(model_run)"
     bdy_conditions : "%(bdy_conditions)"
@@ -76,7 +74,7 @@ metadata          :                        # everything inside "metadata" will b
 #************************************************
 # Directory locations  
 #************************************************
-base-dir          : $(HOME)/forecasting/%(model_run)
+base-dir          : $(PWD)
 working-dir       : "%(base-dir)/%iY-%im-%id_%iH"  
 wrftools-dir      : $(HOME)/code/wrftools/devel                       # location of local wrftools repository
             

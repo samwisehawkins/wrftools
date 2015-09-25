@@ -9,10 +9,30 @@ a framework which is easily customised and modified.
 
 ## Overview
 
-There are two main scripts [prepare.py](prepare.py) and [submit.py](submit.py). 
+Everything here is referred to from a `base-directory`. This is the directory which will contain the top-level
+namelist files, and the master job scripts. Individual simulations are held in subdirectories named according to date
+e.g. 
+```
+    base_dir/namelist.wps              # master namelist templates
+    base_dir/namelist.input
+    base_dir/scripts                   # master script templates
+    base_dir/2015-01-01_00             # simulation directory
+    base_dir/2015-01-02_00             # simulation directory
+```    
+    
+Simulation directories are referred to in the configuration files as the `working-dir`. This is a misnomer, and should 
+probably be changed in future. 
+
+There are three main scripts, [initialise.py](initialise.py), [prepare.py](prepare.py) and [submit.py](submit.py). 
+
+[initialise.py](initialise.py) is run as a one-off for a block of simulations. It creates the master job scripts, copies
+example configuration files and links the main python scripts into the `base-dir`. 
+
 [prepare.py](prepare.py) creates the directory structure, updates `namelist.wps` and 
 `namelist.input` files, and puts all of the job-submission scripts into the right place.
 `submit.py` then submits a series of jobs to the scheduler.
+
+There is also a utility script
 
 A simulation is performed by running:
 ```

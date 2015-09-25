@@ -58,12 +58,21 @@ def main():
     # merge command-line and file-specified arguments
     config = conf.config(__doc__, sys.argv[1:])
 
-
     logger = loghelper.create(LOGGER, log_level=config.get('log.level'), log_fmt=config.get('log.format'))
     if config.get('log.file'):
         log_file = config['log.file']
         logger.addHandler(loghelper.file_handler(log_file, config['log.level'], config['log.format']))
         logger.debug('now logging to file')
+    
+    
+    if not os.path.exists(config['namelist_wps']):
+        logger.error("No namelist.input found, %s was specifed as template, but does not exist" % config['namelist_wps'])
+        sys.exit()
+    
+    if not os.path.exists(config['namelist_input']):
+        logger.error("No namelist.input found, %s was specifed as template, but does not exist" % config['namlist_input'])
+        sys.exit()
+    
     
     dry_run = config.get('dry-run')
     rmtree = config.get('rmtree')
@@ -142,45 +151,48 @@ def main():
         # link in input files for all ungrib jobs
         # update namelist.wps to modify start and end time
         
-        if link_boundaries and config.get('ungrib'):
+        if config.get('ungrib'):
             for key,entry in config['ungrib'].items():
                 # apply any delay and rounding to the init_time to get correct time for dataset
                 # note that sometimes it is necessary to use a different time e.g. for SST field is delayed by one day
-                base_time = shared.get_time(init_time, delay=entry.get('delay'), round=entry.get('cycles'))
-                fcst_hours = entry['fcst_hours']
-                bdy_times = shared.get_bdy_times(base_time, fcst_hours, bdy_interval)
-                
-                file_pattern = entry['files']
-                
-                # create an ordered set to ensure filenames only appear once
-                filenames = shared.ordered_set([substitute.sub_date(file_pattern, init_time=base_time, valid_time=t) for t in bdy_times])
-                for f in filenames:
-                    if not os.path.exists(f): 
-                        raise IOError("%s does not exist" % f)
-                
                 run_dir = expand(entry['run_dir'])
+                base_time = shared.get_time(init_time, delay=entry.get('delay'), round=entry.get('cycles'))
+                fcst_hours = int(entry['fcst_hours'])
+                bdy_times = shared.get_bdy_times(base_time, fcst_hours, bdy_interval)
                 namelist = shared.read_namelist(run_dir+"/namelist.wps")
+
+                
+
                 start_str  = base_time.strftime("%Y-%m-%d_%H:%M:%S")
                 end_str    = bdy_times[-1].strftime("%Y-%m-%d_%H:%M:%S")
-
 
                 namelist.update('start_date', [start_str]*max_dom)
                 namelist.update('end_date',   [end_str]*max_dom)
                 namelist.to_file(run_dir+"/namelist.wps")
-
-
-                args = ' '.join(filenames)
-                cmd = '%s/link_grib.csh %s' %(run_dir,args)
-                shared.run_cmd(cmd, dry_run=dry_run, cwd=run_dir, log=False)
                 
                 # link in vtable
                 vtable = entry['vtable']
                 cmd = "%s %s/Vtable" % (vtable, run_dir)
                 shared.link(cmd, dry_run=dry_run)
+           
+
+                if link_boundaries:
+           
+                    file_pattern = entry['files']
+                    
+                    # create an ordered set to ensure filenames only appear once
+                    filenames = shared.ordered_set([substitute.sub_date(file_pattern, init_time=base_time, valid_time=t) for t in bdy_times])
+                    for f in filenames:
+                        if not os.path.exists(f): 
+                            raise IOError("%s does not exist" % f)
+                    
+
+
+                    args = ' '.join(filenames)
+                    cmd = '%s/link_grib.csh %s' %(run_dir,args)
+                    shared.run_cmd(cmd, dry_run=dry_run, cwd=run_dir, log=False)
                 
-                # update namlist.wps
-                namelist.update('prefix', entry['prefix'])
-                namelist.to_file(run_dir+'/namelist.wps')
+                
         
         
         

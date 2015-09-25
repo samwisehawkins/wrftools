@@ -1,0 +1,151 @@
+#***************************************************************
+# Configuration file for initialising WRF simulation base directory
+#
+# The approach is to create a base directory, which will hold a collection 
+# of simulation directories which all share the same major namelist options.
+# Initialisation will also create a set of 'master' job scripts which will also 
+# get copied into the simulation directories. These job scripts can be added to 
+# and edited by hand to do more complex operations.
+#
+# 
+# Environment variables can be accessed using $(var) syntax
+# Local variables defined elswhere in this configuration file can be 
+# accessed using %(var) syntax.  If the variable inside $() or %() 
+# is not defined within the current environment, it will not be expanded.
+#
+# Due to the syntax of yaml, entries cannot begin with %; 
+# to start an entry with a local variable reference, enclose 
+# the entry in quotation marks, see examples below.
+#
+#***************************************************************
+
+#************************************************
+# Logging
+#************************************************
+log.name          : wrftools                               # name of logger object
+log.level         : DEBUG                                  # log level to write to file   
+log.file          : "%(base_dir)/prepare.log"              # file to write to
+log.fmt           : "%(message)s"                          # see logging module for format codes
+log.mail          : false                                  # send an email of logfile
+log.mail.to       : sam.hawkins@vattenfall.com
+log.mail.level    : INFO                                   # level to mail
+log.mail.buffer   : 100000                                 # maximum number of lines in one email
+log.mail.subject  : "WRF preparation log"                  # subject to use in email 
+
+
+#************************************************
+# Metadata. 
+# Used to help compose directory names, and
+# are also added as attributes to the output netcdf
+# files. 
+#************************************************
+model             : WRF
+model_run         : $(PWD)
+bdy_conditions    : GFS
+
+metadata          :                        # no longer used, but could be useful later e.g. for adding attributes to the wrfout files
+    model         : "%(model)"
+    model_run     : "%(model_run)"
+    bdy_conditions : "%(bdy_conditions)"
+
+#************************************************
+# Directory locations  
+#************************************************
+base_dir          : $(PWD)                                             # this will be taken from current working direcory
+wrftools_dir      : $(HOME)/code/wrftools/devel  
+ncl_scripts       : "%(wrftools_dir)/ncl"
+template_dir      : "%(wrftools_dir)/templates"                       # location of job script templates
+target_dir        : "%(base_dir)/scripts"                             # create 'master' job scripts here
+
+
+
+#*************************************************************************************************************************
+# Internals, only modify if you know what you are doing
+#*************************************************************************************************************************
+
+# these subdirectoies will get created     
+initialise.create:
+    - "%(base_dir)" 
+    - "%(target_dir)"
+
+initialise.remove:
+    - "%(base_dir)/prepare.py"                                           # list of arguments to consecutive linux rm commands. Be careful!
+    - "%(base_dir)/submit.py"
+
+initialise.link:                                                          # list of arguments to consecutive linux ln -sf commands
+  - "%(wrftools_dir)/prepare.py     %(base_dir)"
+  - "%(wrftools_dir)/submit.py      %(base_dir)"
+
+initialise.copy:                                                           # list of arguments to consecutive linux cp commands
+  - "%(wrftools_dir)/config/prepare.yaml     %(base_dir)"
+  - "%(wrftools_dir)/config/submit.yaml      %(base_dir)"
+  - "-r %(template_dir)/*                    %(target_dir)"
+  - "-r %(ncl_scripts)/*                     %(target_dir)/ncl"
+  
+
+queue             : all.q
+
+jobs:
+    1: 
+        template : "%(template_dir)/template_mpi.sge"
+        target   : "%(target_dir)/ungrib/ungrib.sh"
+        replacements: 
+            <jobname>    : ungrib
+            <cmd> : ungrib.exe
+            <nprocs>     : 1
+            <queue>      : "%(queue)"
+            <logfile>    : "ungrib.log"
+
+            
+    2: 
+        template : "%(template_dir)/template_mpi.sge"
+        target   : "%(target_dir)/ungrib_sst/ungrib.sh"
+        replacements: 
+            <jobname>    : ungrib_sst
+            <cmd> : ungrib.exe
+            <nprocs>     : 1
+            <queue>      : "%(queue)"
+            <logfile>    : "ungrib.log"            
+            
+    3: 
+        template : "%(template_dir)/template_mpi.sge"
+        target   : "%(target_dir)/metgrid/metgrid.sh"
+        replacements: 
+            <jobname>    : metgrid
+            <cmd> : metgrid.exe
+            <nprocs>     : 1
+            <queue>      : "%(queue)"
+            <logfile>    : "metgrid.log"            
+
+    4: 
+        template : "%(template_dir)/template_mpi.sge"
+        target   : "%(target_dir)/wrf/real.sh"
+        replacements: 
+            <jobname>    : real
+            <cmd> : real.exe
+            <nprocs>     : 1
+            <queue>      : "%(queue)"
+            <logfile>    : "real.log"            
+
+    5: 
+        template : "%(template_dir)/template_mpi.sge"
+        target   : "%(target_dir)/wrf/wrf.sh"
+        replacements: 
+            <jobname>    : wrf
+            <cmd> : wrf.exe
+            <nprocs>     : 40
+            <queue>      : "%(queue)"
+            <logfile>    : "wrf.log"
+            
+
+    6: 
+        template : "%(template_dir)/ncl/ncl.sh"
+        target   : "%(target_dir)/ncl/ncl.sh"
+        replacements: 
+            <jobname>    : ncl
+            <nprocs>     : 1
+            <queue>      : "%(queue)"
+            <logfile>    : "ncl.log"
+            
+            
+            
