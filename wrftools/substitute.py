@@ -41,8 +41,8 @@ def date_replacements(init_time=None, valid_time=None, end_time=None):
         result['%iS'] = Si
 
     if valid_time:
-        yv  = str(init_time.year)[2:]
-        Yv  = str(init_time.year)
+        yv  = str(valid_time.year)[2:]
+        Yv  = str(valid_time.year)
         mv  = '%02d' % valid_time.month
         dv  = '%02d' % valid_time.day
         Hv  = '%02d' % valid_time.hour
