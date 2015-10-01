@@ -19,48 +19,37 @@
 #
 #***************************************************************
 
+
 #************************************************
 # Logging
 #************************************************
 log.name          : wrftools                               # name of logger object
 log.level         : DEBUG                                  # log level to write to file   
-log.file          : "%(base_dir)/prepare.log"              # file to write to
+log.file          : "%(base_dir)/init.log"                 # file to write to
 log.fmt           : "%(message)s"                          # see logging module for format codes
-log.mail          : false                                  # send an email of logfile
-log.mail.to       : sam.hawkins@vattenfall.com
-log.mail.level    : INFO                                   # level to mail
-log.mail.buffer   : 100000                                 # maximum number of lines in one email
-log.mail.subject  : "WRF preparation log"                  # subject to use in email 
 
 
 #************************************************
 # Metadata. 
-# Used to help compose directory names, and
-# are also added as attributes to the output netcdf
-# files. 
+# added as attributes to the output netcdf files. 
 #************************************************
-model             : WRF
 model_run         : $(PWD)
 bdy_conditions    : GFS
 
-metadata          :                        # no longer used, but could be useful later e.g. for adding attributes to the wrfout files
-    model         : "%(model)"
-    model_run     : "%(model_run)"
-    bdy_conditions : "%(bdy_conditions)"
-
+    
 #************************************************
 # Directory locations  
 #************************************************
 base_dir          : $(PWD)                                             # this will be taken from current working direcory
 wrftools_dir      : $(HOME)/code/wrftools/devel  
-ncl_scripts       : "%(wrftools_dir)/ncl"
-template_dir      : "%(wrftools_dir)/templates"                       # location of job script templates
-target_dir        : "%(base_dir)/scripts"                             # create 'master' job scripts here
+ncl_scripts       : "%(wrftools_dir)/ncl"                              # NCL visualisation scripts
+template_dir      : "%(wrftools_dir)/templates"                        # location of job script templates
+target_dir        : "%(base_dir)/scripts"                              # create 'master' job scripts for collection of simulations
 
 
 
 #*************************************************************************************************************************
-# Internals, only modify if you know what you are doing
+# Copy and linking
 #*************************************************************************************************************************
 
 # these subdirectoies will get created     
@@ -69,7 +58,7 @@ initialise.create:
     - "%(target_dir)"
 
 initialise.remove:
-    - "%(base_dir)/prepare.py"                                           # list of arguments to consecutive linux rm commands. Be careful!
+    - "%(base_dir)/prepare.py"                                            # list of arguments to consecutive linux rm commands. Be careful!
     - "%(base_dir)/submit.py"
 
 initialise.link:                                                          # list of arguments to consecutive linux ln -sf commands
@@ -79,19 +68,26 @@ initialise.link:                                                          # list
 initialise.copy:                                                           # list of arguments to consecutive linux cp commands
   - "%(wrftools_dir)/config/prepare.yaml     %(base_dir)"
   - "%(wrftools_dir)/config/submit.yaml      %(base_dir)"
-  - "-r %(template_dir)/*                    %(target_dir)"
+#  - "-r %(template_dir)/*                    %(target_dir)"
   - "-r %(ncl_scripts)/*                     %(target_dir)/ncl"
   
 
-queue             : all.q
 
+
+
+#************************************************
+# Create master job scrips.
+# Each entry consists of a template file, a set of replacements to apply, 
+# and a target file to write to
+#************************************************
+queue             : all.q
 jobs:
     1: 
         template : "%(template_dir)/template_mpi.sge"
         target   : "%(target_dir)/ungrib/ungrib.sh"
         replacements: 
             <jobname>    : ungrib
-            <cmd> : ungrib.exe
+            <cmd>        : ungrib.exe
             <nprocs>     : 1
             <queue>      : "%(queue)"
             <logfile>    : "ungrib.log"
@@ -102,7 +98,7 @@ jobs:
         target   : "%(target_dir)/ungrib_sst/ungrib.sh"
         replacements: 
             <jobname>    : ungrib_sst
-            <cmd> : ungrib.exe
+            <cmd>        : ungrib.exe
             <nprocs>     : 1
             <queue>      : "%(queue)"
             <logfile>    : "ungrib.log"            
@@ -112,7 +108,7 @@ jobs:
         target   : "%(target_dir)/metgrid/metgrid.sh"
         replacements: 
             <jobname>    : metgrid
-            <cmd> : metgrid.exe
+            <cmd>        : metgrid.exe
             <nprocs>     : 1
             <queue>      : "%(queue)"
             <logfile>    : "metgrid.log"            
@@ -122,7 +118,7 @@ jobs:
         target   : "%(target_dir)/wrf/real.sh"
         replacements: 
             <jobname>    : real
-            <cmd> : real.exe
+            <cmd>        : real.exe
             <nprocs>     : 1
             <queue>      : "%(queue)"
             <logfile>    : "real.log"            
@@ -136,9 +132,20 @@ jobs:
             <nprocs>     : 40
             <queue>      : "%(queue)"
             <logfile>    : "wrf.log"
-            
+
+
 
     6: 
+        template : "%(template_dir)/wrf/wrf.post.sh"
+        target   : "%(target_dir)/wrf/wrf.post.sh"
+        replacements: 
+            <jobname>    : wrf.post
+            <queue>      : "%(queue)"
+            <logfile>    : "wrf.post.log"
+            <attributes> : -a MODEL_RUN,global,c,c,"%(model_run)" -a BOUNDARY_CONDITIONS,global,c,c,"%(bdy_conditions)"
+
+
+    7: 
         template : "%(template_dir)/ncl/ncl.sh"
         target   : "%(target_dir)/ncl/ncl.sh"
         replacements: 
@@ -146,6 +153,20 @@ jobs:
             <nprocs>     : 1
             <queue>      : "%(queue)"
             <logfile>    : "ncl.log"
+
+    8: 
+        template : "%(template_dir)/ncl/tseries.sh"
+        target   : "%(target_dir)/ncl/tseries.sh"
+        replacements: 
+            <jobname>    : tseries
+            <nprocs>     : 1
+            <queue>      : "%(queue)"
+            <logfile>    : "ncl.log"
+
+
             
-            
-            
+    8: 
+        template     : "%(template_dir)/finalise.sh"
+        target       : "%(target_dir)/finalise.sh"
+        <jobname>    : finalise
+        <logfile>    : finalise.log

@@ -182,9 +182,13 @@ def main():
                     
                     # create an ordered set to ensure filenames only appear once
                     filenames = shared.ordered_set([substitute.sub_date(file_pattern, init_time=base_time, valid_time=t) for t in bdy_times])
+                    missing_files = []
                     for f in filenames:
                         if not os.path.exists(f): 
-                            raise IOError("%s does not exist" % f)
+                            logger.error("%s \t missing" % f)
+                    
+                    if missing_files!=[]:
+                        raise IOError("some files could not be found")
                     
 
 

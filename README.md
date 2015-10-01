@@ -1,17 +1,20 @@
-README
+wrftools
 --------
 
 A framework for running WRF simulations.
 
-It is designed to be quickly hackable. There are some tools out there
+It is designed to be flexible and extendable. There are some tools out there
 which run WRF, but they are not easily modified. This is designed to provide 
 a framework which is easily customised and modified. 
 
 ## Overview
 
-Everything here is referred to from a `base-directory`. This is the directory which will contain the top-level
+There are three main scripts, [init.py](init.py), [prepare.py](prepare.py) and [submit.py](submit.py). 
+
+Each block of simulations are run from a `base_dir`. This is the directory which will contain the top-level
 namelist files, and the master job scripts. Individual simulations are held in subdirectories named according to date
 e.g. 
+
 ```
     base_dir/namelist.wps              # master namelist templates
     base_dir/namelist.input
@@ -19,87 +22,96 @@ e.g.
     base_dir/2015-01-01_00             # simulation directory
     base_dir/2015-01-02_00             # simulation directory
 ```    
+
+
+## Install
+
+It relies on submodules, use the `--recursive` option to grab them.
     
-Simulation directories are referred to in the configuration files as the `working-dir`. This is a misnomer, and should 
-probably be changed in future. 
+    ```
+     $>git clone --recursive -b development https://github.com/samwisehawkins/wrftools.git
+    ```
 
-There are three main scripts, [initialise.py](initialise.py), [prepare.py](prepare.py) and [submit.py](submit.py). 
 
-[initialise.py](initialise.py) is run as a one-off for a block of simulations. It creates the master job scripts, copies
-example configuration files and links the main python scripts into the `base-dir`. 
+## Configuration files
+    
+The configuration files are yaml, with an extended syntax to allow environment variables,
+local variables and date placeholders to be used in the files. See [Configuration](##configuration) for more details.
+A subset of configuration file options can be overriden at the command-line, use the `--help` flag with each script to 
+see the available command-line options.
 
-[prepare.py](prepare.py) creates the directory structure, updates `namelist.wps` and 
-`namelist.input` files, and puts all of the job-submission scripts into the right place.
-`submit.py` then submits a series of jobs to the scheduler.
+    
+## Step 1: Initialise
 
-There is also a utility script
 
-A simulation is performed by running:
+[init.py](init.py) is run once per block of simulations. It creates the master job scripts, copies
+configuration files and links the main python scripts into the `base_dir`.
+
+First create the `base_dir` and copy in a `namelist.wps` and `namelist.input`.
+
+    ```
+    mkdir mysimulations
+    cp namelist.input namelist.wps mysimulations
+    cp /path/to/wrftools/config/init.yaml mysimulations
+    ```
+    
+If needed, edit the `init.yaml` file. See [init.yaml](config/init.yaml) for annotated example. The main purpose of  `init.py` 
+is to create a subdirectory of *master scripts* which will be used to run each simulation within a block.  Check the 'jobs' entry of `init.yaml` 
+to see how these job scripts are created.
+
+    
+    ```
+    cd mysimulations
+    python /path/to/wrftools/init.py --config=init.yaml
+    ```
+
+Generation of master scripts is configured by the jobs entry within `init.yaml`. Each sub-entry specifies a 
+job template file, a set of replacements to apply, and a target file to write to.  By default these 'master scripts'
+are generated within `base_dir/scripts`. 
+    
+These master scripts can then be edited by hand to provide more control and customisation for whatever post-processing and renaming etc you require. 
+These master scripts will get copied and used within each simulation directory, within the same subdirectories e.g.
+
 ```
-python prepare.py --config=<configuration_file> <optional_command_line_args>
-python submit.py --config=<configuration_file> <optional_command_line_args>
-```
-
-## Quick start example
-
-Suppose we want to run a simulation configuration called `myforecast`. Assume WRF is in `$HOME/WRF`, and WPS is in `$HOME/WPS`.
-
-1. Clone wrftools repository and **switch to the development branch** :
+    base_dir/scripts/wrf/wrf.sh       ----->        simulation_dir/wrf/wrf.sh
+```    
     
-    ```
-     $>cd ~/code
-     $>git clone https://github.com/samwisehawkins/wrftools.git
-     $>cd wrftools
-     $>git checkout development
-    
-    ```
-    
-2. Create a local base directory to hold all simulations
+## Step 2: Prepare
+
+[prepare.py](prepare.py) creates the simulation directories, updates `namelist.wps` and 
+`namelist.input` files, and copies all of the job submission scripts from the master script directory
+into the simulation directories. 
+
+1. Edit `prepare.yaml` to set various directory locations, start time, end time etc. See [config/prepare.yaml](config/prepare.yaml) 
+for an example. 
 
     ```
-    $>mkdir ~/myforecast
-    ```
-
-3. Copy namelist files so you have a `~/myforecast/namelist.wps` and `~/myforecast/namelist.input` files as templates
- 
- 
-4. Copy the configuration file `~/code/wrftools/config/prepare.yaml` into the base directory
- 
-    ```
-     $>cp ~/code/wrftools/config/prepare.yaml ~/myforecast
+    python prepare.py --config=prepare.yaml
     ```
      
-5. Edit the new `~/myforecast/forecast.yaml` file. In particular set:
+    
+2. `Run prepare.py`
+ 
+Try first without `--link-boundaries` option; it is less likely to fail.
  
     ```
-    base_dir          : $(HOME)/forecasting/myforecast              # the base of the directory tree
-    working_dir       : "%(base_dir)/%iY-%im-%id_%iH"               # simulation subdirectories will get named according to initial time
-    namelist_wps      : "%(base_dir)/namelist.wps"                  # location of namelist.wps template to use
-    namelist_input    : "%(base_dir)/namelist.input"                # location of namelist.input template to use
-    wps_dir           : /prog/WPS/3.5                               # location of WPS code
-    wrf_dir           : /prog/WRF/3.5        
-    ```
-    
-Note that some of the settings defined here are not used directly, but are defined for convenience fow when they are used later.  
-I should improve the docs to mark which ones are essential.
-    
-    
-8. Prepare the directories:
- 
- Try this without the `--link-boundaries` option first. It is less likely to fail then.
- 
-    ```
-    $> cd ~/myforecast
-    $> python ~/code/wrftools/prepare.py --config=prepare.yaml --start="%Y-%m-%d %H:%M:%S" --end="%Y-%m-%d %H:%M:%S" --init_interval=<hours>
+    $> cd ~/mysimulations
+    $> python ~/code/wrftools/prepare.py --config=prepare.yaml
     ```
 
+This creates the simulation directories: one for each initial time.  The WRF executables are linked into subdirectories, and the master job scripts
+are copied into the appropriate subdirectories.
+    
 Then try with the  `--link-boundaries` flag. 
+    
     ```
-    $> cd ~/myforecast
-    $> python ~/code/wrftools/prepare.py --config=prepare.yaml --link-boundaries --start="%Y-%m-%d %H:%M:%S" --end="%Y-%m-%d %H:%M:%S" --init_interval=<hours>
+    $> python prepare.py --config=prepare.yaml --link-boundaries
     ```    
 
-## Configuration
+This checks whether the boundary conditions exist and links     
+    
+    
+## Notes on configuration
 
 Command-line arguments override config file arguments. 
 

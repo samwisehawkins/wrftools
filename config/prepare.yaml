@@ -41,14 +41,14 @@ max_dom            : 2                       # maximum number of nests, this wil
 fcst_hours         : 72                      # length of forecast in hours
 history_interval   : 60                      # minutes between history writes
 bdy_interval       : 3                       # hours between boundary conditions
-simulation_len     : 72
+simulation_len     : 72                      # total simulation length in hours
 
 #************************************************
 # Running
 #************************************************
 dry_run           : false                   # if true don't run commands, just log them
-link-boundaries   : true                    # if true, look for boundary conditions specified by ungrib sections
-rmtree            : false                   # remove working directories completely 
+link-boundaries   : true                    # if true, link in boundary conditions specified by ungrib sections
+rmtree            : false                   # remove simulation directories first
 
 
 #************************************************
@@ -73,13 +73,8 @@ metadata          :                        # no longer used, but could be useful
 base_dir          : $(PWD)
 working_dir       : "%(base_dir)/%iY-%im-%id_%iH"  
 wrftools_dir      : $(HOME)/code/wrftools/devel  
-ncl_scripts       : "%(wrftools_dir)/ncl"
-tmp_dir           : $(HOME)/forecasting/tmp                           # temporary directory
-web_dir           : $(HOME)/WWW/forecast                              # convenience for copying plots
 wps_dir           : /prog/WPS/3.5                                     # location of WPS code
 wrf_dir           : /prog/WRF/3.5                                     # location of WRF code 
-wrfout_dir        : "%(working_dir)/wrfout"                           # move wrfout files here after WRF has completed 
-wps_run_dir       : "%(working_dir)/wps"                              # subdirectory to run WPS from; namelists and grib files will be linked here
 real_run_dir      : "%(working_dir)/real"
 geogrid_run_dir   : "%(working_dir)/geogrid"
 metgrid_run_dir   : "%(working_dir)/metgrid"
@@ -88,9 +83,9 @@ geo_em_dir        : "%(working_dir)/geogrid"                    # location of ge
 met_em_dir        : "%(working_dir)/metgrid"                    # location of met_em files
 namelist_wps      : "%(base_dir)/namelist.wps"                  # location of namelist.wps template to use
 namelist_input    : "%(base_dir)/namelist.input"                # location of namelist.input template to use
-template_dir      : "%(base_dir)/scripts"                       # location of job script templates
-grb_dir           : /project/data/grib/GFS
-sst_dir           : /project/data/grib/SST
+template_dir      : "%(base_dir)/scripts"                       # location of master job scripts
+grb_dir           : /project/data/grib/GFS                      # used in ungrib sections   
+sst_dir           : /project/data/grib/SST                      # used in ungrib section
 
 #************************************************
 # Logging
@@ -158,7 +153,7 @@ prepare.copy:                                                           # list o
   - "%(namelist_wps)                %(working_dir)/ungrib_sst"
   - "%(namelist_wps)                %(working_dir)/metgrid"
   - "-r %(template_dir)/*           %(working_dir)"
-  - "-r %(ncl_scripts)/*            %(working_dir)/ncl"
+
   
 # modify any scripts which need initial times and dates in them
 #prepare.template:
@@ -204,8 +199,8 @@ namelist_updates:
             constants_name: "SST:yesterday"  
   
 #**********************************************************************************************
-# Ungrib bondary condition job specifications
-# 
+# Ungrib bondary condition job specifications. Allows ungrib to be run with different
+# namelist.wps settings, such as different simulation length and start and end dates
 #**********************************************************************************************
             
 ungrib:
@@ -213,7 +208,7 @@ ungrib:
         files     : "%(grb_dir)/GFS_Global_0p5deg_%iy%im%id_%iH%iM_fh%fH.grb"             # boundary condition file name specifiers
         delay     : 0                                                                     # any additional delay to apply to initial time e.g. delayed SST fields
         cycles    : [0,6,12,18]                                                           # restrict initial time to these hours
-        fcst_hours: "%(simulation_len)"                                                       # allow different simulaton length for each ungrib task
+        fcst_hours: "%(simulation_len)"                                                   # allow different simulaton length for each ungrib task
         vtable    : "%(wps_dir)/ungrib/Variable_Tables/Vtable.GFS_new"                    # Vtable to use
         run_dir   : "%(working_dir)/ungrib"                                               # directory to run from 
 

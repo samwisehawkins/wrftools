@@ -17,18 +17,21 @@ dom=d`printf "%02d" $SGE_TASK_ID`
 # Active comments for SGE 
 #
 #$ -S /bin/bash
-#$ -N visualise
+#$ -N <jobname>
 #$ -v MPI_HOME
 #$ -v LD_LIBRARY_PATH
 #$ -cwd
 #$ -q all.q
 #$ -pe ompi 1
 #$ -j yes
-#$ -o visualise.<job-id>.log
+#$ -o <logname>
 
-wrf_file="../wrfout_${dom}*"
+# Script to run NCL visualisations. Expects to be run as an array job with one task per domain.
+# This will run ncl with every .ncl file in the directory. 
+
+wrf_file="../wrf/wrfout_${dom}*"
 ncl_options="../options.ncl"
-
+ncl_out_dir="../plots"
 
 # check we should have exactly one file
 nfiles=`ls -l ${wrf_file} | wc -l`
@@ -38,9 +41,10 @@ then
     exit 1
 fi
 
-for script in *.ncl
+# modify this if you don't want to run with every single .ncl within the directory
+for script in wrf_*.ncl
 do
-    NCL_IN_FILE=${wf_file} NCL_OPT_FILE={ncl_options} ncl $script
+    NCL_IN_FILE=${wrf_file}.nc NCL_OUT_DIR=${ncl_out_dir} NCL_OPT_FILE=${ncl_options} ncl $script
 done
 
 
