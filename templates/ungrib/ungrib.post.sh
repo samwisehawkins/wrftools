@@ -4,7 +4,6 @@
 
 # Module stuff
 module load netcdf
-module load szip
 module load sge
 module load openmpi
 module add ncl
@@ -24,7 +23,8 @@ module switch ncl/opendap ncl/nodap
 #$ -j yes
 #$ -o ungrib.post.log
 
-CMD="mv GFS\:* ../metgrid"
+# assumes that the ungrib output files have a three letter prefix followed by a colon
+CMD="mv ???\:* ../metgrid"
 echo $CMD
 $CMD
 

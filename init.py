@@ -5,7 +5,7 @@ can also be given at the command line, where they will override the configuratio
 
 
 Usage:
-    initialise.py [--config=<file>] [options]
+    init.py [--config=<file>] [options]
     
 Options:
     --base_dir=<dir>        directory to initialise (specify at command line, not in file)
@@ -20,11 +20,30 @@ Options:
 The above options can all be given at the command line. Jobs must be specified inside a configuration file. See config/initialise.yaml for
 an example"""
 
+
+NEXT_STEPS = """base directory %s initialised. Next do the following: 
+
+1. Copy namelist.wps and namelist.input files into the base directory. 
+
+2. Check and edit the master scripts inside %s/scripts
+
+3. Edit prepare.yaml 
+
+4. $>python prepare.py --config=prepare.yaml --link-boundaries
+
+5. Check directory structure
+
+6. Edit submit.yaml
+
+7. $>python submit.py --config=submit.yaml"""
+
+
 LOGGER="wrftools"
 
 import os
 import sys
 import subprocess
+import shutil
 from wrftools.loghelper import loghelper
 from wrftools.confighelper import confighelper as conf
 from wrftools import templater as tm
@@ -38,7 +57,8 @@ def main():
     if config.get('log.file'):
         log_file = config['log.file']
         logger.addHandler(loghelper.file_handler(log_file, config['log.level'], config['log.format']))
-        
+    
+    base_dir = config['base_dir']
     wrftools_dir = config['wrftools_dir']
     dry_run = config.get('dry_run')
     jobs = config.get('jobs')
@@ -65,7 +85,12 @@ def main():
         for pattern in link:
             shared.link(pattern, dry_run=dry_run)
 
-
+    logger.debug("init.py done")
+    print "\n\n"
+    print "************************************************"
+    print NEXT_STEPS % (base_dir,base_dir)
+    print "************************************************"
+            
     
 def generate_job_scripts(jobs):
     logger = loghelper.get(LOGGER)
@@ -80,6 +105,8 @@ def generate_job_scripts(jobs):
         
         if entry.get('replacements'):
             tm.fill_template(template,target,entry['replacements'])
+        else:
+            shutil.copyfile(template, target)
         
 if '__main__' in __name__:
     main()

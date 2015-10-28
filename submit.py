@@ -74,14 +74,15 @@ def main():
 
     jobs = config['jobs']
 
+
     # Note that yaml does not preserve ordering of a dictionary's keys.
     # So we need to use keys which can be sorted.
-    run_jobs = OrderedDict([ (j,jobs[j]) for j in sorted(jobs.keys()) if jobs[j]['run']==True])
+    run_jobs = OrderedDict([ (j,jobs[j]) for j in sorted(jobs.keys()) if jobs[j]['run']])
 
     
     parallel = config.get('parallel')
 
-    
+    after_job=None
     for n,init_time in enumerate(init_times):
         # one-argument function to do initial-time substitution in strings
         expand = lambda s : substitute.sub_date(str(s), init_time=init_time)
@@ -104,9 +105,12 @@ def submit(jobs, expand, after_job=None, array_job=None, dry_run=False):
     Returns:
         The final job_id submitted"""
         
+    logger = loghelper.get(LOGGER)
+    logger.debug("submitting jobs")
     job_ids = {}
     first=True
     for key,entry in jobs.items():
+        logger.debug(key, entry)
         script = expand(entry['script'])
         run_dir = os.path.split(script)[0]
         
@@ -115,7 +119,6 @@ def submit(jobs, expand, after_job=None, array_job=None, dry_run=False):
 
 
         array = array_job if entry.get('per-domain') else None
-
         job_id = queue.qsub(script, after_job=after_job, cwd=run_dir, array=array, dry_run=dry_run)
         job_ids[key] = job_id
         first=False

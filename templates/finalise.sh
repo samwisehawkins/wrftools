@@ -15,19 +15,19 @@ module switch ncl/opendap ncl/nodap
 # Active comments for SGE 
 #
 #$ -S /bin/bash
-#$ -N wrf
+#$ -N finalise
 #$ -v MPI_HOME
 #$ -v LD_LIBRARY_PATH
 #$ -cwd
 #$ -q all.q
-#$ -pe ompi 120
+#$ -pe ompi 1
 #$ -j yes
-#$ -o wrf.log
+#$ -o finalise.log
 
+# Finalise, clean up messy files, do any moving of time-series, plots etc
 
-CMD="$MPI_HOME/bin/mpirun wrf.exe"
- 
-echo $CMD
- 
-$CMD
+mv  wrf/wrfout* ../wrfout/
+mv  tseries/tseries* ../tseries/
+rm metgrid/met_em*
+rm metgrid/???\:*
 

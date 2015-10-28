@@ -36,7 +36,30 @@ begin
     ; due to the way a load statement works in NCL
     ;opt_file   = getenv("NCL_OPT_FILE")
     load "$NCL_OPT_FILE"
+    ncl_in_file = getenv("NCL_IN_FILE")
+    ncl_out_file = getenv("NCL_OUT_FILE")
+    ncl_out_type = getenv("NCL_OUT_TYPE")
+    ncl_loc_file = getenv("NCL_LOC_FILE")
+
 ;******************************************************
+
+    ; test whether filename has .nc extension, and if not
+    ; we add it
+    extension = str_match(ncl_in_file, ".nc")
+    if ismissing(extension) then
+        print("adding file extension")
+        ncl_in_file = ncl_in_file+".nc"
+        print(ncl_in_file)
+    end if
+
+    extension = str_match(ncl_out_file, "."+ncl_out_type)
+    if ismissing(extension) then
+        print("adding file extension")
+        ncl_out_file = ncl_out_file+"."+ncl_out_type
+        print(ncl_out_file)
+    end if
+
+
 
     
 ;******************************************************

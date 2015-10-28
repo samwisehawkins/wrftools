@@ -24,27 +24,30 @@ dom=d`printf "%02d" $SGE_TASK_ID`
 #$ -q all.q
 #$ -pe ompi 1
 #$ -j yes
-#$ -o <logname>
+#$ -o <logfile>
 
 # Script to run NCL visualisations. Expects to be run as an array job with one task per domain.
 # This will run ncl with every .ncl file in the directory. 
 
-wrf_file="../wrf/wrfout_${dom}*"
-ncl_options="../options.ncl"
-ncl_out_dir="../plots"
+files=(wrf/wrfout*)
+index=$(($SGE_TASK_ID - 1))                       # bash arrays are zero-indexed, array jobs start at 1
+ncl_in_file=${files[$index]}
+ncl_options="options.ncl"
+ncl_out_dir="plots"
+ncl_out_type="png"
+ncl_loc_file="locations.csv"
 
-# check we should have exactly one file
-nfiles=`ls -l ${wrf_file} | wc -l`
-if [ $nfiles -ne 1 ]
-then 
-    echo "expected one wrfoutput file"
-    exit 1
+if [[ ${ncl_in_file} =~ *.nc ]]; then
+    ncl_in_file="${ncl_in_file}.nc"
 fi
 
+
+
 # modify this if you don't want to run with every single .ncl within the directory
-for script in wrf_*.ncl
+for script in ncl/wrf_*.ncl
 do
-    NCL_IN_FILE=${wrf_file}.nc NCL_OUT_DIR=${ncl_out_dir} NCL_OPT_FILE=${ncl_options} ncl $script
+    echo "running $script on $ncl_in_file"
+    NCL_IN_FILE=${ncl_in_file}.nc NCL_OUT_DIR=${ncl_out_dir} NCL_OUT_TYPE=${ncl_out_type} NCL_OPT_FILE=${ncl_options} NCL_LOC_FILE=${ncl_loc_file} ncl $script
 done
 
 

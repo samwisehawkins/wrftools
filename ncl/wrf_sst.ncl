@@ -23,6 +23,7 @@ begin
     ncl_in_file = getenv("NCL_IN_FILE")
     ncl_out_dir = getenv("NCL_OUT_DIR")
     ncl_loc_file = getenv("NCL_LOC_FILE")
+    ncl_out_type = getenv("NCL_OUT_TYPE")
 
     prefix   = "sst"
 

@@ -16,14 +16,14 @@ module switch ncl/opendap ncl/nodap
 # Active comments for SGE 
 #
 #$ -S /bin/bash
-#$ -N wrf.pre
+#$ -N <jobname>
 #$ -v MPI_HOME
 #$ -v LD_LIBRARY_PATH
 #$ -cwd
-#$ -q all.q
-#$ -pe ompi 1
+#$ -q <queue>
+#$ -pe ompi <nprocs>
 #$ -j yes
-#$ -o wrf.pre.log
+#$ -o <logname>
 
 ln -sf ../metgrid/met_em* ./
 

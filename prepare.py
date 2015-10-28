@@ -23,7 +23,7 @@ Options:
     --wrf-dir=<dir>         base directory of the WRF installation
     --namelist-wps=<file>   location of namelist.wps template to use, a modified copy will be placed into working_dir
     --namelist-input=<file> location of namelist.input template to use, a modified copy will be places into working_dir
-    --link-boundaries       try to expand ungrib sections and link in appropriate boundary conditions
+    --link-boundaries=<bool> try to expand ungrib sections and link in appropriate boundary conditions
     --rmtree                remove working directory tree first - use with caution!
     --dry-run               log but don't execute commands
     --log.level=<level>     log level info, debug or warn (see python logging modules)
@@ -79,6 +79,9 @@ def main():
     max_dom = config['max_dom']
     bdy_interval = config['bdy_interval']
     fcst_hours = config['fcst_hours']
+    logger.debug(fcst_hours)
+    
+
     history_interval = config['history_interval'] 
     link_boundaries = config.get('link-boundaries')
     
@@ -98,6 +101,8 @@ def main():
 
 
     for init_time in init_times:
+        logger.debug(fcst_hours)
+
         # one-argument function to do initial-time substitution in strings
         expand = lambda s : substitute.sub_date(s, init_time=init_time) if type(s)==type("") else s
         date_replacements = substitute.date_replacements(init_time=init_time)
@@ -115,8 +120,11 @@ def main():
                 target = tokens[1] if len(tokens)>1 else tokens[0]
                 templater.fill_template(source, target, date_replacements)
 
+        logger.debug(fcst_hours)
         
         bdy_times = shared.get_bdy_times(init_time, fcst_hours, bdy_interval)
+        logger.debug(fcst_hours)
+        
         working_namelist = working_dir+"/namelist.wps"
     
         # this can be made cleaner
@@ -127,8 +135,11 @@ def main():
                             config.get('constants_name'))
     
         working_namelist = working_dir+"/namelist.input"
+        logger.debug(fcst_hours)
+        
         update_namelist_input(config['namelist_input'], working_namelist, max_dom, init_time, fcst_hours, history_interval, bdy_interval*60*60, metadata=config.get('metadata'))    
-    
+        logger.debug(fcst_hours)
+        
         # apply any additional specified namelist updates (consider getting rid of this section)
         namelist_updates = config.get('namelist_updates')
         if namelist_updates:
@@ -146,8 +157,8 @@ def main():
                         namelist.update(old,expand(new))
                 namelist.to_file(target)
     
-    
-    
+        logger.debug(fcst_hours)
+
         # link in input files for all ungrib jobs
         # update namelist.wps to modify start and end time
         
@@ -157,11 +168,9 @@ def main():
                 # note that sometimes it is necessary to use a different time e.g. for SST field is delayed by one day
                 run_dir = expand(entry['run_dir'])
                 base_time = shared.get_time(init_time, delay=entry.get('delay'), round=entry.get('cycles'))
-                fcst_hours = int(entry['fcst_hours'])
-                bdy_times = shared.get_bdy_times(base_time, fcst_hours, bdy_interval)
+                ungrib_len = int(entry['ungrib_len'])
+                bdy_times = shared.get_bdy_times(base_time, ungrib_len, bdy_interval)
                 namelist = shared.read_namelist(run_dir+"/namelist.wps")
-
-                
 
                 start_str  = base_time.strftime("%Y-%m-%d_%H:%M:%S")
                 end_str    = bdy_times[-1].strftime("%Y-%m-%d_%H:%M:%S")
@@ -186,6 +195,7 @@ def main():
                     for f in filenames:
                         if not os.path.exists(f): 
                             logger.error("%s \t missing" % f)
+                            missing_files.append(f)
                     
                     if missing_files!=[]:
                         raise IOError("some files could not be found")
@@ -199,7 +209,7 @@ def main():
                 
         
         
-        
+        logger.debug(fcst_hours)
         
 def update_namelist_input(template, target, max_dom, init_time, fcst_hours, history_interval, interval_seconds, metadata=None):    
     """ Updates the namelist.input file to reflect updated settings in config.
@@ -211,18 +221,21 @@ def update_namelist_input(template, target, max_dom, init_time, fcst_hours, hist
     """        
     logger =shared.get_logger()        
     logger.debug('*** UPDATING namelist.input ***')
-    
+    logger.debug(target)
+    logger.debug(fcst_hours)
     namelist        = shared.read_namelist(template)   
 
-    #wrf_dir       = config['wrf_dir']
-
+    
+    logger.debug(fcst_hours)
+    
     if metadata:
         for key,value in metadata.items():
             namelist.update(key, value, section='metadata')
 
     
     fcst_times = shared.get_interval_times(start=init_time, count=fcst_hours+1, freq=rrule.HOURLY)
-    #logger.debug(fcst_times)
+    
+    logger.debug(fcst_times)
     
     start   = fcst_times[0]
     end     = fcst_times[-1]

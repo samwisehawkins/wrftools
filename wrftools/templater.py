@@ -93,6 +93,7 @@ def fill_template(template, target, replacements):
     with open(template) as i:
         content = i.read()
 
+    
     for key in replacements.keys():
         content = content.replace(key,str(replacements[key]))
 
