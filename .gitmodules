@@ -1,9 +1,0 @@
-[submodule "wrftools/confighelper"]
-	path = wrftools/confighelper
-	url = /project/slha/code/confighelper
-[submodule "wrftools/loghelper"]
-	path = wrftools/loghelper
-	url = /project/slha/code/loghelper
-[submodule "wrftools/nctools"]
-	path = wrftools/nctools
-	url = /project/slha/code/nctools

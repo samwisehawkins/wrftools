@@ -5,11 +5,11 @@
 ; it is then 'passed' to ncl via an environment variable NCL_OPT_FILE
 ;***********************************************************************
 
-ncl_in_file   = "<ncl_in_file>"
-ncl_out_dir   = "<ncl_out_dir>"
-ncl_out_file  = "<ncl_out_file>"
-ncl_out_type  = "<ncl_out_type>"
-ncl_loc_file  = "<ncl_loc_file>"
+ncl_in_file   = getenv("NCL_IN_FILE")
+ncl_out_dir   = getenv("NCL_OUT_DIR")
+;ncl_out_file  = getenv("NCL_OUT_FILE")
+ncl_out_type  = "png"
+ncl_loc_file  = getenv("NCL_LOC_FILE")
 
 
 
@@ -22,7 +22,7 @@ ncl_loc_file  = "<ncl_loc_file>"
 ;******************************************************
 ; Time-series options
 ;******************************************************
-    extract_heights = <extract_heights>
+    extract_heights = (/20,50,60,70,80,90,100,110,150,200/)
     tsopts = True
 
     ;**************************************************
