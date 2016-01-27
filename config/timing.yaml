@@ -15,4 +15,3 @@ max_dom            : 2                       # maximum number of nests, this wil
 fcst_hours         : 72                      # length of forecast in hours
 history_interval   : 60                      # minutes between history writes
 bdy_interval       : 3                       # hours between boundary conditions
-simulation_len     : 72                      # total simulation length in hours

@@ -64,7 +64,7 @@ def main():
     
     
     if not os.path.exists(config['namelist_wps']):
-        logger.error("No namelist.input found, %s was specifed as template, but does not exist" % config['namelist_wps'])
+        logger.error("No namelist.wps found, %s was specifed as template, but does not exist" % config['namelist_wps'])
         sys.exit()
     
     if not os.path.exists(config['namelist_input']):
