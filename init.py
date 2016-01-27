@@ -46,17 +46,13 @@ import subprocess
 import shutil
 import loghelper
 import confighelper as conf
-from wrftools import templater as tm
 from wrftools import shared
 
 def main():
     # merge command-line and file-specified arguments
     config = conf.config(__doc__, sys.argv[1:])
-    logger = loghelper.create(LOGGER, log_level=config.get('log.level'), log_fmt=config.get('log.format'))
+    logger = loghelper.create(LOGGER, log_level=config.get('log.level'), log_fmt=config.get('log.format'), log_file=config.get('log.file'))
     
-    if config.get('log.file'):
-        log_file = config['log.file']
-        logger.addHandler(loghelper.file_handler(log_file, config['log.level'], config['log.format']))
     
     base_dir = config['base_dir']
     wrftools_dir = config['wrftools_dir']
@@ -66,8 +62,6 @@ def main():
     remove = config.get('initialise.remove')
     copy = config.get('initialise.copy')
     link = config.get('initialise.link')
-
-    generate_job_scripts(jobs)
     
     if create:
         for d in create:
@@ -86,27 +80,12 @@ def main():
             shared.link(pattern, dry_run=dry_run)
 
     logger.debug("init.py done")
-    print "\n\n"
-    print "************************************************"
-    print NEXT_STEPS % (base_dir,base_dir)
-    print "************************************************"
+    print("\n\n")
+    print("************************************************")
+    print(NEXT_STEPS % (base_dir,base_dir))
+    print("************************************************")
             
     
-def generate_job_scripts(jobs):
-    logger = loghelper.get(LOGGER)
-    for key in sorted(jobs.keys()):
-        entry = jobs[key]
-        template = entry['template']
-        target = entry['target']
-        logger.debug("filling template  %s ----> %s" % (template, target))
-        path,name = os.path.split(target)
-        if not os.path.exists(path):
-            os.makedirs(path)
-        
-        if entry.get('replacements'):
-            tm.fill_template(template,target,entry['replacements'])
-        else:
-            shutil.copyfile(template, target)
         
 if '__main__' in __name__:
     main()
