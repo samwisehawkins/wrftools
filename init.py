@@ -44,8 +44,8 @@ import os
 import sys
 import subprocess
 import shutil
-from wrftools.loghelper import loghelper
-from wrftools.confighelper import confighelper as conf
+import loghelper
+import confighelper as conf
 from wrftools import templater as tm
 from wrftools import shared
 

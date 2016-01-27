@@ -32,16 +32,8 @@
 #
 # To run a reforecast or a reanalysis, use start and end time.
 #***************************************************************
-delay              : 3                       # delay in hours to apply to system time
-cycles             : [00, 12]                # round start time to the nearest one of these hours
-start              : 2015-04-01 00:00:00     # first initial time. Comment out or set to null to use system time
-end                : 2015-04-02 00:00:00     # final *inital time*, not forecast end time
-init_interval      : 24                      # hours betweeen initialisation times
-max_dom            : 2                       # maximum number of nests, this will override namelists
-fcst_hours         : 72                      # length of forecast in hours
-history_interval   : 60                      # minutes between history writes
-bdy_interval       : 3                       # hours between boundary conditions
-simulation_len     : 72                      # total simulation length in hours
+%[timing.yaml]
+
 
 #************************************************
 # Running
@@ -147,7 +139,10 @@ prepare.link:                                                          # list of
   - "%(working_dir)/namelist.input   %(wrf_run_dir)"
   - "%(base_dir)/options.ncl         %(working_dir)"
   - "%(base_dir)/locations.csv       %(working_dir)"
+  - "%(base_dir)/*.yaml              %(working_dir)"
+  - "%(base_dir)/body.txt            %(working_dir)"
   
+ 
 prepare.copy:                                                           # list of arguments to consecutive linux cp commands
   - "%(namelist_wps)                %(working_dir)"
   - "%(namelist_input)              %(working_dir)"
@@ -155,8 +150,7 @@ prepare.copy:                                                           # list o
   - "%(namelist_wps)                %(working_dir)/ungrib_sst"
   - "%(namelist_wps)                %(working_dir)/metgrid"
   - "-r %(template_dir)/*           %(working_dir)"
-
-  
+ 
 # modify any scripts which need initial times and dates in them
 #prepare.template:
 #  - "%(working_dir)/ungrib/ungrib.sh  %(working_dir)/ungrib/ungrib.sh"

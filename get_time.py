@@ -15,7 +15,7 @@ Options:
     --format=<fmt>          date format code default '%Y-%m-%d_%H:%M:%S' """
 
 import sys
-from wrftools.confighelper import confighelper as conf
+import confighelper as conf
 from wrftools import shared    
 
 def main():

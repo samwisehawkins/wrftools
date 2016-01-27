@@ -15,7 +15,7 @@ from collections import OrderedDict
 from namelist import Namelist, read_namelist
 from queue import QueueError
 import glob
-from loghelper import loghelper
+import loghelper
 import substitute
 import queue
 
@@ -463,11 +463,8 @@ def remove(pattern, dry_run=False):
     logger = get_logger()
     flist = glob.glob(pattern)
     for f in flist:
-        if os.path.exists(f):
-            logger.debug('removing file: %s' % f )
-            if not dry_run:
-                pass
-                #os.remove(f)    
+        if os.path.exists(f) and not dry_run:
+            os.remove(f)    
 
 def create(subdir, dry_run=False):                
     logger = get_logger()

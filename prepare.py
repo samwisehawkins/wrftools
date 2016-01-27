@@ -43,8 +43,8 @@ from dateutil import rrule
 from wrftools import namelist
 from wrftools import substitute
 from wrftools import templater
-from wrftools.confighelper import confighelper as conf
-from wrftools.loghelper import loghelper
+import confighelper as conf
+import loghelper
 from wrftools import shared
 
 
@@ -58,11 +58,9 @@ def main():
     # merge command-line and file-specified arguments
     config = conf.config(__doc__, sys.argv[1:])
 
-    logger = loghelper.create(LOGGER, log_level=config.get('log.level'), log_fmt=config.get('log.format'))
-    if config.get('log.file'):
-        log_file = config['log.file']
-        logger.addHandler(loghelper.file_handler(log_file, config['log.level'], config['log.format']))
-        logger.debug('now logging to file')
+    logger = loghelper.create(LOGGER, log_level=config.get('log.level'), 
+                              log_fmt=config.get('log.format'), 
+                              log_file=config.get('log.file'))
     
     
     if not os.path.exists(config['namelist_wps']):
@@ -100,116 +98,123 @@ def main():
         init_times = [init_time]
 
 
+
     for init_time in init_times:
-        logger.debug(fcst_hours)
+        try:
+            logger.info("**** Running simulation for %s *****" % init_time)
+            
+            # one-argument function to do initial-time substitution in strings
+            expand = lambda s : substitute.sub_date(s, init_time=init_time) if type(s)==type("") else s
 
-        # one-argument function to do initial-time substitution in strings
-        expand = lambda s : substitute.sub_date(s, init_time=init_time) if type(s)==type("") else s
-        date_replacements = substitute.date_replacements(init_time=init_time)
-        
-        working_dir = expand(config['working_dir'])
+            date_replacements = substitute.date_replacements(init_time=init_time)
+            
+            working_dir = expand(config['working_dir'])
+            logger.info("working dir: %s " % working_dir)
 
-        if rmtree:
-            safe_remove(working_dir, dry_run)
-        
-        create_directory_structure(expand, remove=config.get('prepare.remove'), create=config.get('prepare.create'), copy=config.get('prepare.copy'), link=config.get('prepare.link'), dry_run=dry_run)    
-        if config.get('prepare.template'):
-            for entry in config['prepare.template']:
-                tokens = expand(entry).split()
-                source = tokens[0]
-                target = tokens[1] if len(tokens)>1 else tokens[0]
-                templater.fill_template(source, target, date_replacements)
+            if rmtree:
+                safe_remove(working_dir, dry_run)
+            
+            create_directory_structure(expand, remove=config.get('prepare.remove'), create=config.get('prepare.create'), copy=config.get('prepare.copy'), link=config.get('prepare.link'), dry_run=dry_run)    
+            if config.get('prepare.template'):
+                for entry in config['prepare.template']:
+                    tokens = expand(entry).split()
+                    source = tokens[0]
+                    target = tokens[1] if len(tokens)>1 else tokens[0]
+                    templater.fill_template(source, target, date_replacements)
 
-        logger.debug(fcst_hours)
-        
-        bdy_times = shared.get_bdy_times(init_time, fcst_hours, bdy_interval)
-        logger.debug(fcst_hours)
-        
-        working_namelist = working_dir+"/namelist.wps"
-    
-        # this can be made cleaner
-        prefix=''
-        update_namelist_wps(config['namelist_wps'], working_namelist, config['max_dom'], 
-                            init_time, fcst_hours, config['bdy_interval'], 
-                            config['geo_em_dir'], config['met_em_dir'], config['geogrid_run_dir'], config['metgrid_run_dir'], prefix, 
-                            config.get('constants_name'))
-    
-        working_namelist = working_dir+"/namelist.input"
-        logger.debug(fcst_hours)
-        
-        update_namelist_input(config['namelist_input'], working_namelist, max_dom, init_time, fcst_hours, history_interval, bdy_interval*60*60, metadata=config.get('metadata'))    
-        logger.debug(fcst_hours)
-        
-        # apply any additional specified namelist updates (consider getting rid of this section)
-        namelist_updates = config.get('namelist_updates')
-        if namelist_updates:
-            for key in sorted(namelist_updates.keys()):
-                entry = namelist_updates[key]
-                logger.debug('processing namelist update entry %s' % key)
-                
-                template = expand(entry['template'])
-                target = expand(entry['target'])
-                logger.debug('%s\t---->\t%s' %(template.ljust(20), target.ljust(20)))
-                namelist = shared.read_namelist(template)
-                if entry.get('update'):
-                    for old,new in entry['update'].items():
-                        logger.debug('\t%s\t:\t%s' %(old.ljust(20), expand(new).ljust(20)))
-                        namelist.update(old,expand(new))
-                namelist.to_file(target)
-    
-        logger.debug(fcst_hours)
 
-        # link in input files for all ungrib jobs
-        # update namelist.wps to modify start and end time
+            
+            bdy_times = shared.get_bdy_times(init_time, fcst_hours, bdy_interval)
+            
+            working_namelist = working_dir+"/namelist.wps"
         
-        if config.get('ungrib'):
-            for key,entry in config['ungrib'].items():
-                # apply any delay and rounding to the init_time to get correct time for dataset
-                # note that sometimes it is necessary to use a different time e.g. for SST field is delayed by one day
-                run_dir = expand(entry['run_dir'])
-                base_time = shared.get_time(init_time, delay=entry.get('delay'), round=entry.get('cycles'))
-                ungrib_len = int(entry['ungrib_len'])
-                bdy_times = shared.get_bdy_times(base_time, ungrib_len, bdy_interval)
-                namelist = shared.read_namelist(run_dir+"/namelist.wps")
-
-                start_str  = base_time.strftime("%Y-%m-%d_%H:%M:%S")
-                end_str    = bdy_times[-1].strftime("%Y-%m-%d_%H:%M:%S")
-
-                namelist.update('start_date', [start_str]*max_dom)
-                namelist.update('end_date',   [end_str]*max_dom)
-                namelist.to_file(run_dir+"/namelist.wps")
-                
-                # link in vtable
-                vtable = entry['vtable']
-                cmd = "%s %s/Vtable" % (vtable, run_dir)
-                shared.link(cmd, dry_run=dry_run)
-           
-
-                if link_boundaries:
-           
-                    file_pattern = entry['files']
+            # this can be made cleaner
+            prefix=''
+            update_namelist_wps(config['namelist_wps'], working_namelist, config['max_dom'], 
+                                init_time, fcst_hours, config['bdy_interval'], 
+                                config['geo_em_dir'], config['met_em_dir'], config['geogrid_run_dir'], config['metgrid_run_dir'], prefix, 
+                                config.get('constants_name'))
+        
+            working_namelist = working_dir+"/namelist.input"
+            logger.debug(fcst_hours)
+            
+            update_namelist_input(config['namelist_input'], working_namelist, max_dom, init_time, fcst_hours, history_interval, bdy_interval*60*60, metadata=config.get('metadata'))    
+            logger.debug(fcst_hours)
+            
+            # apply any additional specified namelist updates (consider getting rid of this section)
+            namelist_updates = config.get('namelist_updates')
+            if namelist_updates:
+                for key in sorted(namelist_updates.keys()):
+                    entry = namelist_updates[key]
+                    logger.debug('processing namelist update entry %s' % key)
                     
-                    # create an ordered set to ensure filenames only appear once
-                    filenames = shared.ordered_set([substitute.sub_date(file_pattern, init_time=base_time, valid_time=t) for t in bdy_times])
-                    missing_files = []
-                    for f in filenames:
-                        if not os.path.exists(f): 
-                            logger.error("%s \t missing" % f)
-                            missing_files.append(f)
-                    
-                    if missing_files!=[]:
-                        raise IOError("some files could not be found")
-                    
+                    template = expand(entry['template'])
+                    target = expand(entry['target'])
+                    logger.debug('%s\t---->\t%s' %(template.ljust(20), target.ljust(20)))
+                    namelist = shared.read_namelist(template)
+                    if entry.get('update'):
+                        for old,new in entry['update'].items():
+                            logger.debug('\t%s\t:\t%s' %(old.ljust(20), expand(new).ljust(20)))
+                            namelist.update(old,expand(new))
+                    namelist.to_file(target)
+        
 
 
-                    args = ' '.join(filenames)
-                    cmd = '%s/link_grib.csh %s' %(run_dir,args)
-                    shared.run_cmd(cmd, dry_run=dry_run, cwd=run_dir, log=False)
+            # link in input files for all ungrib jobs
+            # update namelist.wps to modify start and end time
+            
+            if config.get('ungrib'):
+                for key,entry in config['ungrib'].items():
+                    # apply any delay and rounding to the init_time to get correct time for dataset
+                    # note that sometimes it is necessary to use a different time e.g. for SST field is delayed by one day
+                    run_dir = expand(entry['run_dir'])
+                    base_time = shared.get_time(init_time, delay=entry.get('delay'), round=entry.get('cycles'))
+                    ungrib_len = int(entry['ungrib_len'])
+                    bdy_times = shared.get_bdy_times(base_time, ungrib_len, bdy_interval)
+                    namelist = shared.read_namelist(run_dir+"/namelist.wps")
+
+                    start_str  = base_time.strftime("%Y-%m-%d_%H:%M:%S")
+                    end_str    = bdy_times[-1].strftime("%Y-%m-%d_%H:%M:%S")
+
+                    namelist.update('start_date', [start_str]*max_dom)
+                    namelist.update('end_date',   [end_str]*max_dom)
+                    namelist.to_file(run_dir+"/namelist.wps")
+                    
+                    # link in vtable
+                    vtable = entry['vtable']
+                    cmd = "%s %s/Vtable" % (vtable, run_dir)
+                    shared.link(cmd, dry_run=dry_run)
+               
+
+                    if link_boundaries:
+               
+                        file_pattern = entry['files']
+                        
+                        # create an ordered set to ensure filenames only appear once
+                        filenames = shared.ordered_set([substitute.sub_date(file_pattern, init_time=base_time, valid_time=t) for t in bdy_times])
+                        missing_files = []
+                        for f in filenames:
+                            if not os.path.exists(f): 
+                                missing_files.append(f)
+                                logger.error("%s \t missing" % f)
+                                
+                        if missing_files!=[]:
+                            if rmtree:
+                                safe_remove(working_dir, dry_run)
+                            raise IOError("some files could not be found")
+
+
+
+
+                        args = ' '.join(filenames)
+                        cmd = '%s/link_grib.csh %s' %(run_dir,args)
+                        shared.run_cmd(cmd, dry_run=dry_run, cwd=run_dir, log=False)
                 
                 
         
-        
-        logger.debug(fcst_hours)
+        except IOError as e:
+            logger.error(e)
+
         
 def update_namelist_input(template, target, max_dom, init_time, fcst_hours, history_interval, interval_seconds, metadata=None):    
     """ Updates the namelist.input file to reflect updated settings in config.
@@ -225,8 +230,7 @@ def update_namelist_input(template, target, max_dom, init_time, fcst_hours, hist
     logger.debug(fcst_hours)
     namelist        = shared.read_namelist(template)   
 
-    
-    logger.debug(fcst_hours)
+
     
     if metadata:
         for key,value in metadata.items():
@@ -235,7 +239,6 @@ def update_namelist_input(template, target, max_dom, init_time, fcst_hours, hist
     
     fcst_times = shared.get_interval_times(start=init_time, count=fcst_hours+1, freq=rrule.HOURLY)
     
-    logger.debug(fcst_times)
     
     start   = fcst_times[0]
     end     = fcst_times[-1]
@@ -366,7 +369,7 @@ def create_directory_structure(expand, remove=None, create=None,copy=None,link=N
     """        
     # pass initial time as an argument, to leave a one-argument function which will expand strings
 
-    
+    logger = loghelper.get(LOGGER)
     if create:
         for d in create:
             subdir = expand(d)
@@ -388,6 +391,8 @@ def create_directory_structure(expand, remove=None, create=None,copy=None,link=N
 def safe_remove(path, dry_run=False):
     
     logger = loghelper.get(LOGGER)
+    
+    # try and prevent removing someting unsafe: root path, unexpanded wildcards, or paths which are just too short
     cnd1 = path == "/" 
     cnd2 = "*" in path
     cnd3 = len(path.split("/"))<3

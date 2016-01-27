@@ -1,22 +1,5 @@
 #***************************************************************
-# WRF Forecast Simulation Submission configuration file
-# 
-# This is the top level configuration file for running 
-# automated WRF forecasts. This will overide a small number
-# of  settings in 'namelist.wps' and 'namelist.input'
-#
-# Environment variables can be accessed using $(var) syntax
-# Local variables defined elswhere in this configuration file can be 
-# accessed using %(var) syntax.  If the variable inside $() or %() 
-# is not defined within the current environment, it will not be expanded.
-#
-# Due to the syntax of yaml, entries cannot begin with %; 
-# to start an entry with a local variable reference, enclose 
-# the entry in quotation marks, see examples below.
-# 
-# Although the file is nominally divided into sections by comments,
-# logically it is a single dictionary 
-#
+# Simulation Submission Configuration File
 #***************************************************************
 
 #************************************************
@@ -26,21 +9,15 @@ base-dir          : $(PWD)
 working-dir       : "%(base-dir)/%iY-%im-%id_%iH"  
 wrftools-dir      : $(HOME)/code/wrftools/devel                       # location of local wrftools repository
 
+#************************************************
+# Number of parallel simulations 
+# **********************************************
+parallel           : 2                       
 
-#***************************************************************
-# Timing
-# To run as operational forecast, set operational to true
-# To reforecast, use start and end time.
-#***************************************************************
-delay              : 3                       # delay in hours to apply to system time
-cycles             : [00, 12]                # round start time to the nearest one of these hours
-start              : 2015-08-06 00:00:00     # first initial time, ignored if operational is true 
-end                : 2015-08-07 00:00:00     # final *inital time*, not forecast end time
-max_dom            : 2                       # maximum number of nests, this will override namelists
-fcst_hours         : 72                      # length of forecast in hours
-history_interval   : 60                      # minutes between history writes
-bdy_interval       : 3                       # hours between boundary conditions
-init_interval      : 24                      # hours betweeen initialisation times
+#************************************************
+# Timing  
+#************************************************
+%[timing.yaml]
 
 
 #************************************************
@@ -57,105 +34,163 @@ log.mail.buffer   : 100000                                 # maximum number of l
 log.mail.subject  : "Maestro WRF log"                      # subject to use in email 
 
 
-#************************************************
-# Running - note what jobs get run is controlled
-# by the job section below. This is convenient 
-# way of turning groups of jobs on or off.
+#***********************************************************
+# Running 
 #
-#************************************************
-dry-run           : false                                  # don't run commands, just log them
+# note which jobs are submitted is ultimately controlled
+# by the `jobs` section below. This is just a convenient 
+# way of turning groups of jobs on or off e.g.
+# python submit.py --config=submit-yaml --visualise=false
+#
+#***********************************************************
+dry-run           : false  # log commands, don't run them
 wps               : true
 wrf               : true
-ncl               : true
 post              : true
 tseries           : true
+power             : true
+ncdump            : true
+visualise         : true
+dispatch          : true
 finalise          : true
 
 
-#************************************************
-# Metadata. 
-# Used to help compose directory names, and
-# are also added as attributes to the output netcdf
-# files. 
-#************************************************
-#model             : WRF
-#model_run         : $(PWD)
-#bdy_conditions    : GFS
-
-#metadata          :                        # everything inside "metadata" will be copied into attributes in the wrfout files
-#    model         : "%(model)"
-#    model_run     : "%(model_run)"
-#    bdy_conditions : "%(bdy_conditions)"
-
-    
-
-#
-#
-#          
 jobs:
-    1:
-        run      : "%(geogrid)"
-        script   : "%(working-dir)/geogrid/geogrid.sh"
+    - name     : geogrid
+      run      : "%(geogrid)"
+      script   : "%(working-dir)/geogrid/geogrid.sh"
+      nprocs   : 1
+      queue    : all.q
+      pe       : ompi
+      
+    - name     : ungrib
+      run      : "%(wps)"
+      script   : "%(working-dir)/ungrib/ungrib.sh"
+      queue    : all.q
+      pe       : ompi
+      nprocs   : 1
+      after    : geogrid
 
-    2: 
-        run      : "%(wps)"
-        script   : "%(working-dir)/ungrib/ungrib.sh"
-        after    : 1
-        
-    3: 
-        run      : "%(wps)"
-        script   : "%(working-dir)/ungrib/ungrib.post.sh"
-        after    : 2
+    - name     : ungrib.post
+      run      : "%(wps)"
+      script   : "%(working-dir)/ungrib/ungrib.post.sh"
+      queue    : all.q
+      pe       : ompi
+      nprocs   : 1
+      after    : ungrib
 
-    4:
-        run      : "%(wps)"
-        script   : "%(working-dir)/ungrib_sst/ungrib.sh"
-        after    : 3
-        
-    5:
-        run      : "%(wps)"
-        script   : "%(working-dir)/ungrib_sst/ungrib_sst.post.sh"
-        after    : 4
+    - name     : ungrib.sst
+      run      : "%(wps)"
+      script   : "%(working-dir)/ungrib_sst/ungrib.sh"
+      after    : "ungrib*"
+      queue    : all.q
+      pe       : ompi
+      nprocs   : 1
+      after    : geogrid
+      
+    - name     : ungrib.sst.post
+      run      : "%(wps)"
+      script   : "%(working-dir)/ungrib_sst/ungrib_sst.post.sh"
+      queue    : all.q
+      pe       : ompi
+      nprocs  : 1
+      after    : ungrib.sst
+      log      : ungrib.post.log        
        
-    6: 
-        run      : "%(wps)"
-        script   : "%(working-dir)/metgrid/metgrid.sh"
-        after    : 5
-
-    7: 
-        run    : "%(wrf)"
-        script : "%(working-dir)/wrf/real.pre.sh"
-        after  : 6
-        
-    8:
-        run     : "%(wrf)"
-        script  : "%(working-dir)/wrf/real.sh"
-        after   : 7
+    - name     : metgrid
+      run      : "%(wps)"
+      script   : "%(working-dir)/metgrid/metgrid.sh"
+      queue    : all.q
+      pe       : ompi
+      nprocs  : 1
+      after    : ungrib*
+      
+    - name   : real.pre
+      run    : "%(wrf)"
+      script : "%(working-dir)/wrf/real.pre.sh"
+      queue  : all.q
+      pe     : ompi
+      nprocs : 1
+      after  : metgrid
+      log    : real.pre.log
+      
+    - name    : real
+      run     : "%(wrf)"
+      script  : "%(working-dir)/wrf/real.sh"
+      queue   : all.q
+      pe      : ompi
+      nprocs  : 1
+      after   : real.pre
     
-    9:
-        run     : "%(wrf)"
-        script  : "%(working-dir)/wrf/wrf.sh"
-        after   : 8
+    - name    : wrf
+      run     : "%(wrf)"
+      script  : "%(working-dir)/wrf/wrf.sh"
+      queue   : all.q
+      pe      : ompi
+      nprocs  : 80
+      after   : real
+      log     : wrf.log
 
-    10:
-        run    : "%(ncl)"
-        script : "%(working-dir)/ncl.sh"
-        after  : 9
-        per-domain: true
+    - name   : ncl
+      run    : "%(visualise)"
+      script : "%(working-dir)/ncl.sh"
+      queue  : all.q
+      pe     : ompi
+      nprocs : 1
+      after  : wrf
+      array  : "%(max_dom)"
+      
+      
+    - name    : wrf.post
+      run     : "%(post)"
+      script  : "%(working-dir)/wrf/wrf.post.sh"
+      queue   : all.q
+      pe      : ompi
+      nprocs  : 1
+      after   : wrf,ncl
+      array   : "%(max_dom)"
 
-    11: 
-        run    : "%(tseries)"
-        script : "%(working-dir)/tseries.sh"
-        after  : 10
-        per-domain: true
+    - name   : tseries
+      run    : "%(tseries)"
+      script : "%(working-dir)/tseries.sh"
+      queue  : all.q
+      pe     : ompi
+      nprocs : 1
+      after  : wrf.post
+      array  : "%(max_dom)"
 
-    12:
-        run     : "%(post)"
-        script  : "%(working-dir)/wrf/wrf.post.sh"
-        after   : 11
-        per-domain: true                                   # this causes an array job so be submitted, with one job for each nest
+    - name    : power
+      run     : "%(power)"
+      script  : "%(working-dir)/power.sh"
+      queue   : all.q
+      pe      : ompi
+      nprocs  : 1
+      after   : tseries
+      array   : "%(max_dom)"
 
-    13:
-        run     : "%(finalise)"
-        script  : "%(working-dir)/finalise.sh"
-        after   : 12
+
+    - name    : ncdump
+      run     : "%(ncdump)"
+      script  : "%(working-dir)/ncdump.sh"
+      queue   : all.q
+      pe      : ompi
+      nprocs  : 1
+      after   : tseries,power
+      array   : "%(max_dom)"
+
+    - name    : dispatch
+      run     : "%(dispatch)"
+      script  : "%(working-dir)/dispatch.sh"
+      queue   : graphics.q
+      pe      : ompi
+      nprocs  : 1 
+      after   : ncl,wrf.post
+      
+    - name    : finalise
+      run     : "%(finalise)"
+      script  : "%(working-dir)/finalise.sh"
+      queue   : all.q
+      pe      : ompi
+      nprocs  : 1
+      after   : wrf.post,power,dispatch,ncdump
+    

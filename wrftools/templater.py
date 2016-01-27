@@ -34,7 +34,7 @@ LOGGER="wrftools"
 import os
 import sys
 import loghelper
-from confighelper import confighelper as conf
+import confighelper as conf
 import substitute
 
 

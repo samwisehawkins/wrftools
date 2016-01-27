@@ -34,7 +34,7 @@ LOGGER="wrftools"
 import sys
 import loghelper
 from dateutil import rrule
-from wrftools.confighelper import confighelper as conf
+import confighelper as conf
 from wrftools import substitute
 from wrftools import templater as tm
 import json

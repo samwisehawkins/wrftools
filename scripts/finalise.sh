@@ -3,13 +3,7 @@
 . /etc/profile.d/modules.sh
 
 # Module stuff
-module load netcdf
-module load szip
 module load sge
-module load openmpi
-module add ncl
-module add nco
-module switch ncl/opendap ncl/nodap
 
 #
 # Active comments for SGE 
@@ -23,18 +17,33 @@ module switch ncl/opendap ncl/nodap
 #$ -pe ompi 1
 #$ -j yes
 
+webdir="${HOME}/WWW/forecast"
+archive="maestrob:/backup/${USER}/archive/9km"
+
 
 # Finalise, clean up messy files, do any moving of time-series, plots etc
-ls wrf/wrfout*
-echo "scp wrf/wrfout* maestrob:/backup/slha/archive/9km/wrfout/"
-scp wrf/wrfout* maestrob:/backup/slha/archive/9km/wrfout/
+
+# Copy to web directory
+echo "cp plots/* ${webdir}/img/00Z/"
+cp plots/* "${webdir}/img/00Z/"
+echo "cp json/* ${webdir}/data"
+cp json/* "${webdir}/data"
+
+
+# Move things outside of date-based folder to top-level
 echo "mv  wrf/wrfout* ../wrfout/"
 mv  wrf/wrfout* ../wrfout/
-cp plots/* ../plots
-cp plots/* /project/slha/WWW/forecast/img/00Z/
 echo "mv  tseries/tseries* ../tseries/"
 mv  tseries/tseries* ../tseries/
+echo "mv  json/json* ../json/"
+mv  json/json* ../json/
 
+echo "cp plots/* ../plots"
+cp plots/* ../plots
+
+# Archiving
+echo "scp wrf/wrfout* ${archive}/wrfout/"
+scp wrf/wrfout* "${archive}/wrfout/"
 
 rm metgrid/met_em*
 rm metgrid/???\:*

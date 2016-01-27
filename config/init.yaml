@@ -187,7 +187,7 @@ jobs:
         replacements: 
             <jobname>    : wrf
             <cmd> : wrf.exe
-            <nprocs>     : 120
+            <nprocs>     : 40
             <queue>      : "%(queue)"
             <logfile>    : "wrf.log"
 
@@ -222,6 +222,12 @@ jobs:
             <logfile>    : "ncl.log"
             
     14: 
+        template     : "%(template_dir)/dispatch.sh"
+        target       : "%(target_dir)/dispatch.sh"
+        <jobname>    : dispatch
+        <logfile>    : dispatch.log
+
+    15: 
         template     : "%(template_dir)/finalise.sh"
         target       : "%(target_dir)/finalise.sh"
         <jobname>    : finalise
