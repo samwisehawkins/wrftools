@@ -1,57 +1,59 @@
-log_name      : wrf_forecast
-log_file      : ncdump.log
-log_level     : debug
-log_fmt       : "%(message)s"
-log_mail      : false
-mail_level    : INFO                                   # log level for email
-mailto        : null
-mail_buffer   : 10000                                  # how many messages to collate in one email
-mail_subject  : "ncdump log"                  # subject to use in email 
-tseries_dir   : $(HOME)/forecasting/development/tseries
-tseries_file  : "%(tseries_dir)/tseries_d%dd_%iY-%im-%id_%iH.nc"
+#************************************************
+# Configuration file for ncdump
+#
+#************************************************
 
-ncdump:
-    met:
-        tseries_file  : "%(tseries_dir)/tseries_d%dd_%iY-%im-%id_%iH.nc"
-        tseries_vars  : [SPEED,DIRECTION,T2,TD2,SST,RIB,RAIN,SWDOWN,CLDFRAAVG,CLDFRAMAX]
-        coord_vars    : [time,location,height]
-        global_atts   : [GRID_ID,DOMAIN,MODEL_RUN,DX,DY]
-        var_atts      : [units,description]
-        dir           : /home/slha/forecasting/development/json
-        fname         : fcst_data_d%dd_%iHZ.json
-        format        : json
-        float_format  : "%0.3f"
-        dimspec       : 
-            height        : ["2D",60,80,100]
-        drop          : [DOMAIN,MODEL_RUN]
-        group-by      : ["init_time", "location", "variable", "height"]
-        sort-by       : ["init_time", "valid_time", "location"]
-        na-rep        : "null"
-        rename        : null
+#************************************************
+# Metadata. 
+# Used to help compose directory names, and
+# are also added as attributes to the output netcdf
+# files. 
+#************************************************
+
+working-dir       : "$(PWD)"
+tseries-dir       : "%(working-dir)/tseries"
+domain            : baseline_europe 
+model             : WRF
+model_run         : operational
+bdy_conditions    : GFS
+start             : null
+cycles            : [0 ]
+
+metadata          :                        # everything within this will be copied into attributes
+    domain        : "%(domain)"
+    model         : "%(model)"
+    model_run     : "%(model_run)"
+    bdy_conditions : "%(bdy_conditions)"
+
+
+file-pattern   : "%(tseries-dir)/tseries_d01_%iY-%im-%id_%iH.nc"
+valid-time     : true
+vars           : [SPEED,DIRECTION,T2,TD2,SST,RIB,RAIN,SWDOWN,CLDFRAAVG,CLDFRAMAX]
+coord-vars     : [reftime,leadtime,location,height]
+global-atts    : [GRID_ID,DOMAIN,MODEL_RUN,DX,DY]
+var-atts       : [units,description]
+out-dir        : "%(working-dir)/json"
+#out            : "%(out-dir)/fcst_data_d01_%iHZ.json"
+format         : json
+float-format   : "0.3f"
+date-format    : "%Y-%m-%d_%H"
+filter         : 
+  height : [9999,60,80,100]
+  
+group-by      : ["reftime", "location", "variable", "height"]
+sort-by       : ["reftime", "leadtime", "location"]
+split-by      : []
+na-rep        : "null"
     
-    power:
-        tseries_file  : "%(tseries_dir)/power_d%dd_%iY-%im-%id_%iH.nc"
-        tseries_vars  : [POWER,SPEED,DIRECTION]
-        coord_vars    : [time,location,height]
-        global_atts   : [GRID_ID,DOMAIN,MODEL_RUN,DX,DY]
-        var_atts      : [units,description]
-        dir           : /home/slha/forecasting/development/json
-        fname         : power_d%dd_%iHZ.json
-        format        : json
-        float_format  : "%0.3f"
-        dimspec       : 
-            height        : [60,80,100]
-        drop          : [DOMAIN,MODEL_RUN]
-        group-by      : ["init_time", "location", "variable", "height"]
-        sort-by       : ["init_time", "valid_time", "location"]
-        na-rep        : "null"
-        rename        : null
-    
-    aot:
-        tseries_file  : "%(tseries_dir)/tseries_d%dd_%iY-%im-%id_%iH.nc"
-        tseries_vars  : [SPEED,DIRECTION,T2,TD2,SST,RIB,RAIN,SWDOWN,CLDFRAAVG,CLDFRAMAX]
-        global_atts   : [GRID_ID,DOMAIN,MODEL_RUN,DX,DY]
-        var_atts      : [units,description]
-        coord_vars    : [time,location,height]
-        dir           : /home/slha/forecasting/development/aot
-        format        : aot
+#************************************************
+# Logging
+#************************************************
+log.name          : ncdump                                 # name of logger object
+log.level         : debug                                  # log level to write to file   
+log.file          : "%(working-dir)/ncdump.log"            # file to write to
+log.fmt           : "%(message)s"                          # see logging module for format codes
+log.mail          : false                                  # send an email of log
+log.mail.to       : sam.hawkins@vattenfall.com
+log.mail.level    : INFO                                   # level to mail
+log.mail.buffer   : 100000                                 # how many messages to collate in one email
+log.mail.subject  : "ncdump.py log"                           # subject to use in email 

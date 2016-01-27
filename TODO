@@ -1,4 +1,3 @@
+* Make Python 3 compatible
 * Tidy up logging statements
 * Remove as much implicit state and side-effects from functions as possible
-    * e.g. pass a logger instance to functions instead of calling get_logger inside the code
-    
