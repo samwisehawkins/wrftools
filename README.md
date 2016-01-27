@@ -1,9 +1,9 @@
 wrftools
 --------
 
-** The master branch has changed significantly ** and now depends on a scheduler such 
+**The master branch has changed significantly** and now depends on a scheduler such 
 as the Sun Grid Engine.  This makes it much easier to run large historical simulations. 
-A branch corresponding to the old master is available at the synchronous branch.
+A branch corresponding to the old master is available as the synchronous branch.
 
 ## What is it?
 
@@ -66,21 +66,17 @@ configuration files and links the main python scripts into the `base_dir`.
 
 First create the `base_dir` and copy in a `namelist.wps` and `namelist.input`.
 
-    ```
     mkdir mysimulations
     cp namelist.input namelist.wps mysimulations
     cp /path/to/wrftools/config/init.yaml mysimulations
-    ```
     
 If needed, edit the `init.yaml` file. See [init.yaml](config/init.yaml) for annotated example. The main purpose of  `init.py` 
 is to create a subdirectory of *master scripts* which will be used to run each simulation within a block.  Check the 'jobs' entry of `init.yaml` 
 to see how these job scripts are created.
 
     
-    ```
     cd mysimulations
     python /path/to/wrftools/init.py --config=init.yaml
-    ```
 
 Generation of master scripts is configured by the jobs entry within `init.yaml`. Each sub-entry specifies a 
 job template file, a set of replacements to apply, and a target file to write to.  By default these 'master scripts'
@@ -102,28 +98,22 @@ into the simulation directories.
 1. Edit `prepare.yaml` to set various directory locations, start time, end time etc. See [config/prepare.yaml](config/prepare.yaml) 
 for an example. 
 
-    ```
     python prepare.py --config=prepare.yaml
-    ```
      
     
 2. `Run prepare.py`
  
 Try first without `--link-boundaries` option; it is less likely to fail.
  
-    ```
     $> cd ~/mysimulations
     $> python ~/code/wrftools/prepare.py --config=prepare.yaml
-    ```
 
 This creates the simulation directories: one for each initial time.  The WRF executables are linked into subdirectories, and the master job scripts
 are copied into the appropriate subdirectories.
     
 Then try with the  `--link-boundaries` flag. 
     
-    ```
     $> python prepare.py --config=prepare.yaml --link-boundaries
-    ```    
 
 This checks whether the boundary conditions exist and links     
     
