@@ -1,19 +1,27 @@
 wrftools
 --------
 
+** The master branch has changed significantly ** and now depends on a scheduler such 
+as the Sun Grid Engine.  This makes it much easier to run large historical simulations. 
+A branch corresponding to the old master is available at the synchronous branch.
+
+## What is it?
+
 A framework for running WRF simulations.
 
 It is designed to be flexible and extendable. There are some tools out there
 which run WRF, but they are not easily modified. This is designed to provide 
 a framework which is easily customised and modified. 
 
+
+
 ## Overview
 
 There are three main scripts, [init.py](init.py), [prepare.py](prepare.py) and [submit.py](submit.py). 
 
 Each block of simulations are run from a `base_dir`. This is the directory which will contain the top-level
-namelist files, and the master job scripts. Individual simulations are held in subdirectories named according to date
-e.g. 
+namelist files, and the master job scripts. Individual simulations are then executed in subdirectories named 
+according to initial time  e.g. 
 
 ```
     base_dir/namelist.wps              # master namelist templates
@@ -26,16 +34,25 @@ e.g.
 
 ## Install
 
-It relies on submodules, use the `--recursive` option to grab them.
-    
+It relies on two other custom python packages. Grab these and install as you usually would. 
+   
     ```
-     $>git clone --recursive -b development https://github.com/samwisehawkins/wrftools.git
+    $>git clone https://github.com/samwisehawkins/confighelper.git
+    $>python confighelper/setup.py install
+
+    $>git clone https://github.com/samwisehawkins/loghelper.git
+    $>python loghelper/setup.py install
+
+    $>git clone https://github.com/samwisehawkins/wrftools.git
     ```
 
+Why is wrftools not a python package? Because it is not a pure python program - it is a bunch of 
+python scripts, shell scripts and ncl scripts. I haven't found an adequate way of packaging it all 
+together in  way which makes sense.
 
 ## Configuration files
     
-The configuration files are yaml, with an extended syntax to allow environment variables,
+The configuration files are yaml, with an extended syntax to allow imports. environment variables,
 local variables and date placeholders to be used in the files. See [Configuration](##configuration) for more details.
 A subset of configuration file options can be overriden at the command-line, use the `--help` flag with each script to 
 see the available command-line options.
@@ -44,7 +61,7 @@ see the available command-line options.
 ## Step 1: Initialise
 
 
-[init.py](init.py) is run once per block of simulations. It creates the master job scripts, copies
+[init.py](init.py) is run once per block of simulations. It creates the skeleton job scripts, copies
 configuration files and links the main python scripts into the `base_dir`.
 
 First create the `base_dir` and copy in a `namelist.wps` and `namelist.input`.
