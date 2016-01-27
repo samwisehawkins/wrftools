@@ -53,7 +53,7 @@ Assuming you have wrftools repository and the dependencies installed.
     
 ### Documentation
 
-See [docs/documentation.md](documentation) for more details
+See [doc/documentation.md](documentation) for more details
 
 
  
