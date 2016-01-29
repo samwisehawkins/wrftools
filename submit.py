@@ -47,13 +47,7 @@ def main():
     # merge command-line and file-specified arguments
     config = conf.config(__doc__, sys.argv[1:])
 
-    logger = loghelper.create(LOGGER, log_level=config.get('log.level'), log_fmt=config.get('log.format'))
-    if config.get('log.file'):
-        log_file = config['log.file']
-        logger.addHandler(loghelper.file_handler(log_file, config['log.level'], config.get('log.format')))
-    
-
-    
+    logger = loghelper.create(LOGGER, log_level=config.get('log.level'), log_fmt=config.get('log.format'), log_file=config.get('log.file'))
     
     dry_run = config.get('dry-run')
     after_job = config.get('after-job')
