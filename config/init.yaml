@@ -37,7 +37,7 @@ bdy_conditions    : GFS
 # Directory locations  
 #************************************************
 base_dir          : $(PWD)                                             # this will be taken from current working direcory
-wrftools_dir      : $(HOME)/code/wrftools/devel  
+wrftools_dir      : $(HOME)/code/wrftools  
 ncl_scripts       : "%(wrftools_dir)/ncl"                              # NCL visualisation scripts
 template_dir      : "%(wrftools_dir)/scripts"                          # location of job script skeletons
 target_dir        : "%(base_dir)/scripts"                              # create 'master' job scripts for collection of simulations
@@ -71,4 +71,5 @@ initialise.copy:                                                           # lis
   - "%(wrftools_dir)/config/locations.csv    %(base_dir)"
   - "-r %(template_dir)/*                    %(target_dir)"
   - "-r %(ncl_scripts)/*                     %(target_dir)/ncl"
+  - "%(wrftools_dir)/run.sh                  %(base_dir)"
   
