@@ -24,7 +24,14 @@
 ; sam.hawkins@vattenfall.com
 ; 
 ;******************************************************
-load "$HOME/code/wrftools/devel/ncl/wrftools.ncl"
+
+; This is a library which contains custom code for interpolating
+; time-series to locations. It is loaded like this as we can't 
+; rely on it being in a central location. To run this script, 
+; set the NCL_WRFTOOLS environment variable to point to the 
+; correct location.
+
+load "$NCL_WRFTOOLS"
 
 begin
 
