@@ -31,7 +31,7 @@
 ; set the NCL_WRFTOOLS environment variable to point to the 
 ; correct location.
 
-load "$NCL_WRFTOOLS"
+load "ncl/wrftools.ncl"
 
 begin
 
