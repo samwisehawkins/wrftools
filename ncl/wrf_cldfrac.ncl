@@ -109,6 +109,15 @@ do i=0,ntimes-1
   wspd@description = "Wind speed"
   wspd@units = "m/s"
 
+ rain_exp = a->RAINNC(it,:,:)
+ rain_con = a->RAINC(it,:,:)
+ rain_exp = rain_exp - a->RAINNC(it-1,:,:)
+ rain_con = rain_con - a->RAINC(it-1,:,:)
+ rain_tot = rain_exp + rain_con
+
+ # ensure a minimum cloud fraction if there is rainfall
+ min_cldfra_avg = where(rain_tot>0.0001, 0.25, cldfra_avg)
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
     ; Plotting options for wind speed
@@ -127,7 +136,7 @@ do i=0,ntimes-1
  
  ;opts@cnSpanFillPalette = True
 
-  contour_w = wrf_contour(a,wks,cldfra_avg,opts)
+  contour_w = wrf_contour(a,wks,min_cldfra_avg,opts)
   delete(opts)
 
     ; Plotting options for SLP                     
