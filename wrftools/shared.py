@@ -590,7 +590,6 @@ def get_bdy_times(init_time, fcst_hours, bdy_interval):
     Arguments:"""
     
     logger        = get_logger()
-    logger.debug("get_bdy_times called")
     hour          = datetime.timedelta(0, 60*60) 
     end_time      = init_time + datetime.timedelta(0, fcst_hours*60*60)
     

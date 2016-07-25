@@ -63,9 +63,6 @@ end
 
 
 
-
-
-
 ;*****************************************************************************
 ; Horizontally interpolate to a set of locations
 ; interp_option: 0 nearest cell (as found by ll_to_ij)
@@ -694,7 +691,7 @@ begin
         ; Wind speed
         ws_agl_locs  = sqrt(u_agl_locs*u_agl_locs+v_agl_locs*v_agl_locs)
         
-        ; rename the dimensions, sqrt strips any info
+        ; rename the dimensions, since sqrt strips any info
         copy_VarMeta(v3d_template, ws_agl_locs) 
         ws_agl_locs&height = hgt_out
         ws_agl_locs&reftime   = reftime
