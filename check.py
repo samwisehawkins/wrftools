@@ -5,27 +5,14 @@ can also be given at the command line, where they will override the configuratio
 See example/forecast.yaml for a full list of configuration options. 
 
 Usage:
-    check.py [--config=<file>] [options]
+    check.py [--config=<file>] <init_times>
     
 Options:
     --config=<file>         yaml/json file specificying any of the options below
-    --start=<time>          an initial time to start simulation from, if not specified, a time will be derived from base-time, delay and cycles 
-    --base-time=<time>
-    --delay=<hours>         number of hours delay to apply to start time
-    --cycles=<hours>        list of hours to restrict start times to e.g. [0,12]
-    --end=<time>            an end time for the simulation blocks
-    --init-interval=<hours> number of hours between initialistions
-    --working_dir=<dir>     working directory specifier which may contain date and time placeholders, see below
-    --wps-dir=<dir>         base directory of the WPS installation
-    --wrf-dir=<dir>         base directory of the WRF installation
-    --namelist-wps=<file>   location of namelist.wps template to use, a modified copy will be placed into working_dir
-    --namelist-input=<file> location of namelist.input template to use, a modified copy will be places into working_dir
-    --link-boundaries=<bool> try to expand ungrib sections and link in appropriate boundary conditions
-    --rmtree                remove working directory tree first - use with caution!
-    --dry-run               log but don't execute commands
     --log.level=<level>     log level info, debug or warn (see python logging modules)
     --log.format=<fmt>      log format code (see python logging module)
-    --log.file=<file>       optional log file"""
+    --log.file=<file>       optional log file
+    <init_times>            file with init times, one per line"""
 
 LOGGER="wrftools"
 
@@ -36,7 +23,7 @@ import subprocess
 import glob
 import datetime
 import collections
-from dateutil import rrule
+from dateutil import rrule, parser
 from wrftools import namelist
 from wrftools import substitute
 from wrftools import templater
@@ -61,42 +48,54 @@ def main():
                               log_file=config.get('log.file'))
     
     
+    init_file = config['<init_times>']
+    
+    ok_files = open(config['ok_files'], 'w')
+    missing_files = open(config['missing_files'], 'w')
+    
+    if not os.path.exists(init_file):
+        raise IOError("can not find file specifying initial times: %s " % init_file)
+
+    f = open(init_file, 'r')
+    content = f.read().rstrip()
+    f.close()
+    init_strings = content.split('\n') 
+
+    # allow format often used by WRF, with an underscore seperating date and time
+    init_strings = [s.replace('_', ' ') for s in init_strings]
+    init_times = [ parser.parse(token) for token in init_strings]
+
+    
+    # check that the namelist files exist
     if not os.path.exists(config['namelist_wps']):
-        logger.error("No namelist.wps found, %s was specifed as template, but does not exist" % config['namelist_wps'])
-        sys.exit()
+        msg = "No namelist.wps found, %s was specifed as template, but does not exist" % config['namelist_wps']
+        logger.error(msg)
+        raise IOError(msg)
     
     if not os.path.exists(config['namelist_input']):
-        logger.error("No namelist.input found, %s was specifed as template, but does not exist" % config['namlist_input'])
-        sys.exit()
-    
-    ok_files = config.get('ok_files')
-    
-    # dates with missing boundary conditions
-    missing_files = config.get('missing_files')
-    
-    if ok_files is not None and os.path.exists(ok_files):
-        os.remove(ok_files)
+        msg = "No namelist.wps found, %s was specifed as template, but does not exist" % config['namelist_wps']
+        logger.error(msg)
+        raise IOError(msg)
 
-    if missing_files is not None and os.path.exists(missing_files):
-        os.remove(missing_files)
     
-    ok_file = open(ok_files, 'a')
-    init_file = config.get('init_times')
-    lines = open(init_file, 'r').readlines()
-    for l in lines:
-        date_token = l.strip('\n')
-        init_time = datetime.datetime.strptime(date_token, "%Y-%m-%d %H:%M:%S")
-        ok = check(config, init_time)
-        if ok==True:
-            ok_file.write(l)
-            
-    ok_file.close()
+    for init_time in init_times:
+        missing = check(config, init_time)
+        if missing==[]:
+            ok_files.write(init_time.strftime('%Y-%m-%d %H:%M:%S') + '\n')
+        else:
+            for entry in missing:
+                missing_files.write(entry + '\n')
+        
+
+        
+    ok_files.close()
+    missing_files.close()
     
 def check(config, init_time):
     
     logger = loghelper.get(LOGGER)
     
-    logger.info("checking %s " % init_time)
+    
     
 
     bdy_interval = config['bdy_interval']
@@ -138,30 +137,13 @@ def check(config, init_time):
         for f in filenames:
             if not os.path.exists(f): 
                 missing_files.append(f)
-                logger.error("%s \t missing" % f)
+                #logger.error("%s \t missing" % f)
 
-    all_ok = missing_files==[]
-                
-    if not all_ok:
-
-        if config.get('missing_files'):
-            with open(config['missing_files'], "a") as f:
-                f.write(str(init_time)+"\n\t")
-                f.write("\n\t".join(missing_files))
-                f.write("\n")
-    else:
-        if config.get('ok_files'):
-            with open(config['ok_files'], "a") as f:
-                f.write("%s\n" % init_time.strftime("%Y-%m-%d_%H:%M:%S"))
-
+    ok = missing_files==[]
+    msg = 'ok' if ok else 'missing'
+    logger.info("checked %s : %s " % (init_time, msg))
+    return missing_files
     
-
-    if all_ok:
-        logger.info("\t ok") 
-    
-    return all_ok
-
-
 
         
 if '__main__' in __name__:

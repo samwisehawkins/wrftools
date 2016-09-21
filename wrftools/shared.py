@@ -593,6 +593,8 @@ def get_bdy_times(init_time, fcst_hours, bdy_interval):
     hour          = datetime.timedelta(0, 60*60) 
     end_time      = init_time + datetime.timedelta(0, fcst_hours*60*60)
     
+    if fcst_hours==0 or bdy_interval==0:
+        return [init_time]
     #
     # Get the range of files representing boundary condition files
     # Because rrule is not inclusive, we add one hour on to the end 

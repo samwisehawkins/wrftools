@@ -6,16 +6,10 @@ See config/submit.yaml for a full list of configuration options.
 
 
 Usage:
-    submit.py [--config=<file>] [options]
+    submit.py --config=<file> [--dry-run] [--working-dir=<dir>] [--parallel=<N>] [--after-job=<job>] [--log.level=<level>] [--log.format=<fmt>] [--log.file=<file>] <init_times>
     
 Options:
     --config=<file>         yaml/json file specifying configuration options
-    --start=<time>          an initial time to work with, if not specified, time will be caculated from base-time, delay and cycles
-    --base-time=<time>      a base-time to calculate start time from, if not present, system time is used
-    --delay=<hours>         number of hours delay to apply to base-time
-    --cycles=<hours>        list of hours to restrict start times to e.g. [0,12]
-    --end=<time>            an end time for the simulation blocks
-    --init-interval=<hours> number of hours between initialistions
     --working-dir=<dir>     working directory specifier which may contain date and time placeholders, see below
     --after-job=<job>       initial job id or job name to be given as as dependency for the first job
     --parallel=<N>          submit N simulations in parallel
@@ -34,7 +28,7 @@ import sys
 import os
 import loghelper
 from collections import OrderedDict
-from dateutil import rrule
+from dateutil import rrule, parser
 import confighelper as conf
 import loghelper
 from wrftools import shared
@@ -48,29 +42,25 @@ def main():
     config = conf.config(__doc__, sys.argv[1:])
 
     logger = loghelper.create(LOGGER, log_level=config.get('log.level'), log_fmt=config.get('log.format'),log_file=config.get('log.file'))
-    #if config.get('log.file'):
-    #    log_file = config['log.file']
-    #    logger.addHandler(loghelper.file_handler(log_file, config['log.level'], config.get('log.format')))
     
+    init_file = config['<init_times>']
+    if not os.path.exists(init_file):
+        raise IOError("can not find file specifying initial times: %s " % init_file)
 
+    f = open(init_file, 'r')
+    content = f.read().rstrip()
+    f.close()
+    init_strings = content.split('\n') 
+    logger.debug(init_strings)
+    # allow format often used by WRF, with an underscore seperating date and time
+    init_strings = [s.replace('_', ' ') for s in init_strings]
+    init_times = [ parser.parse(token) for token in init_strings]
     
     
     dry_run = config.get('dry-run')
     after_job = config.get('after-job')
     max_dom = config['max_dom']
     
-    # either the start time is exactly specified, or else we calculate it from base time, delay and cycles
-    if config.get('start'):
-        init_time = config['start']
-    else:
-        init_time = shared.get_time(base_time=config.get('base-time'), delay=config.get('delay'), round=config.get('cycles'))
-        
-    if config.get('end'):
-        end_init = config['end']
-        init_interval = config['init_interval']
-        init_times = list(rrule.rrule(freq=rrule.HOURLY, interval=init_interval, dtstart=init_time, until=end_init))
-    else:
-        init_times = [init_time]
 
     jobs = config['jobs']
 

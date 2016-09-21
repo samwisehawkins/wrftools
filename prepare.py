@@ -8,27 +8,17 @@ can also be given at the command line, where they will override the configuratio
 See example/forecast.yaml for a full list of configuration options. 
 
 Usage:
-    prepare.py [--config=<file>] [options]
+    prepare.py --config=<file> [--link-boundaries=<bool>] [--rmtree] [--dry-run] [--log.level=<level>] [--log.format=<fmt>] [--log.file=<file>] <init_times>
     
 Options:
     --config=<file>         yaml/json file specificying any of the options below
-    --start=<time>          an initial time to start simulation from, if not specified, a time will be derived from base-time, delay and cycles 
-    --base-time=<time>
-    --delay=<hours>         number of hours delay to apply to start time
-    --cycles=<hours>        list of hours to restrict start times to e.g. [0,12]
-    --end=<time>            an end time for the simulation blocks
-    --init-interval=<hours> number of hours between initialistions
-    --working_dir=<dir>     working directory specifier which may contain date and time placeholders, see below
-    --wps-dir=<dir>         base directory of the WPS installation
-    --wrf-dir=<dir>         base directory of the WRF installation
-    --namelist-wps=<file>   location of namelist.wps template to use, a modified copy will be placed into working_dir
-    --namelist-input=<file> location of namelist.input template to use, a modified copy will be places into working_dir
     --link-boundaries=<bool> try to expand ungrib sections and link in appropriate boundary conditions
     --rmtree                remove working directory tree first - use with caution!
     --dry-run               log but don't execute commands
     --log.level=<level>     log level info, debug or warn (see python logging modules)
     --log.format=<fmt>      log format code (see python logging module)
-    --log.file=<file>       optional log file"""
+    --log.file=<file>       optional log file
+    <init_times>            list of initial times to process"""
 
 LOGGER="wrftools"
 
@@ -38,8 +28,9 @@ import shutil
 import subprocess
 import glob
 import datetime
+
 import collections
-from dateutil import rrule
+from dateutil import rrule, parser
 from wrftools import namelist
 from wrftools import substitute
 from wrftools import templater
@@ -59,15 +50,25 @@ def main():
     # merge command-line and file-specified arguments
     config = conf.config(__doc__, sys.argv[1:])
 
-
-
-
-
     logger = loghelper.create(LOGGER, log_level=config.get('log.level'), 
                               log_fmt=config.get('log.format'), 
                               log_file=config.get('log.file'))
     
     
+    init_file = config['<init_times>']
+    if not os.path.exists(init_file):
+        raise IOError("can not find file specifying initial times: %s " % init_file)
+
+    f = open(init_file, 'r')
+    content = f.read().rstrip()
+    f.close()
+    init_strings = content.split('\n') 
+    logger.debug(init_strings)
+    # allow format often used by WRF, with an underscore seperating date and time
+    init_strings = [s.replace('_', ' ') for s in init_strings]
+    init_times = [ parser.parse(token) for token in init_strings]
+
+
     if not os.path.exists(config['namelist_wps']):
         logger.error("No namelist.input found, %s was specifed as template, but does not exist" % config['namelist_wps'])
         sys.exit()
@@ -75,25 +76,8 @@ def main():
     if not os.path.exists(config['namelist_input']):
         logger.error("No namelist.input found, %s was specifed as template, but does not exist" % config['namlist_input'])
         sys.exit()
-    
-    
-    
-    # either the start time is exactly specified, or else we calculate it
-    if config.get('start'):
-        init_time = config['start']
-    else:
-        init_time = shared.get_time(base_time=config.get('base-time'), delay=config.get('delay'), round=config.get('cycles'))
 
-    if config.get('end'):
-        end_init = config['end']
-        logger.debug(end_init)
-        init_interval = config['init_interval']
-        init_times = list(rrule.rrule(freq=rrule.HOURLY, interval=init_interval, dtstart=init_time, until=end_init))
-    else:
-        init_times = [init_time]
-
-
-
+        
     for init_time in init_times:
         try:
 
