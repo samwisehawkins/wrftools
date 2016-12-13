@@ -52,11 +52,8 @@ from wrftools import shared
 def main():
     # merge command-line and file-specified arguments
     config = conf.config(__doc__, sys.argv[1:])
-    logger = loghelper.create(LOGGER, log_level=config.get('log.level'), log_fmt=config.get('log.format'))
+    logger = loghelper.create(LOGGER, log_level=config.get('log-level'), log_fmt=config.get('log-format'), log_file=config.get('log-file'))
     
-    if config.get('log.file'):
-        log_file = config['log.file']
-        logger.addHandler(loghelper.file_handler(log_file, config['log.level'], config['log.format']))
     
     base_dir = config['base_dir']
     wrftools_dir = config['wrftools_dir']
@@ -86,10 +83,10 @@ def main():
             shared.link(pattern, dry_run=dry_run)
 
     logger.debug("init.py done")
-    print "\n\n"
-    print "************************************************"
-    print NEXT_STEPS % (base_dir,base_dir)
-    print "************************************************"
+    print("\n\n")
+    print("************************************************")
+    print(NEXT_STEPS % (base_dir,base_dir))
+    print("************************************************")
             
     
 def generate_job_scripts(jobs):

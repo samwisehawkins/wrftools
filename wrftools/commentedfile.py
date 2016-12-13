@@ -10,10 +10,10 @@ class CommentedFile:
     def _detrail(self, line):
         return line.split(self.commentstring)[0]
 
-    def next(self):
-        line = self.f.next()
+    def __next__(self):
+        line = next(self.f)
         while self._skip(line):
-            line = self.f.next()
+            line = next(self.f)
         return self._detrail(line)
 
     def readlines(self):

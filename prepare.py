@@ -8,17 +8,17 @@ can also be given at the command line, where they will override the configuratio
 See example/forecast.yaml for a full list of configuration options. 
 
 Usage:
-    prepare.py --config=<file> [--link-boundaries=<bool>] [--rmtree] [--dry-run] [--log.level=<level>] [--log.format=<fmt>] [--log.file=<file>] <init_times>
+    prepare.py --config=<file> [--link-boundaries=<bool>] [--rmtree] [--dry-run] [--log-level=<level>] [--log-format=<fmt>] [--log-file=<file>] <times>
     
 Options:
     --config=<file>         yaml/json file specificying any of the options below
     --link-boundaries=<bool> try to expand ungrib sections and link in appropriate boundary conditions
     --rmtree                remove working directory tree first - use with caution!
     --dry-run               log but don't execute commands
-    --log.level=<level>     log level info, debug or warn (see python logging modules)
-    --log.format=<fmt>      log format code (see python logging module)
-    --log.file=<file>       optional log file
-    <init_times>            list of initial times to process"""
+    --log-level=<level>     log level info, debug or warn (see python logging modules)
+    --log-format=<fmt>      log format code (see python logging module)
+    --log-file=<file>       optional log file
+    <times>                 either single initial time, or a file listing initial times, one per line"""
 
 LOGGER="wrftools"
 
@@ -55,7 +55,7 @@ def main():
                               log_file=config.get('log.file'))
     
     
-    init_file = config['<init_times>']
+    init_file = config['<times>']
     if not os.path.exists(init_file):
         raise IOError("can not find file specifying initial times: %s " % init_file)
 
@@ -156,7 +156,7 @@ def prepare(config, init_time):
             logger.debug('%s\t---->\t%s' %(template.ljust(20), target.ljust(20)))
             namelist = shared.read_namelist(template)
             if entry.get('update'):
-                for old,new in entry['update'].items():
+                for old,new in list(entry['update'].items()):
                     logger.debug('\t%s\t:\t%s' %(old.ljust(20), expand(new).ljust(20)))
                     namelist.update(old,expand(new))
             namelist.to_file(target)
@@ -167,7 +167,7 @@ def prepare(config, init_time):
     # update namelist.wps to modify start and end time
     
     if config.get('ungrib'):
-        for key,entry in config['ungrib'].items():
+        for key,entry in list(config['ungrib'].items()):
             # apply any delay and rounding to the init_time to get correct time for dataset
             # note that sometimes it is necessary to use a different time e.g. for SST field is delayed by one day
             run_dir = expand(entry['run_dir'])
@@ -233,7 +233,7 @@ def update_namelist_input(template, target, max_dom, init_time, fcst_hours, hist
 
     
     if metadata:
-        for key,value in metadata.items():
+        for key,value in list(metadata.items()):
             namelist.update(key, value, section='metadata')
 
     
@@ -408,7 +408,7 @@ def safe_remove(path, dry_run=False):
 def generate_replacements(mapping, template_expr, expander):
     expand_key = lambda s : template_expr % s
     
-    replacements = { expand_key(key) : expander(value) for (key,value) in mapping.items()}
+    replacements = { expand_key(key) : expander(value) for (key,value) in list(mapping.items())}
     return replacements
 
 

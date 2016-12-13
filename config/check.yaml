@@ -28,33 +28,13 @@
 #************************************************
 %[timing.yaml]
 
-init_times : init_times.txt
 
 #************************************************
-# Running
+# List missing files
 #************************************************
-dry_run           : false                   # if true don't run commands, just log them
-link-boundaries   : true                    # if true, link in boundary conditions specified by ungrib sections
-rmtree            : false                   # remove simulation directories first
-
 missing_files : $(PWD)/missing.txt
 ok_files      : $(PWD)/ok.txt
 
-#************************************************
-# Metadata. 
-# Used to help compose directory names, and
-# are also added as attributes to the output netcdf
-# files. 
-#************************************************
-model             : WRF
-model_run         : $(PWD)
-bdy_conditions    : GFS
-
-metadata          :                        # no longer used, but could be useful later e.g. for adding attributes to the wrfout files
-    domain        : "%(domain)"
-    model         : "%(model)"
-    model_run     : "%(model_run)"
-    bdy_conditions : "%(bdy_conditions)"
 
 #************************************************
 # Directory locations  
@@ -62,131 +42,11 @@ metadata          :                        # no longer used, but could be useful
 base_dir          : $(PWD)                                            # assume configuration file has been copied into base directory
 working_dir       : "%(base_dir)/%iY-%im-%id_%iH"                     # name simulation directories according to initial time
 wrftools_dir      : $(HOME)/code/wrftools/devel                       # location of the code and templates
-wps_dir           : /prog/WPS/3.5                                     # location of WPS code
-wrf_dir           : /prog/WRF/3.5                                     # location of WRF code 
-real_run_dir      : "%(working_dir)/real"
-geogrid_run_dir   : "%(working_dir)/geogrid"
-metgrid_run_dir   : "%(working_dir)/metgrid"
-wrf_run_dir       : "%(working_dir)/wrf"                        # subdirectoty to run WRF from; namelists and met_em files will be linked here   
-geo_em_dir        : "%(working_dir)/geogrid"                    # location of geo_em files
-met_em_dir        : "%(working_dir)/metgrid"                    # location of met_em files
 namelist_wps      : "%(base_dir)/namelist.wps"                  # location of namelist.wps template to use, assume in base directory
 namelist_input    : "%(base_dir)/namelist.input"                # location of namelist.input template to use, assume in base directory
-template_dir      : "%(base_dir)/scripts"                       # location of master job scripts
 grb_dir           : /project/data/grib/GFS                      # used in ungrib sections   
 sst_dir           : /project/data/grib/SST                      # used in ungrib section
 
-#************************************************
-# Logging
-#************************************************
-log.name          : wrf_forecast                           # name of logger object
-log.level         : DEBUG                                  # log level to write to file   
-log.file          : "%(base_dir)/prepare.log"              # file to write to
-log.fmt           : "%(message)s"                          # see logging module for format codes
-log.mail          : false                                  # send an email of logfile
-log.mail.to       : sam.hawkins@vattenfall.com
-log.mail.level    : INFO                                   # level to mail
-log.mail.buffer   : 100000                                 # maximum number of lines in one email
-log.mail.subject  : "WRF preparation log"                  # subject to use in email 
-
-#*************************************************************************************************************************
-# Internals, only modify if you know what you are doing
-#*************************************************************************************************************************
-
-# these subdirectoies will get created     
-prepare.create:
-    - "%(working_dir)" 
-    - "%(working_dir)/ungrib"
-    - "%(working_dir)/ungrib_sst"
-    - "%(working_dir)/geogrid"
-    - "%(working_dir)/metgrid"
-    - "%(working_dir)/real"
-    - "%(working_dir)/wrf"
-    - "%(working_dir)/tseries"
-    - "%(working_dir)/json"
-    - "%(working_dir)/ncl"
-    - "%(working_dir)/wps"
-    - "%(working_dir)/log"
-    - "%(working_dir)/plots"
-
-prepare.remove:                                                          # list of arguments to consecutive linux rm commands. Be careful!
-    - "%(ncl_log)"
-    - "%(gm_log)"
-    - "%(wrf_run_dir)/rsl.*"  
-    - "%(working_dir)/ungrib/ungrib.log*"
-    - "%(working_dir)/metgrid/metgrid.log*"
-    - "%(working_dir)/geogrid/geogrid.log*"
-
-prepare.link:                                                          # list of arguments to consecutive linux ln -sf commands
-  - "%(wrf_dir)/run/*.exe            %(wrf_run_dir)"
-  - "%(wrf_dir)/run/RRTM*            %(wrf_run_dir)"
-  - "%(wrf_dir)/run/*.TBL            %(wrf_run_dir)"
-  - "%(wps_dir)/ungrib.exe           %(working_dir)/ungrib/"
-  - "%(wps_dir)/ungrib.exe           %(working_dir)/ungrib_sst/"
-  - "%(wps_dir)/metgrid.exe          %(working_dir)/metgrid/"
-  - "%(wps_dir)/geogrid.exe          %(working_dir)/geogrid/"
-  - "%(wps_dir)/link_grib.csh        %(working_dir)/ungrib/"
-  - "%(wps_dir)/link_grib.csh        %(working_dir)/ungrib_sst/"
-  - "%(wps_dir)/metgrid/METGRID.TBL  %(metgrid_run_dir)"
-  - "%(wps_dir)/geogrid/GEOGRID.TBL  %(geogrid_run_dir)"
-  - "%(wps_dir)/metgrid/METGRID.TBL  %(metgrid_run_dir)"
-  - "%(wps_dir)/geogrid/GEOGRID.TBL  %(geogrid_run_dir)"
-  - "%(working_dir)/namelist.wps     %(geogrid_run_dir)"
-  - "%(working_dir)/namelist.input   %(wrf_run_dir)"
-  - "%(base_dir)/options.ncl         %(working_dir)/options.ncl"
-  - "%(base_dir)/locations.csv       %(working_dir)/locations.csv"
-  
-prepare.copy:                                                           # list of arguments to consecutive linux cp commands
-  - "%(namelist_wps)                %(working_dir)"
-  - "%(namelist_input)              %(working_dir)"
-  - "%(namelist_wps)                %(working_dir)/ungrib"
-  - "%(namelist_wps)                %(working_dir)/ungrib_sst"
-  - "%(namelist_wps)                %(working_dir)/metgrid"
-  - "-r %(template_dir)/*           %(working_dir)"
-
-  
-# modify any scripts which need initial times and dates in them
-#prepare.template:
-#  - "%(working_dir)/ungrib/ungrib.sh  %(working_dir)/ungrib/ungrib.sh"
-#  - "%(working_dir)/ungrib/ungrib.sh  %(working_dir)/ungrib/ungrib.sh"
-  
-  
-  
-#**********************************************************************************************
-# Namelist updates
-# This allows custom namelist updates to be defined. It was implemented to allow the flexibility of 
-# working with alternative SST source, which requires ungrib to be run with different prefixes.
-# It currently does not automatically know which updates need to be entered max_dom number of times
-# Also we have no sytnax for specifying end time!
-#**********************************************************************************************
-
-namelist_updates:
-    1:
-        template : "%(working_dir)/namelist.wps"
-        target   : "%(working_dir)/namelist.wps"
-        update:
-            opt_output_from_geogrid_path   : "%(geogrid_run_dir)"
-            opt_output_from_metgrid_path   : "%(metgrid_run_dir)"
-            opt_geogrid_tbl_path           : "%(geogrid_run_dir)"
-            opt_metgrid_tbl_path           : "%(metgrid_run_dir)"
-
-    2:
-        template : "%(working_dir)/namelist.wps"
-        target   : "%(working_dir)/ungrib/namelist.wps"
-        update   :
-            prefix   : GFS
-
-    3:
-        template : "%(working_dir)/namelist.wps"
-        target   : "%(working_dir)/ungrib_sst/namelist.wps"
-        update   :
-            prefix: SST
-            end_date : '%iY-%im-%id_%iH:%iM:%iS'             
-    4: 
-        template: "%(working_dir)/namelist.wps"
-        target  : "%(working_dir)/metgrid/namelist.wps"
-        update:
-            constants_name: "SST:yesterday"  
   
 #**********************************************************************************************
 # Ungrib bondary condition job specifications. Allows ungrib to be run with different

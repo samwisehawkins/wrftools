@@ -12,12 +12,10 @@ import glob
 import time, datetime
 from dateutil import rrule
 from collections import OrderedDict
-from namelist import Namelist, read_namelist
-from queue import QueueError
+from .namelist import Namelist, read_namelist
+
 import glob
 import loghelper
-import substitute
-import queue
 
 #*****************************************************************
 # Constants
@@ -130,7 +128,7 @@ def fill_template(template, output, replacements):
      
      i = open(template, 'r')
      content = i.read()
-     for key in replacements.keys():
+     for key in list(replacements.keys()):
         content = content.replace(key,str(replacements[key]))
 
      o = open(output, 'w')
@@ -177,106 +175,21 @@ def get_env_vars(cmd):
     the command, as e.g. A=1 B=2 my_script"""
     
     env_vars = [t for t in cmd.split() if env_var(t)]
-    
-    
-    
-    
-def run(cmd, config, from_dir=None, env_vars=None):
-    """ An all-purpose function to determine how a command should be run. 
-    This looks in the config, and determined whether the command is to be run
-    directly at the command line, at the command line via mpirun, or by 
-    packaged up into a job script and submitted to the scheduler
-    
-    Arguments:
-        cmd      -- executable to run 
-        config   -- configuration specifying number of processors etc 
-        env_vars -- optional dictionary of environment variables for this specific script
-        from_dir -- optional directory to run the the script from
-    """
-    
-    logger=get_logger()
-    exec_name  = get_exe_name(cmd)
-    queue      = config['queue']
-    num_procs  = config['num_procs']
-    queue_log  = config['queue_log']
-    
-    
-    n = num_procs[exec_name] if exec_name in num_procs else 1
-    
-    from_dir = from_dir if from_dir else config['working_dir']
-    
-    # if a queue name is specified and is not false
-    if exec_name in queue and queue[exec_name]:
-        run_queue(cmd,config,from_dir,queue_log[exec_name], env_vars=env_vars)
-        
-    elif n>1:
-        mpirun(cmd, n, config['host_file'], config['run_level'],config['cmd_timing'], env_vars=env_vars)
-    
-    else:
-        run_cmd(cmd, config, env_vars=env_vars)
 
-
-
-def mpirun(cmd, num_procs, hostfile, run_level, cmd_timing=False, env_vars=None):
-    """Wrapper around the system mpirun command.
-    
-    Arguments:
-        @cmd       -- path of the executable
-        @num_procs -- int or dict specifying number of processors. If dict, executable name (not full path) used as key
-        @hostfile  -- path to machine file, use 'None' to not use a host file
-        @run_level -- string: 'RUN' command will get run, anything else command is logged but not run
-        @cmd_timing -- boolean flag,if True, timing information logged"""
-    
-    logger = get_logger()
-    exe = os.path.split(cmd)[1]
-    
-    if type(num_procs) == type({}):
-        nprocs = num_procs[exe]
-    else:
-        nprocs = num_procs
-
-    # LD_LIBRARY_PATH is an ungly hack to get it to work 
-    # on Maestro, hopefully we can get rid of reliance on 
-    # this
-    env_var_str = ""
-    
-    if env_vars:
-        env_var_str = " ".join(["-x %s=%s" %(key,value) for key,value in env_vars.items()])
-        logger.debug(env_var_str)
-    
-    if hostfile=='None':
-        cmd = 'mpirun -x LD_LIBRARY_PATH %s -n %d %s' % (env_var_str, nprocs, cmd)
-
-    else:
-        cmd = 'mpirun -x LD_LIBRARY_PATH %s -n %d -hostfile %s %s' % (env_var_str, nprocs, hostfile, cmd)
-
-    logger.debug(cmd)
-    
-    t0          = time.time()
-    
-    if run_level.upper()=='RUN':
-        ret = subprocess.call(cmd, shell=True)        
-   
-    telapsed = time.time() - t0
-    if cmd_timing:
-        logger.debug("done in %0.1f seconds" %telapsed)
-
-
-        
 
 def run_cmd(cmd, dry_run=False, cwd=None, env_vars=None, timing=False, log=True):
     """Executes and logs a shell command
     
     Arguments:
-        cmd     -- the command to execute
-        dry_run -- log but don't execute commands (default false)
+        cmd      -- the command to execute
+        dry_run  -- log but don't execute commands (default false)
         env_vars -- dictionary of environment vars to prefix, e.g. ENV=value cmd
         timing   -- log elapsed time default False"""
     
     logger = get_logger()
     
 
-    t0          = time.time()
+    t0 = time.time()
     
     if log:
         logger.debug(cmd)
@@ -302,108 +215,7 @@ def run_cmd(cmd, dry_run=False, cwd=None, env_vars=None, timing=False, log=True)
         
     
     return ret
-
-
-def run_queue(cmd,config, run_from_dir, log_file, env_vars=None):
-    """ Run a command via the scheduler, and wait in loop until
-    command is expected to finish.
     
-    Arguments:
-        @cmd            -- full path of the executable
-        @config         -- all the other settings!
-        @run_from_dir   -- directory to run from 
-        @log_file       -- redirect to different log file
-        @env_vars       -- optional dict of environment vars"""
-    
-    logger          = get_logger()    
-
-    run_level       = config['run_level']
-    num_procs       = config['num_procs']
-    job_template    = config['job_template']
-    job_script      = config['job_script']
-    queue_dict      = config['queue']
-    poll_interval   = config['poll_interval']
-    max_job_time    = config['max_job_time']
-
-    exe = get_exe_name(cmd)
-    
-
-    if log_file:
-        log = log_file
-    else:
-        log = exe
-
-        
-
-    try:
-        qname = queue_dict[exe]
-        template = job_template[qname]
-        nprocs =  num_procs[exe] if exe in num_procs else 1
-        mjt = max_job_time[exe]
-        pint = poll_interval[exe]        
-
-    except KeyError, e:
-        tb = traceback.format_exc()
-        raise ConfigError(tb)    
-    
-
-    attempts = mjt / pint
-    
-    #logger.debug('Submitting %s to %d slots on %s, polling every %s minutes for %d attempts' %(exe, nprocs, qname, pint, attempts ))
-    #logger.debug('Running from dir: %s ' % run_from_dir)
-    
-    env_var_str = ""
-    if env_vars:
-        #logger.debug("environment variables supplied")
-        
-        # for older mpi versions
-        env_var_str = " ".join(["-x %s=%s" %(key,value) for key,value in env_vars.items()])
-        
-        # mca_base_env_list" parameter to specify the whole list of required
-        # environment variables. With this new mechanism, -x env_foo1=bar1 -x env_foo2=bar2
-        # becomes -mca mca_base_env_list "env_foo1=bar1;env_foo2=bar2".
-        #env_var_str = "-mca";".join(["%s=%s" %(key,value) for key,value in env_vars.items()])                
-        
-        cmd = "%s %s" %(env_var_str, cmd)
-        #logger.debug(env_var_str)
-        
-    replacements = {'<executable>': cmd,
-                '<jobname>': exe,
-                '<qname>'  : qname,
-                '<nprocs>' : nprocs,
-                '<logfile>': log}
-
-    fill_template(template,job_script,replacements)
-    job_script      = config['job_script']
-    #logger.debug("job_template: %s " % job_template)
-    #logger.debug("job_script: %s "   % job_script)
-    os.chdir(run_from_dir)
-    
-    if run_level.upper()!='RUN':
-        return
-
-
-    job_id = queue.qsub(job_script)
-   
-    for i in range(attempts):
-        output = queue.qstat(job_id)
-        if output=='':
-            #logger.debug('no queue status for job, presume complete')
-            return
-        
-        logger.debug(output)
-        tokens =  output.split()
-        status = tokens[4].strip()
-
-        if 'E' in status:
-            raise QueueError('job %s has queue status of %s' %(job_id, status))
-
-        time.sleep(pint*60)
-
-    # what to do?
-    logger.error('Job did not complete within max number of poll attempts')
-    logger.error('Suggest changing max_job_time in config file')
-    raise QueueError('job %s has queue status of %s' %(job_id, status))
 
     
 #*****************************************************************
@@ -499,10 +311,7 @@ def ordered_set(items):
     """create and ordered set from the iterable"""
     
     odict = OrderedDict([(item,None) for item in items])
-    return odict.keys()
-
-    
-    
+    return list(odict.keys())
 
     
 
@@ -535,44 +344,26 @@ def get_time(base_time=None, delay=None, round=None):
     
 
     return start
-    
-def get_init_times(start, end, interval):
-    """ Returns a list of datetimes representing initial times in a forecast test case
-    
-    Start and end can be lists of start and end times, in which case they must the same length,
-    each pair of start and end times will define a simulation block.
-    
-    Arguments:
-        start -- single start time or list of start times
-        end -- single end time or list of end times same length as start
-        interval -- integer interval in hours between initialsation times
-    
-    Returns:
-        a list of intital times"""
 
-    logger = loghelper.get(LOGGER)
+def read_times(tspec):    
     
-    freq = rrule.HOURLY
-
-    # even if start and end are single elements, package them into lists 
-    # to make the following code generic
-    start = _listify(start)
-    end = _listify(end) 
+    if isinstance(tspec, datetime.datetime):
+        return [tspec]
     
-    if len(start)!=len(end):
-        raise IOError('different start and end times specified')
+    filename = tspec
+    if not os.path.exists(filename):
+        raise IOError("can not find file specifying initial times: %s " % init_file)
 
-    init_times = []
-    hour = datetime.timedelta(0,60*60)
-    
-    
-    for s, e in zip(start, end):
-        rec  = rrule.rrule(freq, dtstart=s, until=e, interval=interval)
-        init_times.extend(list(rec))
+    with open(filename, 'r') as f:
+        content = f.read().rstrip()
 
-
-    logger.debug("get_init_times done")
+    init_strings = content.split('\n') 
+    logger.debug(init_strings)
+    # allow format often used by WRF, with an underscore seperating date and time
+    init_strings = [s.replace('_', ' ') for s in init_strings]
+    init_times = [ parser.parse(token) for token in init_strings]
     return init_times
+
 
     
 def get_interval_times(start, freq, count, inclusive=False):    

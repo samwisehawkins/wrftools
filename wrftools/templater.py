@@ -6,19 +6,13 @@ See example/templater.yaml for a full list of configuration options.
 
 
 Usage:
-    templater.py [--config=<file>] [options]
+    templater.py [--config=<file>] [options] <times>
     
 Options:
     --config=<file>         yaml/json file specifying configuration options
     --source=<source>       source file or directory to read from, directories processes recursively
     --target=<target>       target file or directory to write to. Is source is directory, structure of target will mirror source
     --template-expr=<expr>  expression in templates which indicates placeholder to be expanded (default <%s>)
-    --start=<time>          an initial time to work with, if not specified, init time will be caculated from base-time, delay and cycles
-    --base-time=<time>      a base-time to calculate start time from, if not present, system time is used
-    --delay=<hours>         number of hours delay to apply to base-time
-    --cycles=<hours>        list of hours to restrict start times to e.g. [0,12]
-    --end=<time>            an end initial time for the simulation blocks. If not specified, a single simulation assumed
-    --init-interval=<hours> number of hours between initialistions, use in combination with end
     --working-dir=<dir>     working directory specifier which may contain date and time placeholders, see below
     --dry-run               log but don't execute commands
     --log.level=<level>     log level info, debug or warn (see python logging modules)
@@ -35,8 +29,8 @@ import os
 import sys
 import loghelper
 import confighelper as conf
-import substitute
-
+from wrftools import substitute
+from wrftools import shared
 
 def main():
     # merge command-line and file-specified arguments

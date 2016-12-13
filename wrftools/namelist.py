@@ -1,9 +1,9 @@
 import time, datetime
 import re
-from StringIO import StringIO
+from io import StringIO
 import ast
 from collections import OrderedDict
-from commentedfile import CommentedFile
+from wrftools.commentedfile import CommentedFile
 import os
 
 class Namelist(object):
@@ -64,7 +64,7 @@ class Namelist(object):
     
     def __str__(self):
         output = ''
-        for section,v in self.sections.items():
+        for section,v in list(self.sections.items()):
             sectionstring = '&%s\n'%section
             output+=sectionstring
             keys = self.sections[section]
@@ -110,10 +110,10 @@ class Namelist(object):
         If the entry does not previously exist, the section must be given. """
 
         if key==None:
-            print 'null key given'
+            print('null key given')
             raise ValueError
         
-        if key not in self.settings.keys():
+        if key not in list(self.settings.keys()):
             self.insert(key, value, section)
         
         else:
@@ -578,8 +578,8 @@ obs_file          = /home/slha/domains/obs/adpupa.nc
     #namelist = from_file(f)
     namelist = read_namelist('/home/slha/forecasting/domains/aberdeen/resource/namelist.input')
    
-    print namelist
-    print '\n'
+    print(namelist)
+    print('\n')
     
 
     

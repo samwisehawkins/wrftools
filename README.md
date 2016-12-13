@@ -1,7 +1,7 @@
 wrftools
 --------
 
-A framework for running WRF simulations.
+A framework for preparing WRF simulations.
 
 It is designed to be flexible and extendable. There are some tools out there
 which run WRF, but they are not easily modified. This is designed to provide 
@@ -9,29 +9,28 @@ a framework which is easily customised and modified.
 
 ## Overview
 
-There are three main scripts, [init.py](init.py), [prepare.py](prepare.py) and [submit.py](submit.py). 
+There are ~~three~~ two main scripts, [init.py](init.py) and [prepare.py](prepare.py) and ~~[submit.py](submit.py). ~~. 
+For job submission, see the more general `pysub` package.
 
 Each block of simulations are run from a `base_dir`. This is the directory which will contain the top-level
-namelist files, and the master job scripts. Individual simulations are held in subdirectories named according to date
-e.g. 
+namelist files, and the master job scripts. Individual simulations are held in subdirectories named according to 
+simulation initial time. e.g. 
 
-```
+
     base_dir/namelist.wps              # master namelist templates
     base_dir/namelist.input
     base_dir/scripts                   # master script templates
     base_dir/2015-01-01_00             # simulation directory
     base_dir/2015-01-02_00             # simulation directory
-```    
+
 
 
 ## Install
 
-It relies on submodules, use the `--recursive` option to grab them.
-    
-    ```
-     $>git clone --recursive -b development https://github.com/samwisehawkins/wrftools.git
-    ```
-
+Dependencies:
+  * confighelper
+  * loghelper
+  * pyyaml
 
 ## Configuration files
     
@@ -40,9 +39,18 @@ local variables and date placeholders to be used in the files. See [Configuratio
 A subset of configuration file options can be overriden at the command-line, use the `--help` flag with each script to 
 see the available command-line options.
 
+## Running scripts
+
+Each script is run in the following way:
+
+     python script.py --config=config.yaml [--log-level=<level>] [--dry-run]  [<times>]
+
+Where config.yaml is a configuration file, `log-level` is one of debug, info or warn, and `dry-run` is a 
+boolean flag, and times is either a single time to operate on, or a file specifying a list of times, one per line. 
+The reason for using a file, rather than a simple list is that it is more robust to spaces in the times, and requires 
+less care about quoting, which always plagues my bash workflow.
     
 ## Step 1: Initialise
-
 
 [init.py](init.py) is run once per block of simulations. It creates the master job scripts, copies
 configuration files and links the main python scripts into the `base_dir`.
