@@ -70,7 +70,7 @@ def check(config, init_time):
     logger = loghelper.get(LOGGER)
 
     bdy_interval = config['bdy_interval']
-    fcst_hours = config['fcst_hours']
+    fcst_hours = config['simulation_length']
     
     bdy_times = shared.get_bdy_times(init_time, fcst_hours, bdy_interval)
 

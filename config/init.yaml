@@ -23,29 +23,14 @@
 #************************************************
 # Logging
 #************************************************
-log.name          : wrftools                               # name of logger object
-log.level         : DEBUG                                  # log level to write to file   
-log.file          : "%(base_dir)/init.log"                 # file to write to
-log.fmt           : "%(message)s"                          # see logging module for format codes
-
-
-#************************************************
-# Metadata. 
-# added as attributes to the output netcdf files. 
-#************************************************
-model_run         : $(PWD)
-bdy_conditions    : GFS
-
-    
+log-file          : "%(base-dir)/init.log"                 # file to write to
+log-fmt           : "%(message)s"                          # see logging module for format codes
+   
 #************************************************
 # Directory locations  
 #************************************************
-base_dir          : $(PWD)                                             # this will be taken from current working direcory
-wrftools_dir      : $(HOME)/code/wrftools/devel  
-ncl_scripts       : "%(wrftools_dir)/ncl"                              # NCL visualisation scripts
-template_dir      : "%(wrftools_dir)/templates"                        # location of job script templates
-target_dir        : "%(base_dir)/scripts"                              # create 'master' job scripts for collection of simulations
-
+base-dir          : $(PWD)                                             # this will be taken from current working direcory
+wrftools-dir      : $(HOME)/code/wrftools/devel  
 
 
 #*************************************************************************************************************************
@@ -54,182 +39,21 @@ target_dir        : "%(base_dir)/scripts"                              # create 
 
 # these subdirectoies will get created     
 initialise.create:
-    - "%(base_dir)"
-    - "%(target_dir)"
-    - "%(base_dir)/wrfout"
-    - "%(base_dir)/tseries"
-    
+    - "%(base-dir)"
+    - "%(base-dir)/wrfout"
+    - "%(base-dir)/tseries"
 
 initialise.remove:
-    - "%(base_dir)/prepare.py"                                            # list of arguments to consecutive linux rm commands. Be careful!
-    - "%(base_dir)/submit.py"
+    - "%(base-dir)/prepare.py"                                            # list of arguments to consecutive linux rm commands. Be careful!
+    - "%(base-dir)/submit.py"
 
 initialise.link:                                                          # list of arguments to consecutive linux ln -sf commands
-  - "%(wrftools_dir)/prepare.py     %(base_dir)"
-  - "%(wrftools_dir)/submit.py      %(base_dir)"
+  - "%(wrftools-dir)/check.py      %(base-dir)"
+  - "%(wrftools-dir)/prepare.py     %(base-dir)"
+  - "%(wrftools-dir)/submit.py      %(base-dir)"
 
 initialise.copy:                                                           # list of arguments to consecutive linux cp commands
-  - "%(wrftools_dir)/config/prepare.yaml     %(base_dir)"
-  - "%(wrftools_dir)/config/submit.yaml      %(base_dir)"
-  - "%(wrftools_dir)/config/options.ncl      %(base_dir)"
-  - "%(wrftools_dir)/config/locations.csv    %(base_dir)"
-# - "-r %(template_dir)/*                   %(target_dir)"
-  - "-r %(ncl_scripts)/*                     %(target_dir)/ncl"
+  - "-r %(wrftools-dir)/config            %(base-dir)/config"
+  - "-r %(wrftools-dir)/scripts           %(base-dir)/scripts"
+  - "-r %(wrftools-dir)/ncl               %(base-dir)/ncl"
   
-
-
-
-
-#************************************************
-# Create master job scrips.
-# Each entry consists of a template file, a set of replacements to apply, 
-# and a target file to write to
-#************************************************
-queue             : all.q
-jobs:
-    1: 
-        template : "%(template_dir)/template_mpi.sge"
-        target   : "%(target_dir)/ungrib/ungrib.sh"
-        replacements: 
-            <jobname>    : ungrib
-            <cmd>        : ungrib.exe
-            <nprocs>     : 1
-            <queue>      : "%(queue)"
-            <logfile>    : "ungrib.log"
-
-    2: 
-        template : "%(template_dir)/template_mpi.sge"
-        target   : "%(target_dir)/ungrib_sst/ungrib.sh"
-        replacements: 
-            <jobname>    : ungrib_sst
-            <cmd>        : ungrib.exe
-            <nprocs>     : 1
-            <queue>      : "%(queue)"
-            <logfile>    : "ungrib.log"
-            
-    3: 
-        template : "%(template_dir)/ungrib/ungrib.post.sh"
-        target   : "%(target_dir)/ungrib/ungrib.post.sh"
-        replacements: 
-            <jobname>    : ungrib.post
-            <nprocs>     : 1
-            <queue>      : "%(queue)"
-            <logfile>    : "ungrib.post.log"            
-            
-            
-    4: 
-        template : "%(template_dir)/template_mpi.sge"
-        target   : "%(target_dir)/ungrib_sst/ungrib.sh"
-        replacements: 
-            <jobname>    : ungrib_sst
-            <cmd>        : ungrib.exe
-            <nprocs>     : 1
-            <queue>      : "%(queue)"
-            <logfile>    : "ungrib.log"            
-
-    5: 
-        template : "%(template_dir)/ungrib_sst/ungrib_sst.post.sh"
-        target   : "%(target_dir)/ungrib_sst/ungrib_sst.post.sh"
-        replacements: 
-            <jobname>    : ungrib_sst.post
-            <nprocs>     : 1
-            <queue>      : "%(queue)"
-            <logfile>    : "ungrib_sst.post.log"            
-
-            
-    6: 
-        template : "%(template_dir)/template_mpi.sge"
-        target   : "%(target_dir)/geogrid/geogrid.sh"
-        replacements: 
-            <jobname>    : geogrid
-            <cmd>        : geogrid.exe
-            <nprocs>     : 1
-            <queue>      : "%(queue)"
-            <logfile>    : "geogrid.log"                        
-            
-            
-    7: 
-        template : "%(template_dir)/template_mpi.sge"
-        target   : "%(target_dir)/metgrid/metgrid.sh"
-        replacements: 
-            <jobname>    : metgrid
-            <cmd>        : metgrid.exe
-            <nprocs>     : 1
-            <queue>      : "%(queue)"
-            <logfile>    : "metgrid.log"            
-            
-
-            
-    8: 
-        template : "%(template_dir)/template_serial.sge"
-        target   : "%(target_dir)/wrf/real.pre.sh"
-        replacements: 
-            <jobname>    : real.pre
-            <cmd>        : ln -sf ../metgrid/met_em* ./
-            <nprocs>     : 1
-            <queue>      : "%(queue)"
-            <logfile>    : "real.pre.log"            
-            
-            
-    9: 
-        template : "%(template_dir)/template_mpi.sge"
-        target   : "%(target_dir)/wrf/real.sh"
-        replacements: 
-            <jobname>    : real
-            <cmd>        : real.exe
-            <nprocs>     : 1
-            <queue>      : "%(queue)"
-            <logfile>    : "real.log"            
-
-    10: 
-        template : "%(template_dir)/template_mpi.sge"
-        target   : "%(target_dir)/wrf/wrf.sh"
-        replacements: 
-            <jobname>    : wrf
-            <cmd> : wrf.exe
-            <nprocs>     : 40
-            <queue>      : "%(queue)"
-            <logfile>    : "wrf.log"
-
-
-
-    11: 
-        template : "%(template_dir)/wrf/wrf.post.sh"
-        target   : "%(target_dir)/wrf/wrf.post.sh"
-        replacements: 
-            <jobname>    : wrf.post
-            <queue>      : "%(queue)"
-            <logfile>    : "wrf.post.log"
-            <attributes> : -a MODEL_RUN,global,c,c,"%(model_run)" -a BOUNDARY_CONDITIONS,global,c,c,"%(bdy_conditions)"
-
-
-    12: 
-        template : "%(template_dir)/ncl.sh"
-        target   : "%(target_dir)/ncl.sh"
-        replacements: 
-            <jobname>    : ncl
-            <nprocs>     : 1
-            <queue>      : "%(queue)"
-            <logfile>    : "ncl.log"
-
-    13: 
-        template : "%(template_dir)/tseries.sh"
-        target   : "%(target_dir)/tseries.sh"
-        replacements: 
-            <jobname>    : tseries
-            <nprocs>     : 1
-            <queue>      : "%(queue)"
-            <logfile>    : "ncl.log"
-            
-    14: 
-        template     : "%(template_dir)/dispatch.sh"
-        target       : "%(target_dir)/dispatch.sh"
-        <jobname>    : dispatch
-        <logfile>    : dispatch.log
-
-    15: 
-        template     : "%(template_dir)/finalise.sh"
-        target       : "%(target_dir)/finalise.sh"
-        <jobname>    : finalise
-        <logfile>    : finalise.log
-        

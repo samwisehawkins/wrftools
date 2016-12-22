@@ -55,19 +55,7 @@ def main():
                               log_file=config.get('log.file'))
     
     
-    init_file = config['<times>']
-    if not os.path.exists(init_file):
-        raise IOError("can not find file specifying initial times: %s " % init_file)
-
-    f = open(init_file, 'r')
-    content = f.read().rstrip()
-    f.close()
-    init_strings = content.split('\n') 
-    logger.debug(init_strings)
-    # allow format often used by WRF, with an underscore seperating date and time
-    init_strings = [s.replace('_', ' ') for s in init_strings]
-    init_times = [ parser.parse(token) for token in init_strings]
-
+    init_times = shared.read_times(config['<times>'])
 
     if not os.path.exists(config['namelist_wps']):
         logger.error("No namelist.input found, %s was specifed as template, but does not exist" % config['namelist_wps'])
@@ -91,13 +79,13 @@ def prepare(config, init_time):
     
     logger = loghelper.get(LOGGER)
     
-    logger.info("**** Running simulation for %s *****" % init_time)
+    logger.info("**** Preparing simulation directory for %s *****" % init_time)
     
     dry_run = config.get('dry-run')
     rmtree = config.get('rmtree')
     max_dom = config['max_dom']
     bdy_interval = config['bdy_interval']
-    fcst_hours = config['fcst_hours']
+    fcst_hours = config['simulation_length']
     
 
     history_interval = config['history_interval'] 

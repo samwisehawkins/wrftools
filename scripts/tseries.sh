@@ -39,6 +39,6 @@ ncl_out_file="tseries/${new_name}"
 echo $ncl_in_file
 echo $ncl_out_file
 
-NCL_IN_FILE=${ncl_in_file} NCL_OUT_FILE=${ncl_out_file} NCL_LOC_FILE=locations.csv NCL_OUT_TYPE=nc NCL_OPT_FILE=options.ncl ncl ncl/extract_time_series.ncl
+NCL_IN_FILE=${ncl_in_file} NCL_OUT_FILE=${ncl_out_file} NCL_LOC_FILE=config/locations.csv NCL_OUT_TYPE=nc NCL_OPT_FILE=options.ncl ncl ncl/extract_time_series.ncl
 
 

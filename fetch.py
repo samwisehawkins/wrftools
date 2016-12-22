@@ -5,28 +5,26 @@ can also be given at the command line, where they will override the configuratio
 See example/forecast.yaml for a full list of configuration options. 
 
 Usage:
-    fetch.py [--config=<file>] <init_times>
+    fetch.py --config=<file> [--log-level=<level>] [--log-file=<file>] [--log-fmt=<fmt>] <times>
     
 Options:
     --config=<file>         yaml configuration file
-    --log.level=<level>     log level info, debug or warn (see python logging modules)
-    --log.format=<fmt>      log format code (see python logging module)
-    --log.file=<file>       optional log file
-    <init_times>            file with init times, one per line"""
+    --log-level=<level>     log level info, debug or warn (see python logging modules)
+    --log-format=<fmt>      log format code (see python logging module)
+    --log-file=<file>       optional log file
+    <times>                 either single time, or file with times, one per line"""
 
 LOGGER="wrftools"
 
 import sys
 import os
 import subprocess
-from dateutil import parser
-from wrftools import substitute
-from wrftools import shared
 import confighelper as conf
 import loghelper
 import requests
 from urlparse import urlparse
-
+from wrftools import substitute
+from wrftools import shared
 
         
 def main():
@@ -39,20 +37,8 @@ def main():
                               log_fmt=config.get('log.format'), 
                               log_file=config.get('log.file'))
     
+    init_times = shared.read_times(config['<times>'])
     
-    init_file = config['<init_times>']
-    
-    if not os.path.exists(init_file):
-        raise IOError("can not find file specifying initial times: %s " % init_file)
-
-    f = open(init_file, 'r')
-    content = f.read().rstrip()
-    f.close()
-    init_strings = content.split('\n') 
-
-    # allow format often used by WRF, with an underscore seperating date and time
-    init_strings = [s.replace('_', ' ') for s in init_strings]
-    init_times = [ parser.parse(token) for token in init_strings]
     for init_time in init_times:
         fetch(config, init_time)
 

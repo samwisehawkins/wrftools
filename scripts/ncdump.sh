@@ -24,11 +24,11 @@ module load openmpi
 files=(tseries/tseries*)
 index=$(($SGE_TASK_ID - 1))                       # bash arrays are zero-indexed, array jobs start at 1
 file=${files[$index]}
-python $HOME/code/nctools/ncdump.py --config=ncdump_met.yaml --out=json/fcst_data_d01_00Z.json $file
+python $HOME/code/nctools/ncdump.py --config=config/ncdump_met.yaml --out=json/fcst_data_d01_00Z.json $file
 
 
 files=(tseries/power*)
 index=$(($SGE_TASK_ID - 1))                       # bash arrays are zero-indexed, array jobs start at 1
 file=${files[$index]}
-python $HOME/code/nctools/ncdump.py --config=ncdump_power.yaml --out=json/power_data_d01_00Z.json $file
+python $HOME/code/nctools/ncdump.py --config=config/ncdump_power.yaml --out=json/power_data_d01_00Z.json $file
 

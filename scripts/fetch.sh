@@ -19,5 +19,4 @@ module load openmpi
 #$ -j yes
 
 
-# dispatch files via email 
-python $HOME/code/wrftools/devel/fetch.py --config=fetch.yaml init_times.txt
+python $HOME/code/wrftools/devel/fetch.py --config=config/fetch.yaml times.txt

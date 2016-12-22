@@ -1,20 +1,20 @@
-""" Generate master job scripts from a configuration file
+"""Initialise a directory to contain a group of WRF simulations. The directory must 
+exist and contain a namelist.input and namelist.wps
 
 Config comes from a file, specified as --config argument. Some configuration options (listed below) 
 can also be given at the command line, where they will override the configuration file. 
 
 
 Usage:
-    init.py [--config=<file>] [options]
+    init.py --config=<file> [--base-dir=<dir>] [--dry-run] [--log-level=<level>] [--log-file=<file>] [--log-format=<fmt>]
     
 Options:
-    --base_dir=<dir>        directory to initialise (specify at command line, not in file)
+    --base-dir=<dir>        directory to initialise
+    --dry-run               log but don't create
     --config=<file>         yaml/json file specifying configuration options
-    --template-dir=<dir>    directory containing job template
-    --target-dir=<dir>      directory to write scripts into
-    --log.level=<level>     log level info, debug or warn (see python logging modules)
-    --log.format=<fmt>      log format code (see python logging module)
-    --log.file=<file>       optional log file
+    --log-level=<level>     log level info, debug or warn (see python logging modules)
+    --log-format=<fmt>      log format code (see python logging module)
+    --log-file=<file>       optional log file
     --help                  display documentation
     
 The above options can all be given at the command line. Jobs must be specified inside a configuration file. See config/initialise.yaml for
@@ -52,19 +52,19 @@ from wrftools import shared
 def main():
     # merge command-line and file-specified arguments
     config = conf.config(__doc__, sys.argv[1:])
+    
+    
     logger = loghelper.create(LOGGER, log_level=config.get('log-level'), log_fmt=config.get('log-format'), log_file=config.get('log-file'))
     
     
-    base_dir = config['base_dir']
-    wrftools_dir = config['wrftools_dir']
-    dry_run = config.get('dry_run')
+    base_dir = config['base-dir']
+    wrftools_dir = config['wrftools-dir']
+    dry_run = config.get('dry-run')
     jobs = config.get('jobs')
     create = config.get('initialise.create')
     remove = config.get('initialise.remove')
     copy = config.get('initialise.copy')
     link = config.get('initialise.link')
-
-    generate_job_scripts(jobs)
     
     if create:
         for d in create:
@@ -89,21 +89,6 @@ def main():
     print("************************************************")
             
     
-def generate_job_scripts(jobs):
-    logger = loghelper.get(LOGGER)
-    for key in sorted(jobs.keys()):
-        entry = jobs[key]
-        template = entry['template']
-        target = entry['target']
-        logger.debug("filling template  %s ----> %s" % (template, target))
-        path,name = os.path.split(target)
-        if not os.path.exists(path):
-            os.makedirs(path)
-        
-        if entry.get('replacements'):
-            tm.fill_template(template,target,entry['replacements'])
-        else:
-            shutil.copyfile(template, target)
         
 if '__main__' in __name__:
     main()

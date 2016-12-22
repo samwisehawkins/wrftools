@@ -23,15 +23,14 @@ parallel           : 2
 #************************************************
 # Logging
 #************************************************
-log.name          : wrf_forecast                           # name of logger object
-log.level         : DEBUG                                  # log level to write to file   
-log.file          : "%(base-dir)/submit.log"               # file to write to
-log.fmt           : "%(message)s"                          # see logging module for format codes
-log.mail          : true                                   # send an email of log
-log.mail.to       : sam.hawkins@vattenfall.com
-log.mail.level    : INFO                                   # level to mail
-log.mail.buffer   : 100000                                 # maximum number of lines in one email
-log.mail.subject  : "Maestro WRF log"                      # subject to use in email 
+log-level         : DEBUG                                  # log level to write to file   
+log-file          : "%(base-dir)/submit.log"               # file to write to
+log-fmt           : "%(message)s"                          # see logging module for format codes
+log-mail          : true                                   # send an email of log
+log-mail-to       : sam.hawkins@vattenfall.com
+log-mail-level    : INFO                                   # level to mail
+log-mail-buffer   : 100000                                 # maximum number of lines in one email
+log-mail-subject  : "Maestro WRF log"                      # subject to use in email 
 
 
 #***********************************************************
@@ -55,7 +54,7 @@ dispatch          : true
 finalise          : true
 
 
-jobs:
+submit:
     - name     : geogrid
       run      : "%(geogrid)"
       script   : "%(working-dir)/geogrid/geogrid.sh"
@@ -71,13 +70,13 @@ jobs:
       nprocs   : 1
       after    : geogrid
 
-    - name     : ungrib.post
-      run      : "%(wps)"
-      script   : "%(working-dir)/ungrib/ungrib.post.sh"
-      queue    : all.q
-      pe       : ompi
-      nprocs   : 1
-      after    : ungrib
+#    - name     : ungrib.post
+#      run      : "%(wps)"
+#      script   : "%(working-dir)/ungrib/ungrib.post.sh"
+#      queue    : all.q
+#      pe       : ompi
+#      nprocs   : 1
+#      after    : ungrib
 
     - name     : ungrib.sst
       run      : "%(wps)"
@@ -88,14 +87,14 @@ jobs:
       nprocs   : 1
       after    : geogrid
       
-    - name     : ungrib.sst.post
-      run      : "%(wps)"
-      script   : "%(working-dir)/ungrib_sst/ungrib_sst.post.sh"
-      queue    : all.q
-      pe       : ompi
-      nprocs  : 1
-      after    : ungrib.sst
-      log      : ungrib.post.log        
+#    - name     : ungrib.sst.post
+#      run      : "%(wps)"
+#      script   : "%(working-dir)/ungrib_sst/ungrib_sst.post.sh"
+#      queue    : all.q
+#      pe       : ompi
+#      nprocs  : 1
+#      after    : ungrib.sst
+#      log      : ungrib.post.log        
        
     - name     : metgrid
       run      : "%(wps)"
@@ -105,14 +104,14 @@ jobs:
       nprocs  : 1
       after    : ungrib*
       
-    - name   : real.pre
-      run    : "%(wrf)"
-      script : "%(working-dir)/wrf/real.pre.sh"
-      queue  : all.q
-      pe     : ompi
-      nprocs : 1
-      after  : metgrid
-      log    : real.pre.log
+#    - name   : real.pre
+#      run    : "%(wrf)"
+#      script : "%(working-dir)/wrf/real.pre.sh"
+#      queue  : all.q
+#      pe     : ompi
+#      nprocs : 1
+#      after  : metgrid
+#      log    : real.pre.log
       
     - name    : real
       run     : "%(wrf)"

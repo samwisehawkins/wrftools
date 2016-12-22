@@ -10,7 +10,6 @@ a framework which is easily customised and modified.
 ## Overview
 
 There are ~~three~~ two main scripts, [init.py](init.py) and [prepare.py](prepare.py) and ~~[submit.py](submit.py). ~~. 
-For job submission, see the more general `pysub` package.
 
 Each block of simulations are run from a `base_dir`. This is the directory which will contain the top-level
 namelist files, and the master job scripts. Individual simulations are held in subdirectories named according to 
@@ -26,6 +25,8 @@ simulation initial time. e.g.
 
 
 ## Install
+
+Since this is not a pure python package, more of a collection of tools
 
 Dependencies:
   * confighelper

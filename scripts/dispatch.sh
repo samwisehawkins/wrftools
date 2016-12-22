@@ -14,10 +14,8 @@ module load openmpi
 #$ -v MPI_HOME
 #$ -v LD_LIBRARY_PATH
 #$ -cwd
-#$ -q graphics.q
-#$ -pe ompi 1
 #$ -j yes
 
 
 # dispatch files via email 
-python $HOME/code/dispatch/dispatch.py --config=dispatch.yaml
+python $HOME/code/dispatch/dispatch.py --config=config/dispatch.yaml

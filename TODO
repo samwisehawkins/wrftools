@@ -1,3 +1,0 @@
-* Make Python 3 compatible
-* Tidy up logging statements
-* Remove as much implicit state and side-effects from functions as possible

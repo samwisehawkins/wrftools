@@ -11,6 +11,7 @@ import math
 import glob
 import time, datetime
 from dateutil import rrule
+import dateutil.parser 
 from collections import OrderedDict
 from .namelist import Namelist, read_namelist
 
@@ -347,6 +348,7 @@ def get_time(base_time=None, delay=None, round=None):
 
 def read_times(tspec):    
     
+    
     if isinstance(tspec, datetime.datetime):
         return [tspec]
     
@@ -358,10 +360,11 @@ def read_times(tspec):
         content = f.read().rstrip()
 
     init_strings = content.split('\n') 
-    logger.debug(init_strings)
+    
     # allow format often used by WRF, with an underscore seperating date and time
     init_strings = [s.replace('_', ' ') for s in init_strings]
-    init_times = [ parser.parse(token) for token in init_strings]
+
+    init_times = [ dateutil.parser.parse(token) for token in init_strings]
     return init_times
 
 

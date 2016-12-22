@@ -26,4 +26,4 @@ index=$(($SGE_TASK_ID - 1))                       # bash arrays are zero-indexed
 file=${files[$index]}
 out=${file/tseries_/power_}
 
-python $HOME/code/powerup/powerup.py --config=power.yaml --out=$out $file
+python $HOME/code/powerup/powerup.py --config=config/power.yaml --out=$out $file

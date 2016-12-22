@@ -26,8 +26,9 @@ module switch ncl/opendap ncl/nodap
 
 
 CMD="$MPI_HOME/bin/mpirun ungrib.exe"
- 
 echo $CMD
- 
 $CMD
+
+rename SST:????-??-??_?? SST\:yesterday SST:*
+mv SST\:yesterday ../metgrid
 

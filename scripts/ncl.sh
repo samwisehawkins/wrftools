@@ -32,10 +32,10 @@ dom=d`printf "%02d" $SGE_TASK_ID`
 files=(wrf/wrfout*)
 index=$(($SGE_TASK_ID - 1))                       # bash arrays are zero-indexed, array jobs start at 1
 ncl_in_file=${files[$index]}
-ncl_options="options.ncl"
+ncl_options="config/options.ncl"
 ncl_out_dir="plots"
 ncl_out_type="png"
-ncl_loc_file="locations.csv"
+ncl_loc_file="config/locations.csv"
 
 if [[ ${ncl_in_file} =~ *.nc ]]; then
     ncl_in_file="${ncl_in_file}.nc"

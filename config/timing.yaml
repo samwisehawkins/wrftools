@@ -6,13 +6,7 @@
 #
 # To run a reforecast or a reanalysis, use start and end time.
 #***************************************************************
-delay              : 3                       # delay in hours to apply to system time
-cycles             : [00]                    # round start time to the nearest one of these hours
-#start              : 2015-04-01 00:00:00    # first initial time. Comment out or set to null to use system time
-#end                : 2015-04-02 00:00:00    # final *inital time*, not forecast end time
-init_interval      : 24                      # hours betweeen initialisation times
 max_dom            : 2                       # maximum number of nests, this will override namelists
-fcst_hours         : 72                      # length of forecast in hours
 history_interval   : 60                      # minutes between history writes
 bdy_interval       : 3                       # hours between boundary conditions
-simulation_len     : 72                      # total simulation length in hours
+simulation_length  : 72                      # total simulation length in hours
