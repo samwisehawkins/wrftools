@@ -19,4 +19,4 @@ module load openmpi
 #$ -j yes
 
 
-python $HOME/code/wrftools/devel/fetch.py --config=config/fetch.yaml times.txt
+python $HOME/code/wrftools/fetch.py --config=config/fetch.yaml times.txt

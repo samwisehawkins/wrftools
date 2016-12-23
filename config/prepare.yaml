@@ -78,8 +78,8 @@ namelist_input    : "%(base_dir)/namelist.input"                # location of na
 script_dir        : "%(base_dir)/scripts"                       # location of master job scripts
 grb_dir           : /project/data/grib/GFS                      # used in ungrib sections   
 sst_dir           : /project/data/grib/SST                      # used in ungrib section
-missing_files     : "%(working_dir)/missing.txt"
-ok_files          : "%(working_dir)/ok.txt"
+missing_files     : "%(base_dir)/log/missing.txt"
+ok_files          : "%(base_dir)/log/ok.txt"
 
 
 #************************************************
@@ -197,7 +197,7 @@ ungrib:
         files     : "%(grb_dir)/GFS_Global_0p5deg_%iy%im%id_%iH%iM_fh%fH.grb"             # boundary condition file name specifiers
         delay     : 0                                                                     # any additional delay to apply to initial time e.g. delayed SST fields
         cycles    : [0,6,12,18]                                                           # restrict initial time to these hours
-        ungrib_len: "%(simulation_length)"                                                   # allow different simulaton length for each ungrib task
+        ungrib_len: "%(simulation_length)"                                                # allow different simulaton length for each ungrib task
         vtable    : "%(wps_dir)/ungrib/Variable_Tables/Vtable.GFS_new"                    # Vtable to use
         run_dir   : "%(working_dir)/ungrib"                                               # directory to run from 
 

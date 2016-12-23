@@ -69,6 +69,7 @@ def main():
     for init_time in init_times:
         try:
 
+            
             prepare(config, init_time)
         
         except IOError as e:
@@ -127,7 +128,7 @@ def prepare(config, init_time):
                         config.get('constants_name'))
 
     working_namelist = working_dir+"/namelist.input"
-    logger.debug(fcst_hours)
+
     
     update_namelist_input(config['namelist_input'], working_namelist, max_dom, init_time, fcst_hours, history_interval, bdy_interval*60*60, metadata=config.get('metadata'))    
 

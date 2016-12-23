@@ -53,6 +53,7 @@ visualise         : true
 dispatch          : true
 finalise          : true
 
+prepare          : null               # preparation already been handled for WRF
 
 submit:
     - name     : geogrid
@@ -70,15 +71,7 @@ submit:
       nprocs   : 1
       after    : geogrid
 
-#    - name     : ungrib.post
-#      run      : "%(wps)"
-#      script   : "%(working-dir)/ungrib/ungrib.post.sh"
-#      queue    : all.q
-#      pe       : ompi
-#      nprocs   : 1
-#      after    : ungrib
-
-    - name     : ungrib.sst
+    - name     : ungrib_sst
       run      : "%(wps)"
       script   : "%(working-dir)/ungrib_sst/ungrib.sh"
       after    : "ungrib*"
@@ -86,15 +79,7 @@ submit:
       pe       : ompi
       nprocs   : 1
       after    : geogrid
-      
-#    - name     : ungrib.sst.post
-#      run      : "%(wps)"
-#      script   : "%(working-dir)/ungrib_sst/ungrib_sst.post.sh"
-#      queue    : all.q
-#      pe       : ompi
-#      nprocs  : 1
-#      after    : ungrib.sst
-#      log      : ungrib.post.log        
+
        
     - name     : metgrid
       run      : "%(wps)"
@@ -104,14 +89,6 @@ submit:
       nprocs  : 1
       after    : ungrib*
       
-#    - name   : real.pre
-#      run    : "%(wrf)"
-#      script : "%(working-dir)/wrf/real.pre.sh"
-#      queue  : all.q
-#      pe     : ompi
-#      nprocs : 1
-#      after  : metgrid
-#      log    : real.pre.log
       
     - name    : real
       run     : "%(wrf)"
@@ -119,7 +96,7 @@ submit:
       queue   : all.q
       pe      : ompi
       nprocs  : 1
-      after   : real.pre
+      after   : metgrid
     
     - name    : wrf
       run     : "%(wrf)"
@@ -140,7 +117,7 @@ submit:
       array  : "%(max_dom)"
       
       
-    - name    : wrf.post
+    - name    : wrf_post
       run     : "%(post)"
       script  : "%(working-dir)/wrf/wrf.post.sh"
       queue   : all.q
@@ -155,7 +132,7 @@ submit:
       queue  : all.q
       pe     : ompi
       nprocs : 1
-      after  : wrf.post
+      after  : wrf_post
       array  : "%(max_dom)"
 
     - name    : power
@@ -183,13 +160,13 @@ submit:
       queue   : graphics.q
       pe      : ompi
       nprocs  : 1 
-      after   : ncl,wrf.post
+      after   : ncl,wrf_post
       
-    - name    : finalise
+    - name    : wrf_finalise
       run     : "%(finalise)"
       script  : "%(working-dir)/finalise.sh"
       queue   : all.q
       pe      : ompi
       nprocs  : 1
-      after   : wrf.post,power,dispatch,ncdump
+      after   : wrf_post,power,dispatch,ncdump
     

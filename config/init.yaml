@@ -23,14 +23,14 @@
 #************************************************
 # Logging
 #************************************************
-log-file          : "%(base-dir)/init.log"                 # file to write to
+log-file          : null
 log-fmt           : "%(message)s"                          # see logging module for format codes
    
 #************************************************
 # Directory locations  
 #************************************************
 base-dir          : $(PWD)                                             # this will be taken from current working direcory
-wrftools-dir      : $(HOME)/code/wrftools/devel  
+wrftools-dir      : $(HOME)/code/wrftools  
 
 
 #*************************************************************************************************************************
@@ -40,20 +40,23 @@ wrftools-dir      : $(HOME)/code/wrftools/devel
 # these subdirectoies will get created     
 initialise.create:
     - "%(base-dir)"
+    - "%(base-dir)/scripts"
     - "%(base-dir)/wrfout"
     - "%(base-dir)/tseries"
+    - "%(base-dir)/log"
 
 initialise.remove:
     - "%(base-dir)/prepare.py"                                            # list of arguments to consecutive linux rm commands. Be careful!
     - "%(base-dir)/submit.py"
+    - "-r %(base-dir)/scripts"
 
 initialise.link:                                                          # list of arguments to consecutive linux ln -sf commands
   - "%(wrftools-dir)/check.py      %(base-dir)"
   - "%(wrftools-dir)/prepare.py     %(base-dir)"
-  - "%(wrftools-dir)/submit.py      %(base-dir)"
 
 initialise.copy:                                                           # list of arguments to consecutive linux cp commands
-  - "-r %(wrftools-dir)/config            %(base-dir)/config"
-  - "-r %(wrftools-dir)/scripts           %(base-dir)/scripts"
-  - "-r %(wrftools-dir)/ncl               %(base-dir)/ncl"
+  - "-r %(wrftools-dir)/config            %(base-dir)"
+  - "-r %(wrftools-dir)/scripts           %(base-dir)"
+  - "-r %(wrftools-dir)/ncl               %(base-dir)"
+  - " %(wrftools-dir)/run.sh              %(base-dir)"
   

@@ -24,7 +24,7 @@
 ; sam.hawkins@vattenfall.com
 ; 
 ;******************************************************
-load "$HOME/code/wrftools/devel/ncl/wrftools.ncl"
+load "$HOME/code/wrftools/ncl/wrftools.ncl"
 
 begin
 

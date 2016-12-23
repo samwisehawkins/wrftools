@@ -1,0 +1,45 @@
+#***********************************************************************
+# Locations file for extraction of time-series, plotting, etc
+# Header should contain at least location_id,name,latitude,longitude
+# Other fields may be present
+# Values within fields seperated by :
+#***********************************************************************
+location_id,name,country,hubheight,latitude,longitude,offshore
+FRE,Fredericia,Denmark,0,55.5833,9.5,onshore
+EDI,Edinburgh,United Kingdom,0,55.8,-3.22,onshore
+LON,London,United Kingdom,0,51.5171,-0.1062,onshore
+STO,Stockholm,Sweden,0,55.95,3.22,onshore
+HAM,Hamburg,Germany,100,53.5686,10.0386,onshore
+AMS,Amsterdam,Holland,100,52.37,4.89,onshore
+UKF,Kentish Flats,United Kingdom,70,51.46033756,1.093941408,onshore
+UTH,Thanet,United Kingdom,70,51.43045399,1.632098601,offshore
+UOR,Ormonde,United Kingdom,97,54.08822777,-3.436467767,offshore
+SLG,Lillgrund,Sweden,69,55.51245438,12.7808287,offshore
+DTK,Dan Tysk,Germany,100,55.137,7.2,offshore
+SNB,Sand Bank,Germany,100,55.193,6.859,offshore
+UEB,Edinbane,United Kingdom,70,57.42917,-6.42167,onshore
+NEZ,Egmonde an Zee,Holland,70,52.60962,4.42111,offshore
+ZDB,Zuidlob,Holland,70,52.179722,5.37917,onshore
+AVS,Alpha Ventus,Germany,70,54.00833,6.59833,offshore
+RCN,RCN Mast,Holland,100,52.848,3.5437,offshore
+FN1,Fino 1 Platform,Germany,100,54.013864,6.586491,offshore
+FN3,Fino 3 Platform,Germany,100,55.195,7.19,offshore
+BEK,Beek,Holland,0,50.938611,5.796667,onshore
+DEB,Debilt,Holland,0,52.1,5.18333,onshore
+DKY,Dekooy,Holland,0,52.914444,4.785833,onshore
+DLN,Deelen,Holland,0,52.060278,5.8725,onshore
+HGV,Hoogeveen,Holland,0,52.71667,6.46667,onshore
+LWN,Leeuwarden,Holland,0,53.2,5.783333,onshore
+LYD,Lelystad,Holland,0,52.455278,5.523056,onshore
+SPL,Schipol,Holland,0,52.308333,4.760833,onshore
+SVN,Stavoren,Holland,0,52.883333,5.358333,onshore
+VLK,Valkenburg,Holland,0,52.179722,4.431667,onshore
+ZSN,Zestienhoven,Holland,0,51.95,4.433333,onshore
+EA1,East Anglia 1B,UK,120,52.350147,2.500833,offshore
+EAZ,East Anglia ZE,UK,120,53.177353,2.985053,offshore
+YTS,Yttre Stengrund,Sweden,100,56.165,16.018,onshore
+UTG,Utgrunded,Sweden,100,56.342,16.28,onshore
+WHM,Hagesholm,Denmark,80,55.76059603,11.53429306,onshore
+URY,Ray,UK,80,55.17181256,2.07430531,onshore
+GSB,Sandbank,Germany,100,55.2013375,6.85215278,offshore
+UPV,Pen y Cymoedd,UK,90,51.70877117,-3.616664543,onshore
